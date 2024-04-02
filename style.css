@@ -200,6 +200,17 @@ transition: 0.3s;
   color: rgb(204, 204, 204);
 }
 
+#ip2 {
+  margin-top: 2px;
+  font-family: h1;
+  transition: 1s;
+  z-index: 1;
+  font-size: 20px;
+  color: rgb(204, 204, 204);
+}
+
+
+
 .hero-text button {
   border: 1px solid black;
   outline: 0;
