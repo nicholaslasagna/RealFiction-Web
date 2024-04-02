@@ -201,7 +201,7 @@ transition: 0.3s;
 }
 
 #ip2 {
-  margin-top: 2px;
+  margin: 0;
   font-family: h1;
   transition: 1s;
   z-index: 1;
