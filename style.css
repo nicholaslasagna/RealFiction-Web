@@ -302,6 +302,8 @@ padding-bottom: 10px;
   text-align: center;
   font-size: 40px;
   font-family: bold;
+    -webkit-text-stroke-width: 1px;
+  -webkit-text-stroke-color: black;
 }
 
 .maincontainer2 p {
