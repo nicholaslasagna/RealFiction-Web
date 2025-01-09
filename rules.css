@@ -270,6 +270,8 @@ transition: 0.3s;
   font-size: 35px;
   font-family: bold;
      padding-bottom: 0;
+       padding-left: 10px;
+     padding-right: 100px;
 }
 
 .maincontainer2 p {
