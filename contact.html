@@ -39,7 +39,7 @@
       <a href="https://ko-fi.com/realfiction">Donate</a>
     </li>
     <li>
-          <a href="contact.html">Contact Us</a>
+      <a href="0.html">Contact Us</a>
     </li>
   </ul>
   <div class="hamburger">
@@ -69,7 +69,7 @@
           <a href="https://ko-fi.com/realfiction">Donate</a>
         </li>
         <li>
-          <a href="contact.html">Contact Us</a>
+          <a href="0.html">Contact Us</a>
         </li>
       </ul>
 </div>
@@ -77,8 +77,8 @@
 <h3>Contact Us</h3>
 <h5 id="rulesheader">Have an inquiry? Email us!</h5>
 <div class="container">
-  <form id="contactForm" action="https://formsubmit.co/support@realfiction.live" method="POST">
-    <!-- Replace 'your-form-id' with your actual Formspree form ID -->
+	<form action="https://api.web3forms.com/submit" method="POST">
+    <input type="hidden" name="access_key" value="773ce6e6-0bf1-495f-807b-bdb94e179e94">
     
     <label for="fname">Minecraft Username or Name</label>
     <input type="text" id="fname" name="name" placeholder="Name..." required>
@@ -97,6 +97,7 @@
 
     <input type="hidden" name="Subject" value="New Contact Form Submission">
     <input type="hidden" name="From" value="support@realfiction.live">
+	<input type="checkbox" name="botcheck" class="hidden" style="display: none;">
 
     <input type="submit" value="Submit">
   </form>
