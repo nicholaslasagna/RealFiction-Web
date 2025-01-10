@@ -20,6 +20,9 @@
     <li>
       <a href="index.html">Home</a>
     </li>
+	<li>
+      <a href="http:store.realfiction.live">Store</a>
+    </li>
     <li>
       <a href="rules.html">Rules</a>
     </li>
@@ -74,76 +77,50 @@
 <h3>Contact Us</h3>
 <h5 id="rulesheader">Have an inquiry? Email us!</h5>
 <div class="container">
-  <form id="contactForm" action="contact.php" method="POST">
-
+  <form id="contactForm" action="https://formsubmit.co/support@realfiction.live" method="POST">
+    <!-- Replace 'your-form-id' with your actual Formspree form ID -->
+    
     <label for="fname">Minecraft Username or Name</label>
-    <input type="text" id="fname" name="name" placeholder="Name...">
+    <input type="text" id="fname" name="name" placeholder="Name..." required>
+    
     <label for="subject">Subject</label>
-    <select id="subject" name="subject">
+    <select id="subject" name="subject" required>
       <option value="" disabled selected>Select a subject</option>
-      <option value="General Inquiry">Business Inquiry</option>
+      <option value="Business Inquiry">Business Inquiry</option>
       <option value="Technical Support">Technical Support</option>
-      <option value="Feedback">Bug Report</option>
-      <option value="Feedback">Player Report</option>
+      <option value="Bug Report">Bug Report</option>
+      <option value="Player Report">Player Report</option>
     </select>
 
     <label for="message">Message</label>
-    <textarea id="message" name="message" placeholder="Write something.." style="height:200px"></textarea>
+    <textarea id="message" name="message" placeholder="Write something.." style="height:200px" required></textarea>
+
+    <input type="hidden" name="Subject" value="New Contact Form Submission">
+    <input type="hidden" name="From" value="support@realfiction.live">
+
     <input type="submit" value="Submit">
   </form>
 </div>
-</div>
 <div class="footer">
-<li><a href="index.html">realfiction.live</a></li>
-<center>
-  <h4 id="footerheader">Please Send Inquiries Here:</h4>
-<p id="email">
-  businessrealfiction@gmail.com
-</p>
-<p id="copyright">
-  ©2024 RealFiction
-</p>
-</center>
-</div>
+  <li><a href="index.html">realfiction.live</a></li>
+
+  <div class="emailcontainer">
+  <center>
+    <h4 id="footerheader">Business Inquiries:</h4>
+  <p id="email">
+    business@realfiction.live
+    </p><h4 id="footerheader">General Support:</h4>
+  <p id="email">
+    support@realfiction.live
+  </p>
+  <p id="copyright">
+    ©2025 RealFiction
+  </p>
+  </center></div>
+    
+  </div>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
 <div class="icon-bar">
   <script src="script.js"></script>
-
-<script>
-document.getElementById("contactForm").addEventListener("submit", function(event) {
-    event.preventDefault(); // Prevent the form from submitting normally
-
-    // Get form values
-    var name = document.getElementById("fname").value;
-    var subject = document.getElementById("subject").value;
-    var message = document.getElementById("message").value;
-
-    // Perform form validation
-    if (name.trim() === '' || subject.trim() === '' || message.trim() === '') {
-        alert("Please fill out all fields");
-        return;
-    }
-
-    // Construct the email body
-    var body = "Minecraft Username or Name: " + name + "\n";
-    body += "Subject: " + subject + "\n";
-    body += "Message: " + message;
-
-    // Send the email (you may need to replace this with your backend code)
-    sendEmail(body);
-});
-
-function sendEmail(body) {
-    // This is a placeholder function for sending the email.
-    // You will need to implement the backend logic to actually send the email.
-    // This could involve making an AJAX request to a server-side script that sends the email.
-    // For demonstration purposes, we'll just log the email body to the console.
-    console.log("Sending email:");
-    console.log(body);
-
-    // You can redirect the user to a "Thank You" page or display a success message here.
-}
-</script>
-
 </body>
 </html>
