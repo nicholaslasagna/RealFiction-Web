@@ -245,7 +245,7 @@ padding-bottom: 10px;
   padding: 15px 20px;
   color: white;
   background-color: #3eb336;
-  font-family: bold;
+  font-family: mc;
   text-transform: uppercase;
   animation: fadeIn 1s;
   transition: 0.3s;
@@ -551,6 +551,7 @@ padding-bottom: 10px;
 }
 
 @font-face { font-family: h1; src: url('fonts/h1.otf'); }
+@font-face { font-family: mc; src: url('fonts/mc.ttf'); }
 @font-face { font-family: bold; src: url('fonts/bold.ttf'); }
 @font-face { font-family: light; src: url('fonts/light.ttc'); }
 
