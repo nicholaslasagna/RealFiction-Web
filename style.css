@@ -159,7 +159,7 @@ transition: 0.3s;
 /* ------------------------------ hero-image/text ------------------------------ */
 
 .hero-image {
-  background-image: url("images/hero2.png");
+  background-image: url("images/hero1.png");
   height: 100vh;
   background-position: center;
   background-repeat: no-repeat;
