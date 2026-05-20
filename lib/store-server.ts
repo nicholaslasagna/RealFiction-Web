@@ -231,6 +231,33 @@ export async function markOrderPaidAndFulfill(orderId: string, providerPaymentId
   return data
 }
 
+export async function findOrderIdByPaymentId(provider: "stripe" | "paypal", paymentId: string) {
+  const supabase = getSupabaseServiceRoleClient()
+  const { data } = await supabase
+    .from("orders")
+    .select("id")
+    .eq("provider", provider)
+    .eq("provider_payment_id", paymentId)
+    .maybeSingle()
+
+  return (data?.id as string | undefined) ?? null
+}
+
+export async function revokeOrder(orderId: string, mode: "refund" | "chargeback", reason?: string) {
+  const supabase = getSupabaseServiceRoleClient()
+  const { data, error } = await supabase.rpc("revoke_order", {
+    p_order_id: orderId,
+    p_mode: mode,
+    p_reason: reason ?? null
+  })
+
+  if (error) {
+    throw new Error("Could not revoke order.")
+  }
+
+  return data
+}
+
 export async function persistWebhookEvent(provider: "stripe" | "paypal", providerEventId: string, eventType: string, payload: unknown) {
   const supabase = getSupabaseServiceRoleClient()
   const { error } = await supabase.from("webhook_events").insert({

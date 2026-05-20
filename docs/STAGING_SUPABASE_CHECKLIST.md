@@ -10,6 +10,9 @@ Apply migrations in filename order:
 2. `supabase/migrations/202605200002_security_hardening.sql`
 3. `supabase/migrations/202605200003_realcore_delivery.sql`
 4. `supabase/migrations/202605200004_plugin_nonce_cleanup.sql`
+5. `supabase/migrations/202605200005_refund_chargeback.sql`
+6. `supabase/migrations/202605200006_support_tickets_antispam.sql`
+7. `supabase/migrations/202605200007_vote_streaks.sql`
 
 The order matters:
 
@@ -17,6 +20,9 @@ The order matters:
 - `202605200002` tightens RLS, splits user-writable profile settings, seeds safe store products, and adds idempotent payment fulfillment.
 - `202605200003` adds RealCore reward claim fields, plugin nonce replay storage, and service-role-only poll/ack SQL functions.
 - `202605200004` adds the service-role-only `cleanup_plugin_request_nonces()` prune function.
+- `202605200005` adds the service-role-only `revoke_order()` refund/chargeback function.
+- `202605200006` adds `support_tickets.ip_hash` + index for per-IP rate limiting.
+- `202605200007` adds the service-role-only `apply_vote_streak()` accounting function.
 
 ## Local Verification
 
@@ -92,7 +98,7 @@ Build and type verification on this branch:
 - `npm run build:cloudflare` — pass (`.open-next/worker.js` generated).
 - `npm audit --audit-level=high` — pass (0 high/critical). 7 moderate advisories remain, all confined to build/dev tooling (`postcss` via `next`, `ws` via `wrangler`/`miniflare`); none are in the runtime request path. Do not run `npm audit fix --force` — it downgrades `next` to 9.x.
 
-Database/RLS verification was performed structurally (the four migrations and `supabase/tests/database/rls_security.test.sql` were reviewed line by line) because the local Supabase stack could not bind its default ports: another local Supabase project on this machine (`imagicast-account`) currently holds 54321-54327.
+Database/RLS verification was executed against a live local stack. Because another local Supabase project on this machine (`imagicast-account`) holds the default ports (54321-54327), RealFiction was started on a temporary non-default port range, all migrations were applied via `supabase db reset`, and `npm run test:rls` passed; the config was then reverted. The commands below reproduce it.
 
 ### Run the RLS suite once a DB port is free
 
@@ -129,10 +135,17 @@ Expected result: `rls_security.test.sql` declares `plan(27)` and all 27 assertio
 5. `cleanup_plugin_request_nonces()` added (migration `202605200004`); schedule it per-environment (pg_cron snippet inline in the migration).
 6. Webhook duplicate handling re-drives fulfillment for events persisted-but-not-processed (idempotent), instead of silently dropping a retry.
 
+### Resolved in the feature pass (2026-05-20)
+
+7. Refund/chargeback handling: Stripe/PayPal refund, dispute, and reversal webhooks call `revoke_order`, which transitions entitlements, cancels undelivered grants, and queues compensating revoke rewards (migration `202605200005`).
+8. `POST /api/contact` persists support tickets via the service role with a honeypot field + per-IP DB-backed rate limit (migration `202605200006`).
+9. Atomic vote streaks + monthly milestone rewards via `apply_vote_streak` (migration `202605200007`).
+10. Cloudflare rate-limit / abuse rules documented in `docs/CLOUDFLARE_RATELIMIT.md` for deploy-time configuration.
+
 ### Still open before real-money production cutover
 
-- `POST /api/contact` validates but does not persist. When implemented it must insert via the service role (the public-insert policy on `support_tickets` was removed in the hardening migration).
-- Add Cloudflare-layer rate limiting / abuse signals on `/api/store/checkout`, `/api/vote`, `/api/account/link/start`, and all `/api/plugin/*` routes.
-- Refund / chargeback handling: revoke entitlements and enqueue compensating revoke rewards.
-- `vote_streaks` increments `monthly_votes` / `total_votes` only; `current_streak` / `longest_streak` are set once and never advanced, and a concurrent first-insert race is silently swallowed. Cosmetic, but finish before the leaderboard launches.
-- Run the RLS suite against a live DB (see commands above) — currently structural only.
+- Apply the Cloudflare rate-limit / WAF rules from `docs/CLOUDFLARE_RATELIMIT.md` (configured in Cloudflare, not in the repo).
+- Verify refund/chargeback/dispute webhooks against the Stripe and PayPal sandboxes — provider event payload field mapping cannot be exercised locally.
+- Gift-card store-credit clawback on refund (entitlement revocation already covers non-consumables).
+- Retry backoff worker + failed-row replay tooling for the reward queue.
+- Wire Supabase Auth UI into the account dashboard (Phase 4).

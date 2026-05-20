@@ -219,6 +219,12 @@ Supported delivery families:
 
 RealCore must validate `rewardKey`, `rewardType`, and `delivery.safeReward` against an allowlist before executing anything.
 
+Each reward carries `delivery.action`, which is `grant` or `revoke`. A `revoke`
+reward (from a refund or chargeback) instructs RealCore to undo the matching
+grant — remove the LuckPerms group/permission or lock the cosmetic — using the
+same `productSlug` / `luckPerms` / `cosmetic` fields. Revokes are best-effort and
+idempotent: removing a perk the player no longer has is a no-op.
+
 ## Entitlement Lifecycle
 
 Payment lifecycle:
@@ -237,15 +243,18 @@ Entitlement states:
 - `revoked`
 - `refunded`
 
-Future refunds and revocations should update entitlement status and enqueue compensating revoke rewards. Do not delete entitlement or reward history.
+Refunds and chargebacks are handled by `revoke_order`: the order and its
+entitlements transition to refunded/revoked, undelivered grant rewards are
+cancelled, and compensating revoke rewards (`delivery.action = "revoke"`) are
+queued for RealCore. Entitlement and reward history is never deleted.
 
 ## Vote Reward Lifecycle
 
 1. Vote webhook passes shared-secret verification.
 2. Vote log is persisted with idempotency.
-3. Vote streaks update.
-4. Safe vote reward is queued.
-5. RealCore polls and delivers the vote reward.
+3. Vote streaks update atomically via `apply_vote_streak`.
+4. Safe vote reward is queued; a milestone reward is queued when monthly votes hit 5, 15, 30, or 75.
+5. RealCore polls and delivers the vote and milestone rewards.
 6. RealCore acknowledges final status.
 
 ## Package Layout

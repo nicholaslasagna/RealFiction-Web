@@ -25,13 +25,13 @@ RealFiction is now structured as a Cloudflare Pages compatible Next.js App Route
 ## Implemented Routes
 
 - `GET /api/player-count`: reads network player count from a status provider.
-- `POST /api/contact`: validates and accepts support/contact requests.
+- `POST /api/contact`: persists a support ticket via the service role, with a honeypot field and a per-IP DB-backed rate limit.
 - `POST /api/account/link/start`: authenticated user starts a Minecraft link request; the code is generated and hashed server-side.
 - `POST /api/store/checkout`: validates cart items against database products, creates a pending local order, then creates Stripe or PayPal checkout.
 - `GET /api/store/paypal/capture`: captures a PayPal checkout return and only fulfills if the returned PayPal order references the same local order id.
-- `POST /api/webhooks/stripe`: verifies Stripe signatures, persists webhook events, ignores duplicates, fulfills paid local orders idempotently.
-- `POST /api/webhooks/paypal`: verifies PayPal webhook transmission, persists webhook events, ignores duplicates, fulfills paid local orders idempotently.
-- `POST /api/vote`: requires `VOTE_WEBHOOK_SECRET`, persists vote logs, updates streaks, and queues vote rewards.
+- `POST /api/webhooks/stripe`: verifies Stripe signatures, persists webhook events, fulfills paid orders idempotently, and revokes orders on `charge.refunded` / `charge.dispute.created`.
+- `POST /api/webhooks/paypal`: verifies PayPal webhook transmission, persists webhook events, fulfills paid orders idempotently, and revokes orders on refund/reversal/dispute events.
+- `POST /api/vote`: requires `VOTE_WEBHOOK_SECRET`, persists vote logs, updates streaks atomically, queues the vote reward, and queues monthly milestone rewards.
 - `POST /api/rewards/claim`: authenticated owner-only; expedites delivery of the user's own pending reward. Plugin delivery transitions live in `/api/plugin/rewards/poll` and `/api/plugin/rewards/ack`.
 - `POST /api/plugin/account-link/confirm`: RealCore-facing account link confirmation with plugin auth.
 - `POST /api/plugin/rewards/poll`: plugin-authenticated atomic reward polling and claiming.
@@ -61,6 +61,12 @@ The RealCore delivery migration is in `supabase/migrations/202605200003_realcore
 - `public.ack_reward_delivery(reward_id, server_id, status, failure_reason)` for service-role-only idempotent delivery acknowledgement.
 
 The nonce cleanup migration is in `supabase/migrations/202605200004_plugin_nonce_cleanup.sql` and adds `public.cleanup_plugin_request_nonces()` (service-role only) to prune expired replay nonces. Scheduling (pg_cron or an external cron) is per-environment and documented inline.
+
+The refund/chargeback migration is in `supabase/migrations/202605200005_refund_chargeback.sql` and adds `public.revoke_order(order_id, mode, reason)` (service-role only): it transitions the order and its entitlements to refunded/revoked, cancels undelivered grant rewards, queues compensating revoke rewards, and writes an audit log row.
+
+The support anti-spam migration is in `supabase/migrations/202605200006_support_tickets_antispam.sql` and adds `support_tickets.ip_hash` plus an index for per-IP rate limiting.
+
+The vote streak migration is in `supabase/migrations/202605200007_vote_streaks.sql` and adds `public.apply_vote_streak(...)` (service-role only) for atomic streak/counter accounting.
 
 ## RLS Model
 
@@ -152,8 +158,9 @@ Implemented flow:
 4. Server matches a verified Java Minecraft link when available.
 5. Vote is persisted with a hashed idempotency key.
 6. Duplicate votes with the same idempotency key return accepted duplicate.
-7. Monthly streak counters update.
+7. Streak counters update atomically through `apply_vote_streak` (current/longest/monthly/total with gap-based reset).
 8. A safe vote reward is placed into `reward_queue` and linked through `vote_rewards`.
+9. When monthly votes hit a milestone (5, 15, 30, 75), a safe milestone reward is queued with a per-month idempotency key.
 
 Vote routes do not grant rewards directly.
 
@@ -172,10 +179,12 @@ Implemented plugin delivery behavior:
 - Acknowledgement marks rows delivered/failed idempotently.
 - Queue states support `pending`, `processing`, `delivered`, `failed`, and `cancelled`.
 
+Refund and chargeback handling is implemented: Stripe/PayPal refund, dispute, and reversal webhooks call `revoke_order`, which transitions entitlements, cancels undelivered grants, and queues compensating revoke rewards (`delivery.action = "revoke"`). Gift-card store-credit clawback is the remaining refund case.
+
 Still needed:
 
 - Retry backoff worker and failed-row replay tooling.
-- Refund/chargeback revocation queueing.
+- Gift-card store-credit clawback on refund.
 
 ## Environment Variables
 
@@ -225,6 +234,5 @@ No paid kits, combat perks, economy multipliers, PvP advantages, claim advantage
 - Wire Supabase Auth UI into the account dashboard.
 - Add product/catalog API reads from Supabase instead of static storefront data.
 - Add admin product/update/support tooling.
-- Add rate limiting and abuse analytics at the Cloudflare layer.
-- Add refund/chargeback handling.
+- Apply the Cloudflare rate limiting / abuse rules per `docs/CLOUDFLARE_RATELIMIT.md` at deploy time.
 - Apply and test migrations in a staging Supabase project before production cutover.
