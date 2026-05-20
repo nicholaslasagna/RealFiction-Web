@@ -1,0 +1,14 @@
+node_modules
+.next
+.open-next
+.wrangler
+.env
+.env.*
+!.env.example
+npm-debug.log*
+*.tsbuildinfo
+
+# Supabase CLI local state
+supabase/.branches
+supabase/.temp
+supabase/.env

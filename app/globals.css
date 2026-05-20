@@ -1,0 +1,140 @@
+@import "tailwindcss";
+
+@font-face {
+  font-family: "RealFiction Display";
+  src: url("/fonts/h1.otf") format("opentype");
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "RealFiction Minecraft";
+  src: url("/fonts/mc.ttf") format("truetype");
+  font-display: swap;
+}
+
+@theme inline {
+  --color-background: #06101c;
+  --color-foreground: #f5f8ff;
+  --color-card: #0a1726;
+  --color-card-foreground: #f5f8ff;
+  --color-popover: #0a1726;
+  --color-popover-foreground: #f5f8ff;
+  --color-primary: #47c7ff;
+  --color-primary-foreground: #04111d;
+  --color-secondary: #142235;
+  --color-secondary-foreground: #e7f1ff;
+  --color-muted: #111c2d;
+  --color-muted-foreground: #9fb1c8;
+  --color-accent: #173556;
+  --color-accent-foreground: #f5f8ff;
+  --color-destructive: #ff5f73;
+  --color-destructive-foreground: #fff7f8;
+  --color-border: rgba(163, 197, 255, 0.16);
+  --color-input: rgba(163, 197, 255, 0.18);
+  --color-ring: #47c7ff;
+  --font-sans: "Inter", "Geist", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "RealFiction Display", "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-minecraft: "RealFiction Minecraft", ui-monospace, monospace;
+  --radius: 8px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+  background: #06101c;
+}
+
+body {
+  min-height: 100vh;
+  margin: 0;
+  background:
+    linear-gradient(180deg, rgba(6, 16, 28, 0.9), rgba(6, 16, 28, 0.98)),
+    linear-gradient(90deg, rgba(71, 199, 255, 0.09) 1px, transparent 1px),
+    linear-gradient(0deg, rgba(236, 176, 87, 0.045) 1px, transparent 1px),
+    #06101c;
+  background-size: auto, 64px 64px, 64px 64px, auto;
+  color: #f5f8ff;
+  font-family: var(--font-sans);
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+::selection {
+  background: rgba(71, 199, 255, 0.35);
+}
+
+.minecraft-font {
+  font-family: var(--font-minecraft);
+}
+
+.display-font {
+  font-family: var(--font-display);
+}
+
+.container-shell {
+  width: min(1180px, calc(100% - 32px));
+  margin-inline: auto;
+}
+
+.premium-surface {
+  border: 1px solid rgba(163, 197, 255, 0.16);
+  background:
+    linear-gradient(145deg, rgba(14, 30, 49, 0.92), rgba(6, 16, 28, 0.74)),
+    linear-gradient(90deg, rgba(71, 199, 255, 0.08), rgba(236, 176, 87, 0.05));
+  box-shadow: 0 22px 80px rgba(0, 0, 0, 0.34);
+  backdrop-filter: blur(18px);
+}
+
+.pixel-grid {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+  background-size: 28px 28px;
+  mask-image: linear-gradient(to bottom, black, transparent 72%);
+}
+
+.animated-sheen {
+  background-size: 200% 100%;
+  animation: sheen 12s ease-in-out infinite;
+}
+
+@keyframes sheen {
+  0%,
+  100% {
+    background-position: 0% 50%;
+  }
+
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+}

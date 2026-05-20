@@ -1,24 +1,39 @@
 {
-  "name": "responsive-navbar-html-css-js",
-  "version": "1.0.0",
-  "description": "",
-  "main": "index.html",
+  "name": "realfiction-platform",
+  "version": "2.0.0",
+  "private": true,
+  "description": "RealFiction Minecraft network platform, store, account, vote, map, and community portal.",
   "scripts": {
-    "start": "serve",
-    "build": "echo This is a static template, there is no bundler or bundling involved!"
+    "dev": "next dev",
+    "build": "next build",
+    "build:cloudflare": "opennextjs-cloudflare build",
+    "preview:cloudflare": "wrangler pages dev .open-next/assets",
+    "test:rls": "supabase test db",
+    "typecheck": "tsc --noEmit"
   },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/codesandbox-app/static-template.git"
+  "dependencies": {
+    "@supabase/ssr": "^0.6.1",
+    "@supabase/supabase-js": "^2.49.0",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "framer-motion": "^12.4.7",
+    "lucide-react": "^0.475.0",
+    "next": "^16.0.0",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "server-only": "^0.0.1",
+    "tailwind-merge": "^3.0.1",
+    "zod": "^3.24.2"
   },
-  "keywords": [],
-  "author": "Ives van Hoorne",
-  "license": "MIT",
-  "bugs": {
-    "url": "https://github.com/codesandbox-app/static-template/issues"
-  },
-  "homepage": "https://github.com/codesandbox-app/static-template#readme",
   "devDependencies": {
-    "serve": "^11.2.0"
+    "@cloudflare/workers-types": "^4.20250214.0",
+    "@opennextjs/cloudflare": "^1.0.0",
+    "@tailwindcss/postcss": "^4.0.6",
+    "@types/node": "^22.13.4",
+    "@types/react": "^19.0.8",
+    "@types/react-dom": "^19.0.3",
+    "tailwindcss": "^4.0.6",
+    "typescript": "^5.7.3",
+    "wrangler": "^4.86.0"
   }
 }

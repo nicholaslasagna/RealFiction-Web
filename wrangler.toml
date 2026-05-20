@@ -1,0 +1,8 @@
+name = "realfiction-platform"
+compatibility_date = "2026-05-20"
+pages_build_output_dir = ".open-next/assets"
+
+[vars]
+NEXT_PUBLIC_SITE_URL = "https://realfiction.live"
+NEXT_PUBLIC_MINECRAFT_SERVER = "realfiction.live"
+NEXT_PUBLIC_BEDROCK_SERVER = "bedrock.realfiction.live"
