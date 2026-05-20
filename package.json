@@ -5,9 +5,11 @@
   "description": "RealFiction Minecraft network platform, store, account, vote, map, and community portal.",
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "opennextjs-cloudflare build",
+    "build:next": "next build",
     "build:cloudflare": "opennextjs-cloudflare build",
-    "preview:cloudflare": "wrangler pages dev .open-next/assets",
+    "deploy": "opennextjs-cloudflare deploy",
+    "preview:cloudflare": "opennextjs-cloudflare preview",
     "test:rls": "supabase test db",
     "typecheck": "tsc --noEmit"
   },
