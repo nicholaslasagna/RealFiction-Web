@@ -1,6 +1,11 @@
 name = "realfiction-platform"
+main = ".open-next/worker.js"
 compatibility_date = "2026-05-20"
-pages_build_output_dir = ".open-next/assets"
+compatibility_flags = ["nodejs_compat", "global_fetch_strictly_public"]
+
+[assets]
+directory = ".open-next/assets"
+binding = "ASSETS"
 
 [vars]
 NEXT_PUBLIC_SITE_URL = "https://realfiction.live"
