@@ -41,6 +41,10 @@ function booleanValue(value: unknown) {
 }
 
 function inferRewardType(row: RewardQueueRow, payload: JsonRecord, metadata: JsonRecord) {
+  if (stringValue(payload.action) === "revoke") {
+    return "revoke"
+  }
+
   if (row.source === "vote") {
     return "vote"
   }
@@ -87,6 +91,7 @@ export function formatRealCoreReward(row: RewardQueueRow) {
       expiresAt: row.entitlement_expires_at
     },
     delivery: {
+      action: stringValue(payload.action) === "revoke" ? "revoke" : "grant",
       safeReward: payload.safe_reward === true || metadata.safe_reward === true,
       productSlug: stringValue(payload.product_slug),
       voteSite: stringValue(payload.vote_site),

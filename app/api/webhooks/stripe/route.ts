@@ -3,9 +3,11 @@ import {
   safeJsonError
 } from "@/lib/security"
 import {
+  findOrderIdByPaymentId,
   markOrderPaidAndFulfill,
   markWebhookEventProcessed,
-  persistWebhookEvent
+  persistWebhookEvent,
+  revokeOrder
 } from "@/lib/store-server"
 
 export const runtime = "edge"
@@ -111,6 +113,19 @@ export async function POST(request: Request) {
           orderId,
           typeof session.payment_intent === "string" ? session.payment_intent : null
         )
+      }
+    }
+
+    if (event.type === "charge.refunded" || event.type === "charge.dispute.created") {
+      const object = (event.data?.object ?? {}) as Record<string, unknown>
+      const metadata = (object.metadata ?? {}) as Record<string, string | undefined>
+      const paymentIntent = typeof object.payment_intent === "string" ? object.payment_intent : null
+      const orderId =
+        metadata.order_id ?? (paymentIntent ? await findOrderIdByPaymentId("stripe", paymentIntent) : null)
+      const mode = event.type === "charge.dispute.created" ? "chargeback" : "refund"
+
+      if (orderId) {
+        await revokeOrder(orderId, mode, `stripe:${event.type}`)
       }
     }
 

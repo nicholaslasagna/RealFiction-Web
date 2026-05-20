@@ -2,7 +2,7 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 
-select plan(27);
+select plan(29);
 
 create or replace function pg_temp.set_auth_context(user_id uuid)
 returns void
@@ -295,6 +295,16 @@ select ok(
 select ok(
   pg_temp.statement_is_blocked($$select * from public.poll_reward_queue('rls-server', 'global', 10)$$),
   'browser roles cannot execute plugin reward poll function'
+);
+
+select ok(
+  pg_temp.statement_is_blocked($$select * from public.revoke_order('33333333-3333-3333-3333-333333333333', 'refund', 'test')$$),
+  'browser roles cannot execute service-role refund function'
+);
+
+select ok(
+  pg_temp.statement_is_blocked($$select * from public.apply_vote_streak(null::uuid, null::text, 'RLSUserOne'::text, '2026-05'::text, now())$$),
+  'browser roles cannot execute service-role vote streak function'
 );
 
 select pg_temp.set_auth_context('22222222-2222-2222-2222-222222222222');

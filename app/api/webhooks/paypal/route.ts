@@ -1,9 +1,11 @@
 import { getPayPalAccessToken, getPayPalBaseUrl } from "@/lib/payments"
 import { safeJsonError } from "@/lib/security"
 import {
+  findOrderIdByPaymentId,
   markOrderPaidAndFulfill,
   markWebhookEventProcessed,
-  persistWebhookEvent
+  persistWebhookEvent,
+  revokeOrder
 } from "@/lib/store-server"
 
 export const runtime = "edge"
@@ -75,13 +77,53 @@ type PayPalWebhookEvent = {
     supplementary_data?: {
       related_ids?: {
         order_id?: string
+        capture_id?: string
       }
     }
+    links?: Array<{ href?: string; rel?: string }>
+    disputed_transactions?: Array<{ seller_transaction_id?: string }>
     purchase_units?: Array<{
       reference_id?: string
       custom_id?: string
     }>
   }
+}
+
+function getCaptureIdFromPayPalEvent(payload: PayPalWebhookEvent) {
+  const resource = payload.resource ?? {}
+
+  if (resource.supplementary_data?.related_ids?.capture_id) {
+    return resource.supplementary_data.related_ids.capture_id
+  }
+
+  const sellerTxn = resource.disputed_transactions?.[0]?.seller_transaction_id
+  if (sellerTxn) {
+    return sellerTxn
+  }
+
+  const upLink = resource.links?.find((link) => link.rel === "up")?.href
+  const match = upLink?.match(/\/captures\/([^/]+)$/)
+
+  return match?.[1] ?? null
+}
+
+// A refund/reversal/dispute does not carry our local order id directly, so
+// resolve it: prefer the custom_id/invoice_id we set on the purchase unit,
+// otherwise map the originating capture id back to the stored order.
+async function resolveRevokeOrderId(payload: PayPalWebhookEvent) {
+  const resource = payload.resource ?? {}
+
+  if (resource.custom_id) {
+    return resource.custom_id
+  }
+
+  if (resource.invoice_id) {
+    return resource.invoice_id
+  }
+
+  const captureId = getCaptureIdFromPayPalEvent(payload)
+
+  return captureId ? findOrderIdByPaymentId("paypal", captureId) : null
 }
 
 export async function POST(request: Request) {
@@ -108,6 +150,19 @@ export async function POST(request: Request) {
 
       if (orderId) {
         await markOrderPaidAndFulfill(orderId, payload.resource?.id ?? null)
+      }
+    }
+
+    if (
+      payload.event_type === "PAYMENT.CAPTURE.REFUNDED" ||
+      payload.event_type === "PAYMENT.CAPTURE.REVERSED" ||
+      payload.event_type === "CUSTOMER.DISPUTE.CREATED"
+    ) {
+      const orderId = await resolveRevokeOrderId(payload)
+      const mode = payload.event_type === "PAYMENT.CAPTURE.REFUNDED" ? "refund" : "chargeback"
+
+      if (orderId) {
+        await revokeOrder(orderId, mode, `paypal:${payload.event_type}`)
       }
     }
 

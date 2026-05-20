@@ -35,6 +35,12 @@ export function ContactForm() {
 
   return (
     <form className="grid gap-4" onSubmit={submit}>
+      <div aria-hidden="true" className="absolute left-[-9999px] top-[-9999px] h-0 w-0 overflow-hidden">
+        <label>
+          Do not fill this field
+          <input autoComplete="off" name="website" tabIndex={-1} />
+        </label>
+      </div>
       <div className="grid gap-4 md:grid-cols-2">
         <label className="grid gap-2 text-sm font-medium">
           Name

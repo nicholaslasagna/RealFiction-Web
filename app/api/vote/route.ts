@@ -111,37 +111,16 @@ export async function POST(request: Request) {
     const key = monthKey(votedAt)
     const username = link?.minecraft_username ?? parsed.data.minecraftUsername
 
-    const { data: streak } = await supabase
-      .from("vote_streaks")
-      .select("id, monthly_votes, total_votes")
-      .eq("minecraft_username", username)
-      .eq("month_key", key)
-      .maybeSingle()
+    const { data: streakRows } = await supabase.rpc("apply_vote_streak", {
+      p_user_id: link?.user_id ?? null,
+      p_minecraft_uuid: link?.minecraft_uuid ?? null,
+      p_minecraft_username: username,
+      p_month_key: key,
+      p_voted_at: votedAt.toISOString()
+    })
 
-    if (streak) {
-      await supabase
-        .from("vote_streaks")
-        .update({
-          monthly_votes: Number(streak.monthly_votes ?? 0) + 1,
-          total_votes: Number(streak.total_votes ?? 0) + 1,
-          last_vote_at: votedAt.toISOString(),
-          user_id: link?.user_id ?? null,
-          minecraft_uuid: link?.minecraft_uuid ?? null
-        })
-        .eq("id", streak.id)
-    } else {
-      await supabase.from("vote_streaks").insert({
-        user_id: link?.user_id ?? null,
-        minecraft_uuid: link?.minecraft_uuid ?? null,
-        minecraft_username: username,
-        current_streak: 1,
-        longest_streak: 1,
-        monthly_votes: 1,
-        total_votes: 1,
-        last_vote_at: votedAt.toISOString(),
-        month_key: key
-      })
-    }
+    const streak = Array.isArray(streakRows) ? streakRows[0] : streakRows
+    const monthlyVotes = Number(streak?.monthly_votes ?? 0)
 
     const rewardKey = site.reward_key as string
     const { data: rewardQueue } = await supabase
@@ -172,10 +151,48 @@ export async function POST(request: Request) {
       })
     }
 
+    // Cumulative monthly-vote milestones. Each successful vote increments the
+    // counter by one, so an exact match fires a milestone once; the idempotency
+    // key is a backstop against any reprocessing.
+    const milestone = [5, 15, 30, 75].find((threshold) => threshold === monthlyVotes)
+    let milestoneQueued = false
+
+    if (milestone) {
+      const { data: milestoneRow } = await supabase
+        .from("reward_queue")
+        .insert({
+          user_id: link?.user_id ?? null,
+          minecraft_uuid: link?.minecraft_uuid ?? null,
+          minecraft_username: username,
+          source: "vote",
+          source_id: vote.id,
+          reward_key: `vote.milestone.${milestone}`,
+          payload: {
+            vote_id: vote.id,
+            vote_site: site.slug,
+            milestone,
+            monthly_votes: monthlyVotes,
+            safe_reward: true
+          },
+          idempotency_key: `vote_milestone:${username.toLowerCase()}:${key}:${milestone}`,
+          status: "pending"
+        })
+        .select("id")
+        .maybeSingle()
+
+      milestoneQueued = Boolean(milestoneRow?.id)
+    }
+
     return Response.json({
       accepted: true,
       voteId: vote.id,
-      rewardQueued: Boolean(rewardQueue?.id)
+      rewardQueued: Boolean(rewardQueue?.id),
+      streak: {
+        current: Number(streak?.current_streak ?? 0),
+        longest: Number(streak?.longest_streak ?? 0),
+        monthly: monthlyVotes
+      },
+      milestoneQueued
     })
   } catch (error) {
     console.error("vote_webhook_error", error)
