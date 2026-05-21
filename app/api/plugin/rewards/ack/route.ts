@@ -1,10 +1,12 @@
 import { z } from "zod"
 
 import { parsePluginJson, requirePluginAuth } from "@/lib/plugin-auth"
-import { safeJsonError } from "@/lib/security"
+import { describeError, safeJsonError } from "@/lib/security"
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role"
 
 export const runtime = "edge"
+
+const MISSING_SCHEMA_CODES = new Set(["42883", "42P01", "42704"])
 
 const ackSchema = z.object({
   serverId: z.string().trim().min(2).max(80),
@@ -21,25 +23,32 @@ const ackSchema = z.object({
 })
 
 export async function POST(request: Request) {
-  const rawBody = await request.text()
-  const auth = await requirePluginAuth(request, rawBody, "rewards.ack")
-
-  if (!auth.ok) {
-    return auth.response
-  }
-
-  const parsed = ackSchema.safeParse(parsePluginJson(rawBody))
-
-  if (!parsed.success) {
-    return Response.json({ error: "Invalid reward acknowledgement payload." }, { status: 400 })
-  }
-
-  if (auth.mode === "hmac" && parsed.data.serverId !== auth.serverId) {
-    return Response.json({ error: "Plugin server identity mismatch." }, { status: 401 })
-  }
-
   try {
-    const supabase = getSupabaseServiceRoleClient()
+    const rawBody = await request.text()
+    const auth = await requirePluginAuth(request, rawBody, "rewards.ack")
+
+    if (!auth.ok) {
+      return auth.response
+    }
+
+    const parsed = ackSchema.safeParse(parsePluginJson(rawBody))
+
+    if (!parsed.success) {
+      return Response.json({ error: "Invalid reward acknowledgement payload." }, { status: 400 })
+    }
+
+    if (auth.mode === "hmac" && parsed.data.serverId !== auth.serverId) {
+      return Response.json({ error: "Plugin server identity mismatch." }, { status: 401 })
+    }
+
+    let supabase
+    try {
+      supabase = getSupabaseServiceRoleClient()
+    } catch (error) {
+      console.error("plugin_rewards_ack_config", describeError(error))
+      return safeJsonError("Reward backend is not configured.", 503)
+    }
+
     const results = []
 
     for (const delivery of parsed.data.deliveries) {
@@ -51,6 +60,10 @@ export async function POST(request: Request) {
       })
 
       if (error) {
+        console.error("plugin_rewards_ack_rpc", describeError(error))
+        if (error.code && MISSING_SCHEMA_CODES.has(error.code)) {
+          return safeJsonError("Reward backend is not ready.", 503)
+        }
         results.push({
           rewardId: delivery.rewardId,
           accepted: false,
@@ -76,7 +89,7 @@ export async function POST(request: Request) {
       results
     })
   } catch (error) {
-    console.error("plugin_rewards_ack_error", error)
+    console.error("plugin_rewards_ack_error", describeError(error))
     return safeJsonError("Reward acknowledgement could not be processed.", 500)
   }
 }

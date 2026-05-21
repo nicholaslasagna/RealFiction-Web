@@ -2,6 +2,7 @@ import "server-only"
 
 import {
   constantTimeEqual,
+  describeError,
   getRequestSecret,
   isSharedSecretAuthAllowed,
   requireConfiguredSecret,
@@ -65,8 +66,19 @@ export async function requirePluginAuth(request: Request, rawBody: string, route
       return { ok: false, response: Response.json({ error: "Unauthorized." }, { status: 401 }) }
     }
 
+    // Signature is valid past this point; remaining failures are backend/infra
+    // issues (missing runtime secret, DB unavailable) and must not surface as an
+    // uncaught 500. They return 503 so RealCore can distinguish "retry later"
+    // from a genuine auth rejection (401).
+    let supabase
+    try {
+      supabase = getSupabaseServiceRoleClient()
+    } catch (error) {
+      console.error("plugin_auth_config", { route: routeName, ...describeError(error) })
+      return { ok: false, response: safeJsonError("Plugin authorization backend is not configured.", 503) }
+    }
+
     const nonceHash = await sha256Hex(`${serverId}:${routeName}:${nonce}`)
-    const supabase = getSupabaseServiceRoleClient()
     const { error } = await supabase.from("plugin_request_nonces").insert({
       nonce_hash: nonceHash,
       server_id: serverId,
@@ -79,7 +91,8 @@ export async function requirePluginAuth(request: Request, rawBody: string, route
     }
 
     if (error) {
-      return { ok: false, response: safeJsonError("Plugin authorization could not be verified.", 500) }
+      console.error("plugin_auth_nonce", { route: routeName, ...describeError(error) })
+      return { ok: false, response: safeJsonError("Plugin authorization could not be verified.", 503) }
     }
 
     return { ok: true, mode: "hmac", serverId }

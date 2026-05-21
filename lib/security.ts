@@ -4,6 +4,22 @@ export function safeJsonError(message: string, status = 500) {
   return Response.json({ error: message }, { status })
 }
 
+// Extracts a log-safe shape from an unknown error. Only the message and (for
+// Postgres/Supabase errors) the code are kept. These never contain secret
+// values — env-config errors carry variable names, not values, and Postgres
+// messages describe the failure, not credentials.
+export function describeError(error: unknown): { message: string; code?: string } {
+  if (error && typeof error === "object") {
+    const candidate = error as { message?: unknown; code?: unknown }
+    return {
+      message: typeof candidate.message === "string" ? candidate.message : "Unknown error",
+      code: typeof candidate.code === "string" ? candidate.code : undefined
+    }
+  }
+
+  return { message: typeof error === "string" ? error : "Unknown error" }
+}
+
 export function getRequestSecret(request: Request, headerName: string) {
   const headerValue = request.headers.get(headerName)
 
