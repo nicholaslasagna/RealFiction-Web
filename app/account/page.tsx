@@ -115,7 +115,7 @@ const perkCards = [
     key: "supporter",
     title: "RealVIP",
     text: "Supporter flair, friendly extras, and community perks.",
-    slugs: ["realvip-monthly", "real-supporter"],
+    slugs: ["realvip", "real-supporter"],
     icon: Star
   },
   {
@@ -129,7 +129,7 @@ const perkCards = [
     key: "pets",
     title: "Pets",
     text: "Bring a fun lobby companion with you.",
-    slugs: ["realpets-pack"],
+    slugs: ["realpets"],
     icon: Heart
   },
   {
@@ -159,6 +159,12 @@ function getProduct(row: EntitlementRow): ProductRef | null {
 function entitlementSlug(row: EntitlementRow) {
   const product = getProduct(row)
   return product?.slug ?? row.entitlement_key.replace(/^product:/, "")
+}
+
+// Subscription SKUs are <base>-1m/-3m/-6m/-12m; collapse to the base so a perk
+// counts as owned regardless of the purchased term.
+function baseSlug(slug: string) {
+  return slug.replace(/-(1m|3m|6m|12m)$/, "")
 }
 
 function formatDate(value: string | null) {
@@ -360,7 +366,7 @@ async function SignedInAccount() {
   const data = await getAccountData()
   const verifiedLink = data.links.find((link) => link.status === "verified")
   const pendingLink = data.links.find((link) => link.status === "pending")
-  const ownedSlugs = new Set(data.entitlements.map(entitlementSlug))
+  const ownedSlugs = new Set(data.entitlements.map((row) => baseSlug(entitlementSlug(row))))
   const ownedCount = perkCards.filter((perk) => perk.slugs.some((slug) => ownedSlugs.has(slug))).length
 
   return (
