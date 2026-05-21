@@ -28,18 +28,43 @@ export type ProductCategory =
   | "lobby"
   | "gift-cards"
 
-export type StoreProduct = {
+export type DurationMonths = 1 | 3 | 6 | 12
+
+export type SubscriptionTier = {
+  slug: string
+  months: DurationMonths
+  priceCents: number
+}
+
+export type SubscriptionProduct = {
+  id: string
+  name: string
+  category: ProductCategory
+  summary: string
+  details: string[]
+  accent: string
+  featured?: boolean
+  tiers: SubscriptionTier[]
+}
+
+export type GiftCard = {
   id: string
   name: string
   category: ProductCategory
   priceCents: number
   summary: string
   details: string[]
-  fulfillment: "permanent" | "subscription" | "consumable"
-  durationDays?: number
+  fulfillment: "consumable"
   featured?: boolean
   accent: string
-  image?: string
+  image: string
+}
+
+export const DURATION_LABEL: Record<DurationMonths, string> = {
+  1: "1 month",
+  3: "3 months",
+  6: "6 months",
+  12: "1 year"
 }
 
 export const navItems = [
@@ -120,81 +145,114 @@ export const gamemodes = [
   }
 ]
 
-export const storeProducts: StoreProduct[] = [
+// Subscription products. Every non-gift product offers 1 / 3 / 6 / 12-month
+// tiers with built-in discounts on the longer terms. Each tier is its own
+// server-authoritative product slug (priced + duration-bound in the database).
+export const storeProducts: SubscriptionProduct[] = [
   {
-    id: "realvip-monthly",
+    id: "realvip",
     name: "RealVIP",
     category: "supporter",
-    priceCents: 699,
-    summary: "Monthly supporter rank with profile style, chat flair, and lobby cosmetics.",
-    details: ["No gameplay advantage", "Monthly supporter badge", "Cosmetic perks", "Helpful support access"],
-    fulfillment: "subscription",
-    durationDays: 30,
+    summary: "Supporter rank with profile style, chat flair, and lobby cosmetics.",
+    details: ["No gameplay advantage", "Supporter badge + chat flair", "Lobby cosmetic perks", "Helpful support access"],
+    accent: "cyan",
     featured: true,
-    accent: "cyan"
+    tiers: [
+      { slug: "realvip-1m", months: 1, priceCents: 499 },
+      { slug: "realvip-3m", months: 3, priceCents: 1299 },
+      { slug: "realvip-6m", months: 6, priceCents: 2399 },
+      { slug: "realvip-12m", months: 12, priceCents: 3999 }
+    ]
   },
   {
     id: "real-supporter",
     name: "RealSupporter",
     category: "supporter",
-    priceCents: 2499,
-    summary: "Permanent account supporter status for community members who want to back the network.",
-    details: ["Permanent supporter profile frame", "Discord supporter sync", "Cosmetic-only perks", "Monthly cosmetic drop"],
-    fulfillment: "permanent",
+    summary: "Top supporter status for members who want to back the network in style.",
+    details: ["Supporter profile frame", "Discord supporter sync", "Cosmetic-only perks", "Monthly cosmetic drop"],
+    accent: "amber",
     featured: true,
-    accent: "amber"
+    tiers: [
+      { slug: "real-supporter-1m", months: 1, priceCents: 999 },
+      { slug: "real-supporter-3m", months: 3, priceCents: 2699 },
+      { slug: "real-supporter-6m", months: 6, priceCents: 4799 },
+      { slug: "real-supporter-12m", months: 12, priceCents: 7999 }
+    ]
   },
   {
-    id: "realpets-pack",
+    id: "realpets",
     name: "RealPets Pack",
     category: "pets",
-    priceCents: 999,
-    summary: "Unlock a rotating pet collection for hubs, lobbies, and social spaces.",
+    summary: "A rotating pet collection for hubs, lobbies, and social spaces.",
     details: ["Lobby-only pets", "Nameable pet profile", "Seasonal skins", "No combat effects"],
-    fulfillment: "permanent",
-    accent: "emerald"
+    accent: "emerald",
+    tiers: [
+      { slug: "realpets-1m", months: 1, priceCents: 299 },
+      { slug: "realpets-3m", months: 3, priceCents: 799 },
+      { slug: "realpets-6m", months: 6, priceCents: 1399 },
+      { slug: "realpets-12m", months: 12, priceCents: 2399 }
+    ]
   },
   {
     id: "particle-vault",
     name: "Particle Vault",
     category: "particles",
-    priceCents: 799,
     summary: "Cinematic trails, celebration effects, and lobby visual effects.",
     details: ["Lobby and cosmetic-safe effects", "Toggleable presets", "Profile showcase support", "Delivered to your account"],
-    fulfillment: "permanent",
-    accent: "violet"
+    accent: "violet",
+    tiers: [
+      { slug: "particle-vault-1m", months: 1, priceCents: 349 },
+      { slug: "particle-vault-3m", months: 3, priceCents: 899 },
+      { slug: "particle-vault-6m", months: 6, priceCents: 1699 },
+      { slug: "particle-vault-12m", months: 12, priceCents: 2799 }
+    ]
   },
   {
     id: "username-colors",
     name: "Username Colors",
     category: "identity",
-    priceCents: 499,
     summary: "Curated chat colors and nameplate identity styles for your in-game look.",
     details: ["Approved palette", "Works with prefixes", "No staff impersonation colors", "Works with your profile"],
-    fulfillment: "permanent",
-    accent: "rose"
+    accent: "rose",
+    tiers: [
+      { slug: "username-colors-1m", months: 1, priceCents: 199 },
+      { slug: "username-colors-3m", months: 3, priceCents: 499 },
+      { slug: "username-colors-6m", months: 6, priceCents: 899 },
+      { slug: "username-colors-12m", months: 12, priceCents: 1599 }
+    ]
   },
   {
     id: "lobby-flight",
     name: "Lobby Flight",
     category: "lobby",
-    priceCents: 599,
     summary: "Smooth lobby flight for hubs, spawn showcases, and event spaces.",
     details: ["Lobby-only convenience", "No survival or PvP impact", "Easy to turn on or off", "Made for hub areas"],
-    fulfillment: "permanent",
-    accent: "sky"
+    accent: "sky",
+    tiers: [
+      { slug: "lobby-flight-1m", months: 1, priceCents: 249 },
+      { slug: "lobby-flight-3m", months: 3, priceCents: 649 },
+      { slug: "lobby-flight-6m", months: 6, priceCents: 1199 },
+      { slug: "lobby-flight-12m", months: 12, priceCents: 1999 }
+    ]
   },
   {
     id: "cosmetic-atelier",
     name: "Cosmetic Atelier",
     category: "cosmetics",
-    priceCents: 1299,
     summary: "A curated bundle of profile effects, lobby entrances, particles, and badges.",
     details: ["Profile customization", "Lobby entrance effects", "Seasonal badge rotation", "Giftable"],
-    fulfillment: "permanent",
+    accent: "blue",
     featured: true,
-    accent: "blue"
-  },
+    tiers: [
+      { slug: "cosmetic-atelier-1m", months: 1, priceCents: 699 },
+      { slug: "cosmetic-atelier-3m", months: 3, priceCents: 1899 },
+      { slug: "cosmetic-atelier-6m", months: 6, priceCents: 3399 },
+      { slug: "cosmetic-atelier-12m", months: 12, priceCents: 5599 }
+    ]
+  }
+]
+
+export const giftCards: GiftCard[] = [
   {
     id: "gift-card-5",
     name: "$5 Gift Card",

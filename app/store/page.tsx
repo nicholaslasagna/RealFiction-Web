@@ -8,7 +8,6 @@ import { Storefront } from "@/components/storefront"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
-import { storeProducts } from "@/lib/data"
 
 export const metadata: Metadata = {
   title: "Store",
@@ -70,7 +69,7 @@ export default function StorePage() {
       </Reveal>
 
       <Reveal className="mt-10">
-        <Storefront products={storeProducts} />
+        <Storefront />
       </Reveal>
       </div>
     </section>
