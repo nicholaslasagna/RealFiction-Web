@@ -1,5 +1,6 @@
 "use client"
 
+import Image from "next/image"
 import { CreditCard, Gift, Minus, Plus, ShieldCheck, ShoppingCart, Trash2 } from "lucide-react"
 import { useMemo, useState } from "react"
 
@@ -127,42 +128,69 @@ export function Storefront({ products }: { products: StoreProduct[] }) {
         </div>
 
         <div className="grid gap-5 md:grid-cols-2">
-          {filteredProducts.map((product) => (
-            <Card key={product.id} className="minecraft-card overflow-hidden">
-              <CardHeader>
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <Badge variant={product.featured ? "warning" : "outline"}>
-                      {product.fulfillment === "subscription"
-                        ? "Monthly"
-                        : product.fulfillment === "consumable"
-                          ? "Gift"
-                          : "Permanent"}
-                    </Badge>
-                    <CardTitle className="display-font mt-3 text-2xl">{product.name}</CardTitle>
-                  </div>
-                  <div className="font-mono text-lg font-semibold text-amber-100">
-                    {formatCurrency(product.priceCents)}
-                  </div>
+          {filteredProducts.map((product) =>
+            product.image ? (
+              <Card key={product.id} className="minecraft-card flex flex-col overflow-hidden">
+                <div className="flex justify-center bg-black/30 px-4 pt-5">
+                  <Image
+                    alt={`${product.name} for RealFiction`}
+                    src={product.image}
+                    width={384}
+                    height={606}
+                    className="h-auto w-[58%] max-w-[210px] rounded-lg drop-shadow-[0_18px_42px_rgba(0,0,0,0.55)]"
+                  />
                 </div>
-                <CardDescription>{product.summary}</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <ul className="grid gap-2 text-sm text-muted-foreground">
-                  {product.details.map((detail) => (
-                    <li key={detail} className="flex gap-2">
-                      <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-emerald-200" />
-                      <span>{detail}</span>
-                    </li>
-                  ))}
-                </ul>
-                <Button className="mt-5 w-full" onClick={() => updateQuantity(product.id, 1)} type="button">
-                  <Plus className="h-4 w-4" />
-                  Add to cart
-                </Button>
-              </CardContent>
-            </Card>
-          ))}
+                <CardContent className="flex flex-1 flex-col gap-3 pt-5">
+                  <div className="flex items-center justify-between gap-3">
+                    <CardTitle className="display-font text-xl">{product.name}</CardTitle>
+                    <span className="font-mono text-lg font-semibold text-amber-100">
+                      {formatCurrency(product.priceCents)}
+                    </span>
+                  </div>
+                  <p className="text-sm leading-6 text-muted-foreground">{product.summary}</p>
+                  <Button className="mt-auto w-full" onClick={() => updateQuantity(product.id, 1)} type="button">
+                    <Plus className="h-4 w-4" />
+                    Add to cart
+                  </Button>
+                </CardContent>
+              </Card>
+            ) : (
+              <Card key={product.id} className="minecraft-card overflow-hidden">
+                <CardHeader>
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <Badge variant={product.featured ? "warning" : "outline"}>
+                        {product.fulfillment === "subscription"
+                          ? "Monthly"
+                          : product.fulfillment === "consumable"
+                            ? "Gift"
+                            : "Permanent"}
+                      </Badge>
+                      <CardTitle className="display-font mt-3 text-2xl">{product.name}</CardTitle>
+                    </div>
+                    <div className="font-mono text-lg font-semibold text-amber-100">
+                      {formatCurrency(product.priceCents)}
+                    </div>
+                  </div>
+                  <CardDescription>{product.summary}</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <ul className="grid gap-2 text-sm text-muted-foreground">
+                    {product.details.map((detail) => (
+                      <li key={detail} className="flex gap-2">
+                        <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-emerald-200" />
+                        <span>{detail}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  <Button className="mt-5 w-full" onClick={() => updateQuantity(product.id, 1)} type="button">
+                    <Plus className="h-4 w-4" />
+                    Add to cart
+                  </Button>
+                </CardContent>
+              </Card>
+            )
+          )}
         </div>
       </div>
 

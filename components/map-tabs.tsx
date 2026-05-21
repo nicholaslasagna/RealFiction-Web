@@ -1,7 +1,7 @@
 "use client"
 
 import { ExternalLink } from "lucide-react"
-import { useState } from "react"
+import { useEffect, useState } from "react"
 
 import { Button } from "@/components/ui/button"
 import { mapEndpoints } from "@/lib/data"
@@ -9,6 +9,17 @@ import { cn } from "@/lib/utils"
 
 export function MapTabs() {
   const [active, setActive] = useState(mapEndpoints[0])
+  const [status, setStatus] = useState<"loading" | "loaded" | "blocked">("loading")
+
+  useEffect(() => {
+    setStatus("loading")
+
+    const timer = window.setTimeout(() => {
+      setStatus((current) => (current === "loaded" ? current : "blocked"))
+    }, 7000)
+
+    return () => window.clearTimeout(timer)
+  }, [active.url])
 
   return (
     <div className="space-y-5">
@@ -48,13 +59,46 @@ export function MapTabs() {
             </a>
           </Button>
         </div>
-        <iframe
-          className="h-[620px] w-full bg-background"
-          loading="lazy"
-          referrerPolicy="no-referrer"
-          src={active.url}
-          title={active.name}
-        />
+
+        <div className="relative">
+          <iframe
+            key={active.url}
+            className="h-[620px] w-full bg-background"
+            loading="lazy"
+            referrerPolicy="no-referrer"
+            src={active.url}
+            title={active.name}
+            onLoad={() => setStatus("loaded")}
+          />
+
+          {status === "blocked" ? (
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-[#06101c]/92 p-6 text-center backdrop-blur-sm">
+              <p className="display-font text-xl font-semibold text-white">This map opens best in its own tab</p>
+              <p className="max-w-md text-sm leading-6 text-muted-foreground">
+                {active.name} can take a moment to load, and some map hosts block embedding. Open it
+                directly for the full live view.
+              </p>
+              <Button asChild size="lg">
+                <a href={active.url} rel="noreferrer" target="_blank">
+                  <ExternalLink className="h-4 w-4" />
+                  Open {active.name}
+                </a>
+              </Button>
+            </div>
+          ) : null}
+        </div>
+
+        <div className="border-t border-amber-200/12 px-4 py-3 text-center text-sm text-muted-foreground">
+          Map not loading?{" "}
+          <a
+            href={active.url}
+            rel="noreferrer"
+            target="_blank"
+            className="font-semibold text-amber-100 hover:underline"
+          >
+            Open {active.name} in a new tab
+          </a>
+        </div>
       </div>
     </div>
   )

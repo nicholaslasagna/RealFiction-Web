@@ -2,15 +2,12 @@ import Image from "next/image"
 import Link from "next/link"
 import {
   ArrowRight,
-  Castle,
   ExternalLink,
   Gem,
   HeartHandshake,
   MapPinned,
   MessageCircle,
   ShieldCheck,
-  Sparkles,
-  Star,
   Vote
 } from "lucide-react"
 
@@ -38,62 +35,54 @@ export default function HomePage() {
         <div className="absolute inset-0 -z-20">
           <Image
             alt="RealFiction Minecraft landscape"
-            src="/images/hero2.png"
+            src="/images/hero1.png"
             fill
             priority
-            className="scale-105 object-cover opacity-65 blur-[2px]"
+            className="scale-105 object-cover opacity-70 blur-[3px]"
             sizes="100vw"
           />
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(15,39,52,0.2),rgba(5,10,18,0.9)_64%,rgba(3,7,13,0.98))]" />
-          <div className="absolute inset-0 bg-gradient-to-b from-[#071525]/62 via-[#071525]/58 to-background" />
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(8,24,42,0.18),rgba(3,9,18,0.9)_66%,rgba(2,6,13,0.98))]" />
+          <div className="absolute inset-0 bg-gradient-to-b from-[#04101f]/55 via-[#04101f]/60 to-background" />
           <div className="absolute inset-x-0 bottom-0 h-44 bg-gradient-to-t from-background to-transparent" />
         </div>
-        <div className="pixel-grid opacity-45" />
 
         <div className="container-shell flex min-h-[calc(100svh-80px)] flex-col items-center justify-center py-16 text-center">
-          <Reveal className="flex w-full max-w-5xl flex-col items-center">
+          <Reveal className="flex w-full max-w-3xl flex-col items-center">
             <Image
               alt="RealFiction"
-              src="/images/logo1.png"
-              width={560}
-              height={170}
+              src="/images/rf.png"
+              width={460}
+              height={450}
               priority
-              className="w-[min(560px,88vw)] drop-shadow-[0_24px_60px_rgba(0,0,0,0.65)]"
+              className="w-[min(320px,72vw)] drop-shadow-[0_28px_70px_rgba(0,0,0,0.7)]"
             />
 
-            <Badge variant="warning" className="mt-6 border-amber-200/35 bg-black/35 uppercase tracking-[0.22em]">
-              Java + Bedrock Minecraft Network
-            </Badge>
-
-            <h1 className="display-font mt-6 max-w-4xl text-5xl font-semibold leading-[0.98] text-white md:text-7xl">
+            <h1 className="display-font mt-7 text-4xl font-semibold leading-tight text-white md:text-6xl">
               Welcome to RealFiction
             </h1>
-            <p className="mt-6 max-w-3xl text-base leading-8 text-slate-200 md:text-xl">
+            <p className="mt-5 max-w-2xl text-base leading-8 text-slate-200/90 md:text-lg">
               A community-driven Minecraft network with Survival, Factions, Arcade, BedWars,
               Murder Mystery, events, cosmetics, voting rewards, and more.
             </p>
 
-            <div className="minecraft-panel mt-8 w-full max-w-4xl p-4 md:p-5">
-              <div className="grid gap-3 md:grid-cols-[1fr_auto_1fr] md:items-center">
-                <div className="rounded-md border border-white/12 bg-black/26 px-4 py-3 text-left">
-                  <p className="minecraft-font text-xs uppercase tracking-[0.2em] text-amber-200">Java IP</p>
-                  <p className="mt-1 font-mono text-lg font-semibold text-white">realfiction.live</p>
-                </div>
-                <div className="flex justify-center">
-                  <LivePlayerCount />
-                </div>
-                <div className="rounded-md border border-white/12 bg-black/26 px-4 py-3 text-left">
-                  <p className="minecraft-font text-xs uppercase tracking-[0.2em] text-emerald-200">Bedrock</p>
-                  <p className="mt-1 font-mono text-lg font-semibold text-white">bedrock.realfiction.live:19132</p>
-                </div>
-              </div>
+            <div className="mt-6">
+              <LivePlayerCount />
+            </div>
 
-              <div className="mt-4 flex flex-col justify-center gap-3 sm:flex-row">
+            <div className="minecraft-panel mt-6 w-full max-w-2xl p-5 md:p-6">
+              <p className="minecraft-font text-xs uppercase tracking-[0.24em] text-amber-200/90">Java IP</p>
+              <p className="mt-1 font-mono text-2xl font-semibold text-white md:text-3xl">realfiction.live</p>
+              <p className="mt-2 text-sm text-slate-300/80">
+                Bedrock: <span className="font-mono text-slate-200">bedrock.realfiction.live</span>
+                <span className="text-slate-400"> · Port 19132</span>
+              </p>
+
+              <div className="mt-5 flex flex-col justify-center gap-3 sm:flex-row">
                 <CopyServerButton value="realfiction.live" label="Copy Java IP" />
                 <Button asChild size="lg" variant="outline">
                   <Link href="https://discord.com/invite/JkPpmzn">
                     <MessageCircle className="h-4 w-4" />
-                    Join Discord
+                    Join Our Discord
                   </Link>
                 </Button>
               </div>
@@ -242,10 +231,7 @@ export default function HomePage() {
         <div className="absolute inset-0 -z-10 bg-gradient-to-r from-background via-background/88 to-background/72" />
         <div className="container-shell">
           <Reveal className="max-w-3xl">
-            <Badge variant="warning">
-              <Star className="mr-1.5 h-3.5 w-3.5" />
-              RealFiction Network
-            </Badge>
+            <Badge variant="warning">RealFiction Network</Badge>
             <h2 className="display-font mt-4 text-4xl font-semibold md:text-6xl">A server built around players, not purchases.</h2>
             <p className="mt-5 text-base leading-8 text-muted-foreground md:text-lg">
               Explore, compete, vote, collect cosmetics, show off your profile, and stay close to the
@@ -253,16 +239,10 @@ export default function HomePage() {
             </p>
             <div className="mt-7 flex flex-col gap-3 sm:flex-row">
               <Button asChild size="lg">
-                <Link href="/store">
-                  <Sparkles className="h-4 w-4" />
-                  Browse cosmetics
-                </Link>
+                <Link href="/store">Browse cosmetics</Link>
               </Button>
               <Button asChild size="lg" variant="outline">
-                <Link href="/rules">
-                  <Castle className="h-4 w-4" />
-                  Read the rules
-                </Link>
+                <Link href="/rules">Read the rules</Link>
               </Button>
             </div>
           </Reveal>

@@ -1,7 +1,8 @@
 "use client"
 
-import { Activity, WifiOff } from "lucide-react"
 import { useEffect, useState } from "react"
+
+import { cn } from "@/lib/utils"
 
 type PlayerCountState = {
   online: boolean
@@ -50,16 +51,28 @@ export function LivePlayerCount() {
   const online = state.online && !loading
 
   return (
-    <div className="inline-flex items-center gap-3 rounded-md border border-white/15 bg-black/28 px-4 py-3 text-sm shadow-xl backdrop-blur">
-      {online ? (
-        <Activity className="h-4 w-4 text-emerald-300" />
+    <div className="inline-flex items-center gap-2.5 rounded-full border border-white/12 bg-black/35 px-4 py-2 text-sm shadow-lg backdrop-blur">
+      <span className="relative flex h-2.5 w-2.5">
+        {online ? (
+          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400/60" />
+        ) : null}
+        <span
+          className={cn(
+            "relative inline-flex h-2.5 w-2.5 rounded-full",
+            online ? "bg-emerald-400" : "bg-amber-300"
+          )}
+        />
+      </span>
+      {loading ? (
+        <span className="text-slate-300">Checking players…</span>
+      ) : online ? (
+        <span className="text-slate-200">
+          <strong className="font-semibold text-amber-200">{state.playersOnline}</strong>{" "}
+          player{state.playersOnline === 1 ? "" : "s"} online
+        </span>
       ) : (
-        <WifiOff className="h-4 w-4 text-amber-200" />
+        <span className="text-slate-300">Server status updating</span>
       )}
-      <span className="text-muted-foreground">Network</span>
-      <strong className="font-mono text-foreground">
-        {loading ? "Checking" : online ? `${state.playersOnline}/${state.playersMax ?? "?"}` : "Status pending"}
-      </strong>
     </div>
   )
 }

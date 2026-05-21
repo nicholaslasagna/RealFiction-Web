@@ -1,7 +1,7 @@
 import type { Metadata } from "next"
 import Image from "next/image"
 import Link from "next/link"
-import { Gift, ShieldCheck, Sparkles } from "lucide-react"
+import { Gift, ShieldCheck } from "lucide-react"
 
 import { Reveal } from "@/components/reveal"
 import { Storefront } from "@/components/storefront"
@@ -61,7 +61,7 @@ export default function StorePage() {
               {item.includes("gift") ? (
                 <Gift className="mt-0.5 h-4 w-4 text-amber-200" />
               ) : (
-                <Sparkles className="mt-0.5 h-4 w-4 text-emerald-200" />
+                <ShieldCheck className="mt-0.5 h-4 w-4 text-emerald-200" />
               )}
               <p className="text-sm leading-6 text-muted-foreground">{item}</p>
             </CardContent>

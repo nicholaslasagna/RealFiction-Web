@@ -12,7 +12,6 @@ import {
   Pickaxe,
   Plane,
   ShieldCheck,
-  Sparkles,
   Swords,
   Trophy,
   UserRound,
@@ -40,13 +39,13 @@ export type StoreProduct = {
   durationDays?: number
   featured?: boolean
   accent: string
+  image?: string
 }
 
 export const navItems = [
   { href: "/", label: "Home" },
   { href: "/store", label: "Store" },
   { href: "/vote", label: "Vote" },
-  { href: "/account", label: "Account" },
   { href: "/map", label: "Map" },
   { href: "/rules", label: "Rules" },
   { href: "/updates", label: "Updates" },
@@ -197,23 +196,58 @@ export const storeProducts: StoreProduct[] = [
     accent: "blue"
   },
   {
+    id: "gift-card-10",
+    name: "$10 Gift Card",
+    category: "gift-cards",
+    priceCents: 1000,
+    summary: "A little something to spend on cosmetics, ranks, and profile perks.",
+    details: ["Store credit for RealFiction", "Great small gift", "Easy to redeem", "Spend it on anything cosmetic"],
+    fulfillment: "consumable",
+    accent: "amber",
+    image: "/images/giftcard-10.png"
+  },
+  {
+    id: "gift-card-20",
+    name: "$20 Gift Card",
+    category: "gift-cards",
+    priceCents: 2000,
+    summary: "Give a friend store credit for cosmetics, ranks, and visual perks.",
+    details: ["Store credit for RealFiction", "Perfect for a friend", "Easy to redeem", "Spend it on anything cosmetic"],
+    fulfillment: "consumable",
+    accent: "emerald",
+    image: "/images/giftcard-20.png"
+  },
+  {
     id: "gift-card-25",
     name: "$25 Gift Card",
     category: "gift-cards",
     priceCents: 2500,
     summary: "Send store credit for cosmetics, supporter ranks, and visual profile perks.",
-    details: ["Store credit for RealFiction", "Safe redemption", "Easy balance view", "Gift-friendly checkout"],
+    details: ["Store credit for RealFiction", "A favorite gift size", "Easy to redeem", "Spend it on anything cosmetic"],
     fulfillment: "consumable",
-    accent: "amber"
+    featured: true,
+    accent: "emerald",
+    image: "/images/giftcard-25.png"
+  },
+  {
+    id: "gift-card-50",
+    name: "$50 Gift Card",
+    category: "gift-cards",
+    priceCents: 5000,
+    summary: "The big one — plenty of store credit for cosmetics and supporter ranks.",
+    details: ["Store credit for RealFiction", "Best value gift", "Easy to redeem", "Spend it on anything cosmetic"],
+    fulfillment: "consumable",
+    accent: "violet",
+    image: "/images/giftcard-50.png"
   }
 ]
 
 export const productCategories: Array<{
   id: ProductCategory | "all"
   label: string
-  icon: typeof Sparkles
+  icon: typeof Boxes
 }> = [
-  { id: "all", label: "All", icon: Sparkles },
+  { id: "all", label: "All", icon: Boxes },
   { id: "supporter", label: "Supporter", icon: Crown },
   { id: "cosmetics", label: "Cosmetics", icon: Palette },
   { id: "pets", label: "Pets", icon: UserRound },
@@ -445,7 +479,7 @@ export const socials = [
 ]
 
 export const trustPillars = [
-  { label: "Cosmetics only", icon: Sparkles },
+  { label: "Cosmetics only", icon: Palette },
   { label: "Secure checkout", icon: ShieldCheck },
   { label: "Verified rewards", icon: BadgeCheck },
   { label: "Fair play", icon: Medal }
