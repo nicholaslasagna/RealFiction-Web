@@ -42,6 +42,21 @@ final class PaperScheduler implements RealCoreScheduler {
   }
 
   @Override
+  public ScheduledTaskHandle runGlobalRepeating(Runnable task, long initialDelayTicks, long periodTicks) {
+    BukkitTask bukkitTask = Bukkit.getScheduler().runTaskTimer(
+        plugin,
+        task,
+        Math.max(1L, initialDelayTicks),
+        Math.max(1L, periodTicks)
+    );
+    tasks.add(bukkitTask);
+    return () -> {
+      bukkitTask.cancel();
+      tasks.remove(bukkitTask);
+    };
+  }
+
+  @Override
   public void runGlobal(Runnable task) {
     Bukkit.getScheduler().runTask(plugin, task);
   }
@@ -49,6 +64,11 @@ final class PaperScheduler implements RealCoreScheduler {
   @Override
   public void runForPlayer(Player player, Runnable task) {
     runGlobal(task);
+  }
+
+  @Override
+  public void runForPlayerLater(Player player, Runnable task, long delayTicks) {
+    Bukkit.getScheduler().runTaskLater(plugin, task, Math.max(1L, delayTicks));
   }
 
   @Override

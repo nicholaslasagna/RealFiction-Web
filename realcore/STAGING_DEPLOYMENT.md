@@ -103,6 +103,8 @@ Console or staff in game:
 
 ```text
 /realfiction status
+/rf status
+/realcore status
 /realfiction reload
 /realfiction status
 ```

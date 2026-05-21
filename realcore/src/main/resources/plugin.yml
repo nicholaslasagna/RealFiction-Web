@@ -3,16 +3,26 @@ version: ${project.version}
 main: com.realfiction.realcore.RealCorePlugin
 api-version: "1.21"
 author: RealFiction
-description: RealFiction account linking and reward delivery.
+description: RealFiction account linking, reward delivery, and lobby.
 softdepend:
   - LuckPerms
 commands:
   realfiction:
-    description: Link your Minecraft account to RealFiction.
-    usage: /realfiction <link|status|reload>
-    aliases:
-      - rf
+    description: RealFiction linking, rewards, and lobby commands.
+    usage: /realfiction <link|menu|lobbies|spawn|status|reload|setspawn>
+  rf:
+    description: RealFiction linking, rewards, and lobby commands.
+    usage: /rf <link|menu|lobbies|spawn|status|reload|setspawn>
+  realcore:
+    description: RealFiction linking, rewards, and lobby commands.
+    usage: /realcore <link|menu|lobbies|spawn|status|reload|setspawn>
 permissions:
   realcore.admin:
-    description: Allows RealCore admin commands.
+    description: Allows RealCore admin commands (status, reload, setspawn).
     default: op
+  realcore.lobby.bypass:
+    description: Bypass lobby build, interact, drop, and pickup protections.
+    default: op
+  realfiction.lobby.flight:
+    description: Allows flight inside lobby worlds.
+    default: false

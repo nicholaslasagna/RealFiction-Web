@@ -124,10 +124,12 @@ If delivery fails, RealCore acknowledges it as failed with a reason. If the webs
 
 ```text
 /realfiction status
+/rf status
+/realcore status
 /realfiction reload
 ```
 
-`status` shows whether RealCore is enabled, the server id, base URL, poll interval, reward polling state, LuckPerms hook state, and whether website auth is configured. It never prints the HMAC secret.
+`/realfiction`, `/rf`, and `/realcore` are all registered as root commands and share the same command handler. `status` shows whether RealCore is enabled, the server id, base URL, poll interval, reward polling state, LuckPerms hook state, and whether website auth is configured. It never prints the HMAC secret.
 It also shows which scheduler mode RealCore detected: `Paper/Purpur` or `Folia`.
 
 `reload` reloads `config.yml`, restarts the HTTP client and reward poller, and reports failure if the config cannot be loaded safely.

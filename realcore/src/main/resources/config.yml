@@ -49,3 +49,228 @@ rewards:
       vote.milestone.75:
         - "eco give {player} 2500"
     byProductSlug: {}
+
+# ---------------------------------------------------------------------------
+# Lobby module (replaces PhoenixLobby). Everything below is local to this
+# server and never affects the website linking/reward HMAC contract above.
+# ---------------------------------------------------------------------------
+lobby:
+  enabled: true
+  # Worlds where lobby behavior is active.
+  worlds:
+    - Void_Spawn
+  # Allow normal players to use /rf menu, /rf lobbies, /rf spawn.
+  playerCommands: true
+  # Spawn point used by /rf spawn and void protection. Set in-game with
+  # /rf setspawn, or fill in manually.
+  spawn:
+    world: Void_Spawn
+    # x: 0.5
+    # y: 100.0
+    # z: 0.5
+    # yaw: 0.0
+    # pitch: 0.0
+  # Scaffold for multiple lobbies (used by the lobby selector later).
+  lobbies:
+    lobby-1:
+      displayName: "&aLobby 1"
+      server: "Lobby1"
+      current: true
+
+# Lobby protections. All default true; only apply inside lobby worlds.
+protection:
+  hunger: true
+  pvp: true
+  fire: true
+  drowning: true
+  voidDeath: true
+  deathMessages: true
+  mobSpawning: true
+  itemDrop: true
+  itemPickup: true
+  blockBreak: true
+  blockPlace: true
+  blockInteract: true
+  fireSpread: true
+  leafDecay: true
+  offhandSwap: true
+  weather: true
+
+# Join handling.
+join:
+  setAdventure: true
+  sound: true
+  speed: false
+  speedAmplifier: 1
+  firework: false
+  clearInventory: false
+  clearEffects: false
+  giveItems: true
+  # Leave blank to keep vanilla messages. Supports %player%.
+  joinMessage: ""
+  quitMessage: ""
+
+# Lobby flight perk.
+lobbyFlight:
+  enabled: true
+  permission: "realfiction.lobby.flight"
+
+# Sidebar scoreboard.
+scoreboard:
+  enabled: true
+  refreshTicks: 20
+  title: "&a&lRealFiction"
+  lines:
+    - ""
+    - " &6Welcome!"
+    - " &fUser: &7%player%"
+    - " &fOnline: &a%online%/%max_online%"
+    - ""
+    - "&7Java:"
+    - "&erealfiction.live"
+    - "&7Bedrock:"
+    - "&eplay.realfiction.live"
+
+# Lobby hotbar items. slot is 1-9 (hotbar). type is menu or visibility.
+lobbyItems:
+  game-menu:
+    slot: 1
+    type: menu
+    menu: game-menu
+    material: PLAYER_HEAD
+    glow: true
+    name: "&aGame Menu &7(Right Click)"
+  lobby-selector:
+    slot: 3
+    type: menu
+    menu: lobby-selector
+    material: BOOK
+    glow: false
+    name: "&aLobby Selector &7(Right Click)"
+  player-visibility:
+    slot: 9
+    type: visibility
+    cooldownSeconds: 3
+    on:
+      material: LIME_DYE
+      name: "&fPlayers: &aVisible &7(Right Click)"
+    off:
+      material: GRAY_DYE
+      name: "&fPlayers: &cHidden &7(Right Click)"
+
+# Config-driven menus.
+menus:
+  game-menu:
+    title: "&aGame Menu"
+    size: 36
+    filler:
+      material: GRAY_STAINED_GLASS_PANE
+      name: " "
+    items:
+      anarchy:
+        slot: 10
+        material: NETHERITE_SWORD
+        glow: true
+        name: "&cAnarchy"
+        lore:
+          - "&7Connect to RealAnarchy"
+        actions:
+          - "[PROXY] RealAnarchy"
+      smp:
+        slot: 11
+        material: GRASS_BLOCK
+        name: "&aSMP"
+        lore:
+          - "&7Connect to SMP"
+        actions:
+          - "[PROXY] SMP"
+      factions:
+        slot: 12
+        material: IRON_SWORD
+        name: "&6Factions"
+        lore:
+          - "&7Connect to Factions"
+        actions:
+          - "[PROXY] Factions"
+      bedwars:
+        slot: 13
+        material: RED_BED
+        name: "&bBedWars"
+        actions:
+          - "[COMMAND] console; cp teleport %player% Arcade Lobby_Games 10 0 36 270 1.95"
+      connect-four:
+        slot: 14
+        material: BLUE_DYE
+        name: "&9Connect Four"
+        actions:
+          - "[COMMAND] console; cp teleport %player% Arcade Lobby_Games -24 23 -133 180.6 2.7"
+      soccer:
+        slot: 15
+        material: SNOWBALL
+        name: "&fSoccer"
+        actions:
+          - "[COMMAND] console; cp teleport %player% Arcade Lobby_Games -455 158 -578 0.6 1.05"
+      spleef:
+        slot: 16
+        material: DIAMOND_SHOVEL
+        name: "&bSpleef"
+        actions:
+          - "[COMMAND] console; cp teleport %player% Arcade Lobby_Games 12 9 -209 90.15 0.15"
+      snake:
+        slot: 19
+        material: LIME_WOOL
+        name: "&aSnake"
+        actions:
+          - "[COMMAND] console; cp teleport %player% Arcade Lobby_Games -464 132 -222 266.25"
+      pool:
+        slot: 20
+        material: ENDER_PEARL
+        name: "&8Pool"
+        actions:
+          - "[COMMAND] console; cp teleport %player% Arcade Lobby_Games -60 16 -153 359.443 7.35"
+      parkour:
+        slot: 21
+        material: FEATHER
+        name: "&eParkour"
+        actions:
+          - "[COMMAND] player; ajparkour start"
+      tournaments:
+        slot: 22
+        material: GOLD_BLOCK
+        name: "&6Tournaments"
+        actions:
+          - "[COMMAND] console; cp teleport %player% Arcade Lobby_Games 0 0 26 180 1.05"
+      murder-mystery:
+        slot: 23
+        material: IRON_AXE
+        name: "&4Murder Mystery"
+        actions:
+          - "[COMMAND] console; cp teleport %player% Arcade Lobby_Games 0 0 45 7.204 1.8"
+      close:
+        slot: 31
+        material: BARRIER
+        name: "&cClose"
+        actions:
+          - "[CLOSE_INVENTORY]"
+  lobby-selector:
+    title: "&aLobby Selector"
+    size: 27
+    filler:
+      material: GRAY_STAINED_GLASS_PANE
+      name: " "
+    items:
+      lobby-1:
+        slot: 13
+        material: LIME_DYE
+        glow: true
+        name: "&aLobby 1"
+        lore:
+          - "&7You are connected here"
+        actions:
+          - "[MESSAGE] &aYou are already on Lobby 1."
+      close:
+        slot: 22
+        material: BARRIER
+        name: "&cClose"
+        actions:
+          - "[CLOSE_INVENTORY]"
