@@ -6,6 +6,7 @@ import { FormEvent, useState } from "react"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Turnstile } from "@/components/turnstile"
 import { getSupabaseBrowserClient } from "@/lib/supabase/browser"
 import { cn } from "@/lib/utils"
 
@@ -16,6 +17,8 @@ export function AccountAuthCard() {
   const [remember, setRemember] = useState(true)
   const [status, setStatus] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null)
+  const [captchaKey, setCaptchaKey] = useState(0)
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -36,14 +39,23 @@ export function AccountAuthCard() {
 
     const result =
       mode === "signin"
-        ? await supabase.auth.signInWithPassword({ email, password })
+        ? await supabase.auth.signInWithPassword({
+            email,
+            password,
+            options: { captchaToken: captchaToken ?? undefined }
+          })
         : await supabase.auth.signUp({
             email,
             password,
             options: {
+              captchaToken: captchaToken ?? undefined,
               data: minecraftUsername ? { minecraft_username: minecraftUsername } : undefined
             }
           })
+
+    // Turnstile tokens are single-use — reset the widget for the next attempt.
+    setCaptchaToken(null)
+    setCaptchaKey((key) => key + 1)
 
     if (result.error) {
       setStatus(mode === "signin" ? "We could not sign you in. Check your email and password." : "We could not create that account yet.")
@@ -56,7 +68,7 @@ export function AccountAuthCard() {
   }
 
   return (
-    <div className="w-full max-w-[520px] rounded-lg border border-amber-200/12 bg-[#080d18]/92 p-6 shadow-[0_30px_90px_rgba(0,0,0,0.48)] backdrop-blur-xl md:p-9">
+    <div className="mx-auto w-full max-w-[520px] rounded-lg border border-amber-200/12 bg-[#080d18]/92 p-6 shadow-[0_30px_90px_rgba(0,0,0,0.48)] backdrop-blur-xl md:p-9">
       <div className="flex rounded-md border border-amber-200/12 bg-black/22 p-1">
         {[
           { id: "signin", label: "Sign in" },
@@ -162,19 +174,14 @@ export function AccountAuthCard() {
           Remember me on this device
         </button>
 
-        <div className="rounded-lg border border-white/10 bg-white/[0.035] p-4">
-          <div className="flex items-center gap-3 rounded-md border border-white/12 bg-black/20 px-4 py-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-emerald-400 text-[#071525]">
-              <Check className="h-5 w-5" />
-            </div>
-            <div>
-              <div className="text-sm font-semibold text-white">Security check ready</div>
-              <div className="text-xs text-muted-foreground">We keep sign-in simple and protected.</div>
-            </div>
+        <div className="grid gap-2 text-sm font-bold text-slate-100">
+          Security check
+          <div className="flex justify-center rounded-lg border border-white/10 bg-white/[0.035] p-3">
+            <Turnstile key={captchaKey} onToken={setCaptchaToken} />
           </div>
         </div>
 
-        <Button className="h-12 w-full text-base" disabled={busy} type="submit">
+        <Button className="h-12 w-full text-base" disabled={busy || !captchaToken} type="submit">
           <Fingerprint className="h-4 w-4" />
           {busy ? "Working..." : mode === "signin" ? "Sign in" : "Create account"}
         </Button>

@@ -31,6 +31,22 @@ during the Cloudflare build (build variables), not only at runtime.
 | `NEXT_PUBLIC_BEDROCK_SERVER` | Bedrock host (display) | yes (`[vars]`) |
 | `NEXT_PUBLIC_SUPABASE_URL` | Browser auth (sign in / account) | **no — add it** |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Browser auth (sign in / account) | **no — add it** |
+| `NEXT_PUBLIC_TURNSTILE_SITE_KEY` | Cloudflare Turnstile widget on sign in/up | **no — add it** |
+
+### Bot protection (Cloudflare Turnstile)
+
+The sign-in / create-account form renders a Cloudflare Turnstile widget and
+passes its token to Supabase as `captchaToken`. To enable real verification:
+
+1. Cloudflare dashboard → Turnstile → add a widget for `realfiction.live`; copy
+   the **site key** and **secret key**.
+2. Set `NEXT_PUBLIC_TURNSTILE_SITE_KEY` (build var) to the site key.
+3. Supabase dashboard → Authentication → Bot & Abuse Protection → enable
+   Turnstile and paste the **secret key** (Supabase verifies the token server-side).
+
+Until the site key is set, the widget falls back to Cloudflare's always-pass
+**test key** so the form still works in dev/preview — but it provides no real
+protection, so set the real key before launch.
 
 Without the two Supabase `NEXT_PUBLIC_*` values at build time, the account
 sign-in UI stays disabled (the header simply shows **Sign in** and the form is
