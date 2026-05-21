@@ -10,7 +10,7 @@ import {
   sha256Hex,
   verifySharedSecret
 } from "@/lib/security"
-import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role"
+import { insertPluginNonce } from "@/lib/supabase/service-role-rest"
 
 const HMAC_WINDOW_MS = 5 * 60 * 1000
 
@@ -70,23 +70,23 @@ export async function requirePluginAuth(request: Request, rawBody: string, route
     // issues (missing runtime secret, DB unavailable) and must not surface as an
     // uncaught 500. They return 503 so RealCore can distinguish "retry later"
     // from a genuine auth rejection (401).
-    let supabase
+    const nonceHash = await sha256Hex(`${serverId}:${routeName}:${nonce}`)
+    let nonceResult: Awaited<ReturnType<typeof insertPluginNonce>>
     try {
-      supabase = getSupabaseServiceRoleClient()
+      nonceResult = await insertPluginNonce({
+        nonce_hash: nonceHash,
+        server_id: serverId,
+        route: routeName,
+        expires_at: new Date(Date.now() + HMAC_WINDOW_MS).toISOString()
+      })
     } catch (error) {
-      console.error("plugin_auth_config", { route: routeName, ...describeError(error) })
+      console.error("plugin_auth_nonce_config", { route: routeName, ...describeError(error) })
       return { ok: false, response: safeJsonError("Plugin authorization backend is not configured.", 503) }
     }
 
-    const nonceHash = await sha256Hex(`${serverId}:${routeName}:${nonce}`)
-    const { error } = await supabase.from("plugin_request_nonces").insert({
-      nonce_hash: nonceHash,
-      server_id: serverId,
-      route: routeName,
-      expires_at: new Date(Date.now() + HMAC_WINDOW_MS).toISOString()
-    })
+    const { error } = nonceResult
 
-    if (error?.code === "23505") {
+    if (error?.code === "23505" || error?.status === 409) {
       return { ok: false, response: Response.json({ error: "Plugin request replay rejected." }, { status: 401 }) }
     }
 

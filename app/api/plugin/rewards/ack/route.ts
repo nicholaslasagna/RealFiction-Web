@@ -2,7 +2,7 @@ import { z } from "zod"
 
 import { parsePluginJson, requirePluginAuth } from "@/lib/plugin-auth"
 import { describeError, safeJsonError } from "@/lib/security"
-import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role"
+import { callServiceRoleRpc } from "@/lib/supabase/service-role-rest"
 
 export const runtime = "edge"
 
@@ -41,18 +41,15 @@ export async function POST(request: Request) {
       return Response.json({ error: "Plugin server identity mismatch." }, { status: 401 })
     }
 
-    let supabase
-    try {
-      supabase = getSupabaseServiceRoleClient()
-    } catch (error) {
-      console.error("plugin_rewards_ack_config", describeError(error))
-      return safeJsonError("Reward backend is not configured.", 503)
-    }
-
     const results = []
 
     for (const delivery of parsed.data.deliveries) {
-      const { data, error } = await supabase.rpc("ack_reward_delivery", {
+      const { data, error } = await callServiceRoleRpc<Array<{
+        status?: string
+        delivered_at?: string | null
+        failed_at?: string | null
+        already_final?: boolean
+      }>>("ack_reward_delivery", {
         p_reward_id: delivery.rewardId,
         p_server_id: parsed.data.serverId,
         p_status: delivery.status,

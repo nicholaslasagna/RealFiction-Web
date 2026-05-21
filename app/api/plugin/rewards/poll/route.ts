@@ -3,7 +3,7 @@ import { z } from "zod"
 import { parsePluginJson, requirePluginAuth } from "@/lib/plugin-auth"
 import { formatRealCoreReward, type RewardQueueRow } from "@/lib/realcore-rewards"
 import { describeError, safeJsonError } from "@/lib/security"
-import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role"
+import { callServiceRoleRpc } from "@/lib/supabase/service-role-rest"
 
 export const runtime = "edge"
 
@@ -38,15 +38,7 @@ export async function POST(request: Request) {
       return Response.json({ error: "Plugin server identity mismatch." }, { status: 401 })
     }
 
-    let supabase
-    try {
-      supabase = getSupabaseServiceRoleClient()
-    } catch (error) {
-      console.error("plugin_rewards_poll_config", describeError(error))
-      return safeJsonError("Reward backend is not configured.", 503)
-    }
-
-    const { data, error } = await supabase.rpc("poll_reward_queue", {
+    const { data, error } = await callServiceRoleRpc<RewardQueueRow[]>("poll_reward_queue", {
       p_server_id: parsed.data.serverId,
       p_server_group: parsed.data.serverGroup,
       p_limit: parsed.data.limit
