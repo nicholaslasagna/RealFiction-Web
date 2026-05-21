@@ -16,6 +16,16 @@ type CartItem = {
   quantity: number
 }
 
+const accentThemes: Record<string, { gradient: string; icon: string; glow: string }> = {
+  cyan: { gradient: "from-cyan-400/25 via-cyan-500/10 to-[#0a1726]", icon: "text-cyan-200", glow: "bg-cyan-400/25" },
+  amber: { gradient: "from-amber-400/25 via-amber-500/10 to-[#0a1726]", icon: "text-amber-200", glow: "bg-amber-400/25" },
+  emerald: { gradient: "from-emerald-400/25 via-emerald-500/10 to-[#0a1726]", icon: "text-emerald-200", glow: "bg-emerald-400/25" },
+  violet: { gradient: "from-violet-400/25 via-violet-500/10 to-[#0a1726]", icon: "text-violet-200", glow: "bg-violet-400/25" },
+  rose: { gradient: "from-rose-400/25 via-rose-500/10 to-[#0a1726]", icon: "text-rose-200", glow: "bg-rose-400/25" },
+  sky: { gradient: "from-sky-400/25 via-sky-500/10 to-[#0a1726]", icon: "text-sky-200", glow: "bg-sky-400/25" },
+  blue: { gradient: "from-blue-400/25 via-blue-500/10 to-[#0a1726]", icon: "text-blue-200", glow: "bg-blue-400/25" }
+}
+
 export function Storefront({ products }: { products: StoreProduct[] }) {
   const [category, setCategory] = useState<ProductCategory | "all">("all")
   const [cart, setCart] = useState<CartItem[]>([])
@@ -23,8 +33,12 @@ export function Storefront({ products }: { products: StoreProduct[] }) {
   const [giftRecipient, setGiftRecipient] = useState("")
   const [checkoutState, setCheckoutState] = useState<string | null>(null)
 
-  const filteredProducts = useMemo(
-    () => products.filter((product) => category === "all" || product.category === category),
+  const sections = useMemo(
+    () =>
+      productCategories
+        .filter((c) => c.id !== "all" && (category === "all" || category === c.id))
+        .map((c) => ({ meta: c, items: products.filter((p) => p.category === c.id) }))
+        .filter((s) => s.items.length > 0),
     [category, products]
   )
 
@@ -127,70 +141,104 @@ export function Storefront({ products }: { products: StoreProduct[] }) {
           })}
         </div>
 
-        <div className="grid gap-5 md:grid-cols-2">
-          {filteredProducts.map((product) =>
-            product.image ? (
-              <Card key={product.id} className="minecraft-card flex flex-col overflow-hidden">
-                <div className="flex justify-center bg-black/30 px-4 pt-5">
-                  <Image
-                    alt={`${product.name} for RealFiction`}
-                    src={product.image}
-                    width={384}
-                    height={606}
-                    className="h-auto w-[58%] max-w-[210px] rounded-lg drop-shadow-[0_18px_42px_rgba(0,0,0,0.55)]"
-                  />
+        <div className="space-y-10">
+          {sections.map((section) => {
+            const SectionIcon = section.meta.icon
+            const isGiftCards = section.meta.id === "gift-cards"
+
+            return (
+              <section key={section.meta.id} className="space-y-4">
+                <div className="flex items-center gap-2.5">
+                  <span className="rounded-md border border-amber-200/20 bg-black/30 p-2">
+                    <SectionIcon className="h-4 w-4 text-amber-200" />
+                  </span>
+                  <h2 className="display-font text-2xl font-semibold">{section.meta.label}</h2>
+                  <span className="rounded-full border border-white/10 bg-black/20 px-2 py-0.5 text-xs text-muted-foreground">
+                    {section.items.length}
+                  </span>
                 </div>
-                <CardContent className="flex flex-1 flex-col gap-3 pt-5">
-                  <div className="flex items-center justify-between gap-3">
-                    <CardTitle className="display-font text-xl">{product.name}</CardTitle>
-                    <span className="font-mono text-lg font-semibold text-amber-100">
-                      {formatCurrency(product.priceCents)}
-                    </span>
-                  </div>
-                  <p className="text-sm leading-6 text-muted-foreground">{product.summary}</p>
-                  <Button className="mt-auto w-full" onClick={() => updateQuantity(product.id, 1)} type="button">
-                    <Plus className="h-4 w-4" />
-                    Add to cart
-                  </Button>
-                </CardContent>
-              </Card>
-            ) : (
-              <Card key={product.id} className="minecraft-card overflow-hidden">
-                <CardHeader>
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <Badge variant={product.featured ? "warning" : "outline"}>
-                        {product.fulfillment === "subscription"
-                          ? "Monthly"
-                          : product.fulfillment === "consumable"
-                            ? "Gift"
-                            : "Permanent"}
-                      </Badge>
-                      <CardTitle className="display-font mt-3 text-2xl">{product.name}</CardTitle>
-                    </div>
-                    <div className="font-mono text-lg font-semibold text-amber-100">
-                      {formatCurrency(product.priceCents)}
-                    </div>
-                  </div>
-                  <CardDescription>{product.summary}</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <ul className="grid gap-2 text-sm text-muted-foreground">
-                    {product.details.map((detail) => (
-                      <li key={detail} className="flex gap-2">
-                        <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-emerald-200" />
-                        <span>{detail}</span>
-                      </li>
-                    ))}
-                  </ul>
-                  <Button className="mt-5 w-full" onClick={() => updateQuantity(product.id, 1)} type="button">
-                    <Plus className="h-4 w-4" />
-                    Add to cart
-                  </Button>
-                </CardContent>
-              </Card>
+
+                <div className={cn("grid gap-5", isGiftCards ? "grid-cols-2 lg:grid-cols-3" : "sm:grid-cols-2")}>
+                  {section.items.map((product) => {
+                    const theme = accentThemes[product.accent] ?? accentThemes.amber
+
+                    if (isGiftCards) {
+                      return (
+                        <Card key={product.id} className="minecraft-card flex flex-col overflow-hidden">
+                          <div className="flex justify-center bg-black/30 px-3 pt-4">
+                            <Image
+                              alt={`${product.name} for RealFiction`}
+                              src={product.image ?? "/images/giftcard-25.png"}
+                              width={384}
+                              height={606}
+                              className="h-auto w-[80%] max-w-[170px] rounded-lg drop-shadow-[0_16px_36px_rgba(0,0,0,0.55)]"
+                            />
+                          </div>
+                          <CardContent className="flex flex-1 flex-col gap-2 pt-4">
+                            <div className="flex items-center justify-between gap-2">
+                              <CardTitle className="display-font text-lg">{product.name}</CardTitle>
+                              <span className="font-mono text-base font-semibold text-amber-100">
+                                {formatCurrency(product.priceCents)}
+                              </span>
+                            </div>
+                            <Button className="mt-auto w-full" onClick={() => updateQuantity(product.id, 1)} type="button">
+                              <Plus className="h-4 w-4" />
+                              Add to cart
+                            </Button>
+                          </CardContent>
+                        </Card>
+                      )
+                    }
+
+                    return (
+                      <Card key={product.id} className="minecraft-card flex flex-col overflow-hidden">
+                        <div
+                          className={cn(
+                            "relative flex h-28 items-center justify-center overflow-hidden border-b border-white/10 bg-gradient-to-br",
+                            theme.gradient
+                          )}
+                        >
+                          <div className={cn("absolute -right-5 -top-6 h-20 w-20 rounded-full blur-2xl", theme.glow)} />
+                          <SectionIcon className={cn("relative h-11 w-11 drop-shadow-[0_6px_16px_rgba(0,0,0,0.5)]", theme.icon)} />
+                          <Badge variant={product.featured ? "warning" : "outline"} className="absolute left-3 top-3">
+                            {product.fulfillment === "subscription"
+                              ? "Monthly"
+                              : product.fulfillment === "consumable"
+                                ? "Gift"
+                                : "Permanent"}
+                          </Badge>
+                        </div>
+                        <CardContent className="flex flex-1 flex-col gap-3 pt-4">
+                          <div className="flex items-center justify-between gap-3">
+                            <CardTitle className="display-font text-xl">{product.name}</CardTitle>
+                            <span className="font-mono text-lg font-semibold text-amber-100">
+                              {formatCurrency(product.priceCents)}
+                              {product.fulfillment === "subscription" ? (
+                                <span className="text-xs font-normal text-muted-foreground">/mo</span>
+                              ) : null}
+                            </span>
+                          </div>
+                          <p className="text-sm leading-6 text-muted-foreground">{product.summary}</p>
+                          <ul className="grid gap-2 text-sm text-muted-foreground">
+                            {product.details.map((detail) => (
+                              <li key={detail} className="flex gap-2">
+                                <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-emerald-200" />
+                                <span>{detail}</span>
+                              </li>
+                            ))}
+                          </ul>
+                          <Button className="mt-auto w-full" onClick={() => updateQuantity(product.id, 1)} type="button">
+                            <Plus className="h-4 w-4" />
+                            Add to cart
+                          </Button>
+                        </CardContent>
+                      </Card>
+                    )
+                  })}
+                </div>
+              </section>
             )
-          )}
+          })}
         </div>
       </div>
 

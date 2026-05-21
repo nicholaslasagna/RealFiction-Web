@@ -196,6 +196,17 @@ export const storeProducts: StoreProduct[] = [
     accent: "blue"
   },
   {
+    id: "gift-card-5",
+    name: "$5 Gift Card",
+    category: "gift-cards",
+    priceCents: 500,
+    summary: "A small treat of store credit for cosmetics and profile perks.",
+    details: ["Store credit for RealFiction", "Nice little gift", "Easy to redeem", "Spend it on anything cosmetic"],
+    fulfillment: "consumable",
+    accent: "amber",
+    image: "/images/giftcard-5.png"
+  },
+  {
     id: "gift-card-10",
     name: "$10 Gift Card",
     category: "gift-cards",
@@ -205,6 +216,17 @@ export const storeProducts: StoreProduct[] = [
     fulfillment: "consumable",
     accent: "amber",
     image: "/images/giftcard-10.png"
+  },
+  {
+    id: "gift-card-15",
+    name: "$15 Gift Card",
+    category: "gift-cards",
+    priceCents: 1500,
+    summary: "Store credit for cosmetics, ranks, and visual profile perks.",
+    details: ["Store credit for RealFiction", "Easy gift size", "Easy to redeem", "Spend it on anything cosmetic"],
+    fulfillment: "consumable",
+    accent: "amber",
+    image: "/images/giftcard-15.png"
   },
   {
     id: "gift-card-20",
@@ -230,15 +252,48 @@ export const storeProducts: StoreProduct[] = [
     image: "/images/giftcard-25.png"
   },
   {
+    id: "gift-card-30",
+    name: "$30 Gift Card",
+    category: "gift-cards",
+    priceCents: 3000,
+    summary: "A generous amount of store credit for cosmetics and supporter ranks.",
+    details: ["Store credit for RealFiction", "Generous gift", "Easy to redeem", "Spend it on anything cosmetic"],
+    fulfillment: "consumable",
+    accent: "emerald",
+    image: "/images/giftcard-30.png"
+  },
+  {
     id: "gift-card-50",
     name: "$50 Gift Card",
     category: "gift-cards",
     priceCents: 5000,
-    summary: "The big one — plenty of store credit for cosmetics and supporter ranks.",
-    details: ["Store credit for RealFiction", "Best value gift", "Easy to redeem", "Spend it on anything cosmetic"],
+    summary: "Plenty of store credit for cosmetics, ranks, and visual perks.",
+    details: ["Store credit for RealFiction", "Great value gift", "Easy to redeem", "Spend it on anything cosmetic"],
     fulfillment: "consumable",
     accent: "violet",
     image: "/images/giftcard-50.png"
+  },
+  {
+    id: "gift-card-75",
+    name: "$75 Gift Card",
+    category: "gift-cards",
+    priceCents: 7500,
+    summary: "A big stash of store credit for cosmetics and supporter ranks.",
+    details: ["Store credit for RealFiction", "Big gift", "Easy to redeem", "Spend it on anything cosmetic"],
+    fulfillment: "consumable",
+    accent: "violet",
+    image: "/images/giftcard-75.png"
+  },
+  {
+    id: "gift-card-100",
+    name: "$100 Gift Card",
+    category: "gift-cards",
+    priceCents: 10000,
+    summary: "The biggest one — maximum store credit for the whole cosmetic shop.",
+    details: ["Store credit for RealFiction", "Best value gift", "Easy to redeem", "Spend it on anything cosmetic"],
+    fulfillment: "consumable",
+    accent: "violet",
+    image: "/images/giftcard-100.png"
   }
 ]
 
