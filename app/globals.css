@@ -168,6 +168,40 @@ select {
   }
 }
 
+/* Smooth success transition for the account email-sent / reset-sent state. */
+@keyframes rf-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes rf-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+.rf-fade-up {
+  animation: rf-fade-up 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.rf-check-ring {
+  stroke-dasharray: 151;
+  stroke-dashoffset: 151;
+  animation: rf-draw 0.5s ease-out forwards;
+}
+
+.rf-check-mark {
+  stroke-dasharray: 48;
+  stroke-dashoffset: 48;
+  animation: rf-draw 0.4s 0.36s ease-out forwards;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
