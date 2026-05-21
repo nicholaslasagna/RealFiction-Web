@@ -97,7 +97,7 @@ export const gamemodes = [
   {
     name: "Murder Mystery",
     href: "/updates",
-    image: "/images/parkour.png",
+    image: "/images/hero1.png",
     icon: ShieldCheck,
     summary: "Social deduction, lobby parties, clean progression, and profile-level rewards.",
     signal: "Party mode"
@@ -113,7 +113,7 @@ export const gamemodes = [
   {
     name: "Lobby Games",
     href: "/store",
-    image: "/images/hero1.png",
+    image: "/images/parkour.png",
     icon: Zap,
     summary: "Parkour, quick challenges, cosmetics, pets, particles, and social spaces.",
     signal: "Social hub"

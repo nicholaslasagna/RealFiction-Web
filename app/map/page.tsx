@@ -32,8 +32,8 @@ export default function MapPage() {
             </Badge>
             <h1 className="display-font mt-5 text-5xl font-semibold leading-tight md:text-7xl">Explore the Worlds</h1>
             <p className="mt-5 max-w-3xl text-lg leading-8 text-muted-foreground">
-              Open the RealFiction and RealAnarchy map surfaces in framed tabs, with direct links
-              available whenever an embed is blocked by the map host.
+              Jump into the RealFiction and RealAnarchy live maps. Pick a world below and open the
+              full interactive map in a new tab.
             </p>
           </Reveal>
         </div>

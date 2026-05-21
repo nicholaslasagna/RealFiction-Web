@@ -1,25 +1,23 @@
 "use client"
 
-import { ExternalLink } from "lucide-react"
-import { useEffect, useState } from "react"
+import Image from "next/image"
+import { ExternalLink, MapPinned } from "lucide-react"
+import { useState } from "react"
 
 import { Button } from "@/components/ui/button"
 import { mapEndpoints } from "@/lib/data"
 import { cn } from "@/lib/utils"
 
+const mapBackdrops: Record<string, string> = {
+  "https://map.realfiction.live": "/images/creative.png",
+  "https://map2.realfiction.live": "/images/hero2.png",
+  "https://map.realanarchy.live": "/images/bedwars.png"
+}
+
 export function MapTabs() {
   const [active, setActive] = useState(mapEndpoints[0])
-  const [status, setStatus] = useState<"loading" | "loaded" | "blocked">("loading")
-
-  useEffect(() => {
-    setStatus("loading")
-
-    const timer = window.setTimeout(() => {
-      setStatus((current) => (current === "loaded" ? current : "blocked"))
-    }, 7000)
-
-    return () => window.clearTimeout(timer)
-  }, [active.url])
+  const backdrop = mapBackdrops[active.url] ?? "/images/hero1.png"
+  const host = active.url.replace(/^https?:\/\//, "")
 
   return (
     <div className="space-y-5">
@@ -47,57 +45,32 @@ export function MapTabs() {
       </div>
 
       <div className="minecraft-panel overflow-hidden rounded-lg">
-        <div className="flex flex-col gap-3 border-b border-amber-200/12 p-4 md:flex-row md:items-center md:justify-between">
-          <div>
-            <h2 className="display-font text-2xl font-semibold">{active.name}</h2>
-            <p className="text-sm text-muted-foreground">{active.description}</p>
-          </div>
-          <Button variant="outline" asChild>
-            <a href={active.url} rel="noreferrer" target="_blank">
-              <ExternalLink className="h-4 w-4" />
-              Open map
-            </a>
-          </Button>
-        </div>
-
         <div className="relative">
-          <iframe
-            key={active.url}
-            className="h-[620px] w-full bg-background"
-            loading="lazy"
-            referrerPolicy="no-referrer"
-            src={active.url}
-            title={active.name}
-            onLoad={() => setStatus("loaded")}
+          <Image
+            alt=""
+            src={backdrop}
+            fill
+            className="object-cover opacity-25"
+            sizes="100vw"
           />
+          <div className="absolute inset-0 bg-gradient-to-b from-[#06101c]/82 via-[#06101c]/86 to-[#06101c]" />
 
-          {status === "blocked" ? (
-            <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-[#06101c]/92 p-6 text-center backdrop-blur-sm">
-              <p className="display-font text-xl font-semibold text-white">This map opens best in its own tab</p>
-              <p className="max-w-md text-sm leading-6 text-muted-foreground">
-                {active.name} can take a moment to load, and some map hosts block embedding. Open it
-                directly for the full live view.
-              </p>
-              <Button asChild size="lg">
-                <a href={active.url} rel="noreferrer" target="_blank">
-                  <ExternalLink className="h-4 w-4" />
-                  Open {active.name}
-                </a>
-              </Button>
+          <div className="relative flex flex-col items-center gap-5 px-6 py-16 text-center md:py-24">
+            <span className="rounded-xl border border-amber-200/25 bg-black/45 p-3.5 shadow-lg">
+              <MapPinned className="h-7 w-7 text-amber-200" />
+            </span>
+            <div>
+              <h2 className="display-font text-3xl font-semibold text-white">{active.name}</h2>
+              <p className="mx-auto mt-2.5 max-w-md text-sm leading-6 text-slate-300">{active.description}</p>
             </div>
-          ) : null}
-        </div>
-
-        <div className="border-t border-amber-200/12 px-4 py-3 text-center text-sm text-muted-foreground">
-          Map not loading?{" "}
-          <a
-            href={active.url}
-            rel="noreferrer"
-            target="_blank"
-            className="font-semibold text-amber-100 hover:underline"
-          >
-            Open {active.name} in a new tab
-          </a>
+            <Button asChild size="lg">
+              <a href={active.url} rel="noreferrer" target="_blank">
+                <ExternalLink className="h-4 w-4" />
+                Open Live Map
+              </a>
+            </Button>
+            <p className="font-mono text-xs text-slate-400">{host} · opens in a new tab</p>
+          </div>
         </div>
       </div>
     </div>
