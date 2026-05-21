@@ -4,9 +4,11 @@ import com.realfiction.realcore.text.Text;
 import java.util.List;
 import org.bukkit.Material;
 import org.bukkit.enchantments.Enchantment;
+import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemFlag;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
+import org.bukkit.inventory.meta.SkullMeta;
 
 /** Builds display ItemStacks for lobby hotbar items and menu icons. */
 public final class ItemFactory {
@@ -22,6 +24,10 @@ public final class ItemFactory {
   }
 
   public static ItemStack build(String materialName, String displayName, List<String> lore, boolean glow, int amount) {
+    return build(materialName, displayName, lore, glow, amount, null);
+  }
+
+  public static ItemStack build(String materialName, String displayName, List<String> lore, boolean glow, int amount, Player owner) {
     Material material = material(materialName, Material.STONE);
     ItemStack item = new ItemStack(material, Math.max(1, amount));
     ItemMeta meta = item.getItemMeta();
@@ -37,6 +43,9 @@ public final class ItemFactory {
     if (glow) {
       meta.addEnchant(Enchantment.UNBREAKING, 1, true);
       meta.addItemFlags(ItemFlag.HIDE_ENCHANTS);
+    }
+    if (owner != null && meta instanceof SkullMeta skullMeta) {
+      skullMeta.setOwningPlayer(owner);
     }
     item.setItemMeta(meta);
     return item;

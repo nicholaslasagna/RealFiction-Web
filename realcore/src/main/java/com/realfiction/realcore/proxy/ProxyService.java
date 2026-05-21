@@ -1,9 +1,11 @@
 package com.realfiction.realcore.proxy;
 
+import com.realfiction.realcore.lobby.LobbyConfig;
 import com.realfiction.realcore.scheduler.RealCoreScheduler;
 import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
+import java.util.function.Supplier;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.messaging.Messenger;
@@ -21,11 +23,13 @@ public final class ProxyService {
 
   private final Plugin plugin;
   private final RealCoreScheduler scheduler;
+  private final Supplier<LobbyConfig> configSupplier;
   private volatile boolean registered;
 
-  public ProxyService(Plugin plugin, RealCoreScheduler scheduler) {
+  public ProxyService(Plugin plugin, RealCoreScheduler scheduler, Supplier<LobbyConfig> configSupplier) {
     this.plugin = plugin;
     this.scheduler = scheduler;
+    this.configSupplier = configSupplier;
   }
 
   public void register() {
@@ -47,7 +51,8 @@ public final class ProxyService {
     if (serverName == null || serverName.isBlank()) {
       return;
     }
-    byte[] payload = buildConnect(serverName.trim());
+    String target = resolveTarget(serverName);
+    byte[] payload = buildConnect(target);
     if (payload == null) {
       return;
     }
@@ -56,6 +61,11 @@ public final class ProxyService {
         player.sendPluginMessage(plugin, BUNGEE_CHANNEL, payload);
       }
     });
+  }
+
+  private String resolveTarget(String serverName) {
+    LobbyConfig config = configSupplier.get();
+    return config == null ? serverName.trim() : config.resolveProxyServer(serverName);
   }
 
   private byte[] buildConnect(String serverName) {

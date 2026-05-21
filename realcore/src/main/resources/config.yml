@@ -17,6 +17,12 @@ capabilities:
   - vote_rewards
   - console_commands
 
+# Proxy server-name aliases. These keep old menu configs working if a target
+# server was renamed in Velocity/Crafty.
+proxy:
+  serverAliases:
+    RealAnarchy: "Anarchy"
+
 linking:
   platform: "java"
 
@@ -100,6 +106,7 @@ protection:
 join:
   setAdventure: true
   sound: true
+  # Legacy potion-speed option. RealCore now uses walkSpeed below for lobby movement.
   speed: false
   speedAmplifier: 1
   firework: false
@@ -111,9 +118,22 @@ join:
   quitMessage: ""
 
 # Lobby flight perk.
+# This is a paid/supporter perk. Default players do not get real flight.
 lobbyFlight:
   enabled: true
   permission: "realfiction.lobby.flight"
+
+# Default lobby double-jump. This does not require a permission.
+doubleJump:
+  enabled: true
+  upwardVelocity: 0.85
+  forwardVelocity: 1.15
+  resetDelayTicks: 8
+
+# Default lobby walk speed. Vanilla walking is 0.20; 0.26 is about 30% faster.
+walkSpeed:
+  enabled: true
+  speed: 0.26
 
 # Sidebar scoreboard.
 scoreboard:
@@ -173,9 +193,9 @@ menus:
         glow: true
         name: "&cAnarchy"
         lore:
-          - "&7Connect to RealAnarchy"
+          - "&7Connect to Anarchy"
         actions:
-          - "[PROXY] RealAnarchy"
+          - "[PROXY] Anarchy"
       smp:
         slot: 11
         material: GRASS_BLOCK

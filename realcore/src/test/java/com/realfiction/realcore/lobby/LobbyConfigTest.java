@@ -35,6 +35,13 @@ final class LobbyConfigTest {
     // Flight + scoreboard defaults.
     assertTrue(config.flight().enabled());
     assertEquals("realfiction.lobby.flight", config.flight().permission());
+    assertTrue(config.doubleJump().enabled());
+    assertEquals(0.85D, config.doubleJump().upwardVelocity());
+    assertEquals(1.15D, config.doubleJump().forwardVelocity());
+    assertEquals(8L, config.doubleJump().resetDelayTicks());
+    assertTrue(config.walkSpeed().enabled());
+    assertEquals(0.26F, config.walkSpeed().speed());
+    assertEquals("Anarchy", config.resolveProxyServer("RealAnarchy"));
     assertTrue(config.scoreboard().enabled());
     assertEquals("&a&lRealFiction", config.scoreboard().title());
     assertEquals(9, config.scoreboard().lines().size());
@@ -74,6 +81,19 @@ final class LobbyConfigTest {
         join:
           setAdventure: false
           firework: true
+        lobbyFlight:
+          enabled: false
+        doubleJump:
+          enabled: false
+          upwardVelocity: 1.4
+          forwardVelocity: 1.8
+          resetDelayTicks: 14
+        walkSpeed:
+          enabled: false
+          speed: 0.3
+        proxy:
+          serverAliases:
+            OldHub: Lobby1
         scoreboard:
           enabled: false
           refreshTicks: 40
@@ -90,6 +110,15 @@ final class LobbyConfigTest {
     assertTrue(config.protection().hunger());
     assertFalse(config.join().setAdventure());
     assertTrue(config.join().firework());
+    assertFalse(config.flight().enabled());
+    assertFalse(config.doubleJump().enabled());
+    assertEquals(1.4D, config.doubleJump().upwardVelocity());
+    assertEquals(1.8D, config.doubleJump().forwardVelocity());
+    assertEquals(14L, config.doubleJump().resetDelayTicks());
+    assertFalse(config.walkSpeed().enabled());
+    assertEquals(0.3F, config.walkSpeed().speed());
+    assertEquals("Lobby1", config.resolveProxyServer("OldHub"));
+    assertEquals("SMP", config.resolveProxyServer("SMP"));
     assertFalse(config.scoreboard().enabled());
     assertEquals(40L, config.scoreboard().refreshTicks());
   }

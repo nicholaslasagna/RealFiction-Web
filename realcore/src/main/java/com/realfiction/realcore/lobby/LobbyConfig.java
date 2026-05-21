@@ -1,9 +1,11 @@
 package com.realfiction.realcore.lobby;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
@@ -19,13 +21,24 @@ public record LobbyConfig(
     Protection protection,
     Join join,
     Flight flight,
+    DoubleJump doubleJump,
+    WalkSpeed walkSpeed,
     ScoreboardSettings scoreboard,
     List<LobbyItem> items,
     boolean playerCommands,
-    List<LobbyEntry> lobbies
+    List<LobbyEntry> lobbies,
+    Map<String, String> serverAliases
 ) {
   public boolean isLobbyWorld(String worldName) {
     return enabled && worldName != null && worlds.contains(worldName);
+  }
+
+  public String resolveProxyServer(String serverName) {
+    if (serverName == null) {
+      return "";
+    }
+    String trimmed = serverName.trim();
+    return serverAliases.getOrDefault(trimmed.toLowerCase(Locale.ROOT), trimmed);
   }
 
   public record SpawnPoint(String world, double x, double y, double z, float yaw, float pitch, boolean present) {
@@ -66,6 +79,12 @@ public record LobbyConfig(
   }
 
   public record Flight(boolean enabled, String permission) {
+  }
+
+  public record DoubleJump(boolean enabled, double upwardVelocity, double forwardVelocity, long resetDelayTicks) {
+  }
+
+  public record WalkSpeed(boolean enabled, float speed) {
   }
 
   public record ScoreboardSettings(boolean enabled, String title, List<String> lines, long refreshTicks) {
@@ -169,6 +188,18 @@ public record LobbyConfig(
         config.getString("lobbyFlight.permission", "realfiction.lobby.flight")
     );
 
+    DoubleJump doubleJump = new DoubleJump(
+        config.getBoolean("doubleJump.enabled", true),
+        clamp(config.getDouble("doubleJump.upwardVelocity", 0.85D), 0.1D, 2.0D),
+        clamp(config.getDouble("doubleJump.forwardVelocity", 1.15D), 0.0D, 3.0D),
+        Math.max(1L, config.getLong("doubleJump.resetDelayTicks", 8L))
+    );
+
+    WalkSpeed walkSpeed = new WalkSpeed(
+        config.getBoolean("walkSpeed.enabled", true),
+        (float) clamp(config.getDouble("walkSpeed.speed", 0.26D), -1.0D, 1.0D)
+    );
+
     ScoreboardSettings scoreboard = new ScoreboardSettings(
         config.getBoolean("scoreboard.enabled", true),
         config.getString("scoreboard.title", "&a&lRealFiction"),
@@ -179,8 +210,10 @@ public record LobbyConfig(
     List<LobbyItem> items = parseItems(config.getConfigurationSection("lobbyItems"));
     boolean playerCommands = config.getBoolean("lobby.playerCommands", true);
     List<LobbyEntry> lobbies = parseLobbies(config.getConfigurationSection("lobby.lobbies"));
+    Map<String, String> serverAliases = parseServerAliases(config.getConfigurationSection("proxy.serverAliases"));
 
-    return new LobbyConfig(enabled, worlds, spawn, protection, join, flight, scoreboard, List.copyOf(items), playerCommands, lobbies);
+    return new LobbyConfig(enabled, worlds, spawn, protection, join, flight, doubleJump, walkSpeed, scoreboard,
+        List.copyOf(items), playerCommands, lobbies, serverAliases);
   }
 
   private static List<String> scoreboardLines(FileConfiguration config) {
@@ -267,5 +300,25 @@ public record LobbyConfig(
       lobbies.add(new LobbyEntry("lobby-1", "&aLobby 1", "Lobby1", true));
     }
     return lobbies;
+  }
+
+  private static Map<String, String> parseServerAliases(ConfigurationSection section) {
+    Map<String, String> aliases = new LinkedHashMap<>();
+    aliases.put("realanarchy", "Anarchy");
+    if (section == null) {
+      return Map.copyOf(aliases);
+    }
+    for (String alias : section.getKeys(false)) {
+      String target = section.getString(alias, "");
+      if (target == null || target.isBlank()) {
+        continue;
+      }
+      aliases.put(alias.trim().toLowerCase(Locale.ROOT), target.trim());
+    }
+    return Map.copyOf(aliases);
+  }
+
+  private static double clamp(double value, double min, double max) {
+    return Math.max(min, Math.min(max, value));
   }
 }

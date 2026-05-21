@@ -188,7 +188,11 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
     if (lobby != null) {
       send(sender, ChatColor.YELLOW + "Lobby module: " + statusText(lobby.config().enabled()));
       send(sender, ChatColor.YELLOW + "Lobby worlds: " + ChatColor.WHITE + String.join(", ", lobby.config().worlds()));
-      send(sender, ChatColor.YELLOW + "Menus loaded: " + ChatColor.WHITE + lobby.menuRegistry().count());
+      String menus = lobby.menuRegistry().keys().isEmpty()
+          ? "none"
+          : String.join(", ", lobby.menuRegistry().keys());
+      send(sender, ChatColor.YELLOW + "Menus: " + ChatColor.WHITE + menus
+          + ChatColor.GRAY + " (" + lobby.menuRegistry().count() + ")");
     }
   }
 

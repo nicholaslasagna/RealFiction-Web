@@ -32,6 +32,7 @@ public final class RealCorePlugin extends JavaPlugin {
   @Override
   public void onEnable() {
     saveDefaultConfig();
+    mergeBundledConfigDefaults();
     if (!reloadRealCore(false)) {
       getLogger().severe("RealCore could not start safely. Disabling plugin.");
       getServer().getPluginManager().disablePlugin(this);
@@ -76,6 +77,7 @@ public final class RealCorePlugin extends JavaPlugin {
 
     try {
       reloadConfig();
+      mergeBundledConfigDefaults();
       realCoreConfig = RealCoreConfig.from(getConfig());
       if (scheduler == null) {
         scheduler = SchedulerFactory.create(this);
@@ -163,6 +165,7 @@ public final class RealCorePlugin extends JavaPlugin {
     String websiteAuth = config != null && config.hmacSecretConfigured() ? "ready" : "not ready";
     String luckPerms = luckPermsAvailable() ? "ready" : "not ready";
     String commands = "/" + String.join(", /", commandLabels);
+    String menus = lobbyManager == null ? "not loaded" : String.join(", ", lobbyManager.menuRegistry().keys());
 
     getLogger().info("+--------------------------------------------------+");
     getLogger().info("| RealCore " + version + " " + action);
@@ -172,7 +175,22 @@ public final class RealCorePlugin extends JavaPlugin {
     getLogger().info("| Website auth: " + websiteAuth);
     getLogger().info("| LuckPerms: " + luckPerms);
     getLogger().info("| Commands: " + commands);
+    getLogger().info("| Menus: " + (menus.isBlank() ? "none" : menus));
     getLogger().info("+--------------------------------------------------+");
+  }
+
+  private void mergeBundledConfigDefaults() {
+    reloadConfig();
+    boolean missingLobbyDefaults = !getConfig().isConfigurationSection("menus")
+        || !getConfig().isConfigurationSection("doubleJump")
+        || !getConfig().isConfigurationSection("walkSpeed")
+        || !getConfig().isConfigurationSection("proxy.serverAliases");
+    if (!missingLobbyDefaults) {
+      return;
+    }
+    getConfig().options().copyDefaults(true);
+    saveConfig();
+    reloadConfig();
   }
 
   private void stopServices(boolean closeScheduler) {

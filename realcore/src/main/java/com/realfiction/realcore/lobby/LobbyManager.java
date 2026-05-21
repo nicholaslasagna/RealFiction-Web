@@ -50,8 +50,8 @@ public final class LobbyManager {
     this.plugin = plugin;
     this.scheduler = scheduler;
     this.config = LobbyConfig.from(initialConfig);
-    this.menuRegistry = MenuRegistry.from(menusSection(initialConfig), plugin.getLogger());
-    this.proxyService = new ProxyService(plugin, scheduler);
+    this.menuRegistry = loadMenuRegistry(initialConfig);
+    this.proxyService = new ProxyService(plugin, scheduler, this::config);
     this.visibilityService = new VisibilityService(plugin, scheduler);
     this.lobbyItemService = new LobbyItemService(plugin, scheduler, visibilityService);
     this.flightService = new LobbyFlightService(scheduler);
@@ -100,7 +100,7 @@ public final class LobbyManager {
 
   public void reload(FileConfiguration newConfig) {
     this.config = LobbyConfig.from(newConfig);
-    this.menuRegistry = MenuRegistry.from(menusSection(newConfig), plugin.getLogger());
+    this.menuRegistry = loadMenuRegistry(newConfig);
 
     if (config.enabled() && config.scoreboard().enabled()) {
       scoreboardService.start();
@@ -110,11 +110,12 @@ public final class LobbyManager {
 
     LobbyConfig current = config;
     for (Player player : Bukkit.getOnlinePlayers()) {
-      String world = player.getWorld().getName();
-      flightService.applyFor(player, world, current);
-      if (current.enabled() && current.isLobbyWorld(world)) {
-        lobbyItemService.give(player, current);
-      }
+      flightService.applyFor(player, current);
+      scheduler.runForPlayer(player, () -> {
+        if (player.isOnline() && current.enabled() && current.isLobbyWorld(player.getWorld().getName())) {
+          lobbyItemService.give(player, current);
+        }
+      });
     }
   }
 
@@ -137,7 +138,7 @@ public final class LobbyManager {
       lobbyItemService.give(player, current);
       scoreboardService.refresh(player);
     }
-    flightService.applyFor(player, world, current);
+    flightService.applyFor(player, current);
     visibilityService.onJoin(player);
   }
 
@@ -174,7 +175,7 @@ public final class LobbyManager {
       return;
     }
     String world = player.getWorld().getName();
-    flightService.applyFor(player, world, current);
+    flightService.applyFor(player, current);
     if (current.isLobbyWorld(world)) {
       lobbyItemService.give(player, current);
       scoreboardService.refresh(player);
@@ -184,6 +185,7 @@ public final class LobbyManager {
   }
 
   public void handleQuit(Player player) {
+    flightService.forget(player);
     visibilityService.onQuit(player);
   }
 
@@ -244,16 +246,29 @@ public final class LobbyManager {
     return Math.round(value * 100.0) / 100.0;
   }
 
-  /**
-   * Returns the menus section from the live config, or, if the server is running
-   * an older config.yml that predates the lobby module, the menus bundled in the
-   * plugin jar. This keeps the Game Menu / Lobby Selector working on upgrade.
-   */
-  private ConfigurationSection menusSection(FileConfiguration config) {
-    ConfigurationSection section = config.getConfigurationSection("menus");
-    if (section != null) {
-      return section;
+  private MenuRegistry loadMenuRegistry(FileConfiguration config) {
+    ConfigurationSection live = config.getConfigurationSection("menus");
+    MenuRegistry liveRegistry = MenuRegistry.from(live, plugin.getLogger());
+    if (liveRegistry.count() > 0) {
+      return liveRegistry;
     }
+
+    ConfigurationSection bundled = bundledMenusSection();
+    MenuRegistry bundledRegistry = MenuRegistry.from(bundled, plugin.getLogger());
+    if (bundledRegistry.count() > 0) {
+      plugin.getLogger().info("RealCore loaded bundled fallback menus: " + String.join(", ", bundledRegistry.keys()));
+      return bundledRegistry;
+    }
+
+    return liveRegistry;
+  }
+
+  /**
+   * Returns the menus bundled in the plugin jar. This keeps Game Menu / Lobby
+   * Selector working when an older existing config.yml has no menus block, or
+   * has an empty/invalid menus block.
+   */
+  private ConfigurationSection bundledMenusSection() {
     try (InputStream resource = plugin.getResource("config.yml")) {
       if (resource != null) {
         YamlConfiguration bundled = YamlConfiguration.loadConfiguration(
@@ -266,4 +281,3 @@ public final class LobbyManager {
     return null;
   }
 }
-

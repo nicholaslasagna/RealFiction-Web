@@ -89,4 +89,8 @@ public final class MenuRegistry {
   public int count() {
     return menus.size();
   }
+
+  public List<String> keys() {
+    return List.copyOf(menus.keySet());
+  }
 }

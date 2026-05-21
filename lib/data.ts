@@ -385,14 +385,14 @@ export const voteMilestones = [
 export const mapEndpoints = [
   {
     name: "RealFiction Map",
-    url: "https://map.realfiction.live",
+    url: "https://map.realfiction.live/?world=Survival&renderer=vintage_story&zoom=0&x=-864&z=201",
     description: "Primary SMP world map, claims, settlements, and major community builds.",
     icon: MapPinned,
     embeddable: false
   },
   {
     name: "Factions",
-    url: "https://map2.realfiction.live",
+    url: "https://map2.realfiction.live/?world=Factions&renderer=vintage_story&zoom=0&x=967&z=1001",
     description: "Factions world map, territory lines, and seasonal bases.",
     icon: Swords,
     embeddable: true

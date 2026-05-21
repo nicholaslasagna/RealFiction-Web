@@ -7,7 +7,9 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerChangedWorldEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
+import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.event.player.PlayerToggleFlightEvent;
 
 /** Join/quit/world-change handling for the lobby. Thin: delegates to LobbyManager. */
 public final class LobbyListener implements Listener {
@@ -46,6 +48,16 @@ public final class LobbyListener implements Listener {
   @EventHandler
   public void onWorldChange(PlayerChangedWorldEvent event) {
     manager.handleWorldChange(event.getPlayer());
+  }
+
+  @EventHandler
+  public void onToggleFlight(PlayerToggleFlightEvent event) {
+    manager.flightService().handleToggleFlight(event, manager.config());
+  }
+
+  @EventHandler(ignoreCancelled = true)
+  public void onMove(PlayerMoveEvent event) {
+    manager.flightService().handleMove(event.getPlayer(), manager.config());
   }
 
   private String applyPlayer(String message, Player player) {

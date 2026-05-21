@@ -59,7 +59,7 @@ public final class LobbyItemService {
       name = item.name();
     }
 
-    ItemStack stack = ItemFactory.build(material, name, item.lore(), item.glow(), 1);
+    ItemStack stack = ItemFactory.build(material, name, item.lore(), item.glow(), 1, player);
     ItemMeta meta = stack.getItemMeta();
     if (meta != null) {
       meta.getPersistentDataContainer().set(itemKey, PersistentDataType.STRING, item.id());

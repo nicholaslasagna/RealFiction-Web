@@ -58,7 +58,7 @@ public final class MenuService {
       if (spec.slot() < 0 || spec.slot() >= definition.size()) {
         continue;
       }
-      inventory.setItem(spec.slot(), ItemFactory.build(spec.material(), spec.name(), spec.lore(), spec.glow(), spec.amount()));
+      inventory.setItem(spec.slot(), ItemFactory.build(spec.material(), spec.name(), spec.lore(), spec.glow(), spec.amount(), player));
       actionsBySlot.put(spec.slot(), spec.actions());
     }
 
