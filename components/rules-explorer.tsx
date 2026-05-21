@@ -42,7 +42,7 @@ export function RulesExplorer() {
 
       <div className="grid gap-5 md:grid-cols-2">
         {filtered.map((group) => (
-          <Card key={group.category}>
+          <Card key={group.category} className="minecraft-card">
             <CardHeader>
               <Badge variant="outline">{group.items.length} policies</Badge>
               <CardTitle>{group.category}</CardTitle>
@@ -51,7 +51,7 @@ export function RulesExplorer() {
               <ol className="grid gap-3">
                 {group.items.map((item, index) => (
                   <li key={item} className="flex gap-3 text-sm leading-6 text-muted-foreground">
-                    <span className="font-mono text-primary">{String(index + 1).padStart(2, "0")}</span>
+                    <span className="font-mono text-amber-100">{String(index + 1).padStart(2, "0")}</span>
                     <span>{item}</span>
                   </li>
                 ))}

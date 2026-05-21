@@ -21,15 +21,15 @@ export async function POST(request: Request) {
   const parsed = checkoutSchema.safeParse(body)
 
   if (!parsed.success) {
-    return Response.json({ error: "Invalid checkout payload." }, { status: 400 })
+    return Response.json({ error: "Something in your cart does not look right." }, { status: 400 })
   }
 
   if (parsed.data.provider === "stripe" && !isStripeConfigured()) {
-    return safeJsonError("Stripe checkout is not configured yet.", 503)
+    return safeJsonError("Card payments are not ready yet.", 503)
   }
 
   if (parsed.data.provider === "paypal" && !isPayPalConfigured()) {
-    return safeJsonError("PayPal checkout is not configured yet.", 503)
+    return safeJsonError("PayPal payments are not ready yet.", 503)
   }
 
   try {
@@ -64,7 +64,7 @@ export async function POST(request: Request) {
 
     if (!result.checkoutUrl) {
       await cancelOrder(orderId)
-      return safeJsonError("Checkout session could not be created.", 502)
+      return safeJsonError("We could not start payment yet. Please try again.", 502)
     }
 
     await attachProviderSession(orderId, result.providerSessionId)
@@ -75,6 +75,6 @@ export async function POST(request: Request) {
     })
   } catch (error) {
     console.error("checkout_error", error)
-    return safeJsonError("Checkout is unavailable right now.", 500)
+    return safeJsonError("Payments are unavailable right now.", 500)
   }
 }

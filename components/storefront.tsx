@@ -66,7 +66,7 @@ export function Storefront({ products }: { products: StoreProduct[] }) {
   }
 
   async function checkout(provider: "stripe" | "paypal") {
-    setCheckoutState("Preparing secure checkout...")
+    setCheckoutState("Getting your payment ready...")
 
     try {
       const response = await fetch("/api/store/checkout", {
@@ -93,14 +93,14 @@ export function Storefront({ products }: { products: StoreProduct[] }) {
         return
       }
 
-      setCheckoutState(json.message ?? json.error ?? "Checkout provider is not configured yet.")
+      setCheckoutState(json.message ?? json.error ?? "This payment option is not ready yet.")
     } catch (error) {
       setCheckoutState(error instanceof Error ? error.message : "Checkout failed.")
     }
   }
 
   return (
-    <div className="grid gap-8 lg:grid-cols-[1fr_380px]">
+    <div className="grid gap-8 lg:grid-cols-[1fr_390px]">
       <div className="space-y-6">
         <div className="flex gap-2 overflow-x-auto pb-2">
           {productCategories.map((item) => {
@@ -111,10 +111,10 @@ export function Storefront({ products }: { products: StoreProduct[] }) {
               <button
                 key={item.id}
                 className={cn(
-                  "inline-flex h-11 shrink-0 items-center gap-2 rounded-md border px-4 text-sm font-semibold transition",
+                  "inline-flex h-11 shrink-0 items-center gap-2 rounded-md border px-4 text-sm font-bold transition",
                   active
-                    ? "border-primary/50 bg-primary/15 text-primary"
-                    : "border-border bg-background/45 text-muted-foreground hover:bg-white/6 hover:text-foreground"
+                    ? "border-amber-200/45 bg-amber-200/14 text-amber-100"
+                    : "border-amber-200/14 bg-black/24 text-muted-foreground hover:bg-amber-200/8 hover:text-amber-100"
                 )}
                 onClick={() => setCategory(item.id)}
                 type="button"
@@ -128,16 +128,20 @@ export function Storefront({ products }: { products: StoreProduct[] }) {
 
         <div className="grid gap-5 md:grid-cols-2">
           {filteredProducts.map((product) => (
-            <Card key={product.id} className="overflow-hidden">
+            <Card key={product.id} className="minecraft-card overflow-hidden">
               <CardHeader>
                 <div className="flex items-start justify-between gap-4">
                   <div>
-                    <Badge variant={product.featured ? "warning" : "default"}>
-                      {product.fulfillment === "subscription" ? "Timed" : product.fulfillment}
+                    <Badge variant={product.featured ? "warning" : "outline"}>
+                      {product.fulfillment === "subscription"
+                        ? "Monthly"
+                        : product.fulfillment === "consumable"
+                          ? "Gift"
+                          : "Permanent"}
                     </Badge>
-                    <CardTitle className="mt-3">{product.name}</CardTitle>
+                    <CardTitle className="display-font mt-3 text-2xl">{product.name}</CardTitle>
                   </div>
-                  <div className="font-mono text-lg font-semibold text-primary">
+                  <div className="font-mono text-lg font-semibold text-amber-100">
                     {formatCurrency(product.priceCents)}
                   </div>
                 </div>
@@ -147,7 +151,7 @@ export function Storefront({ products }: { products: StoreProduct[] }) {
                 <ul className="grid gap-2 text-sm text-muted-foreground">
                   {product.details.map((detail) => (
                     <li key={detail} className="flex gap-2">
-                      <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-emerald-300" />
+                      <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-emerald-200" />
                       <span>{detail}</span>
                     </li>
                   ))}
@@ -163,15 +167,15 @@ export function Storefront({ products }: { products: StoreProduct[] }) {
       </div>
 
       <aside className="lg:sticky lg:top-28 lg:self-start">
-        <Card>
+        <Card className="minecraft-panel">
           <CardHeader>
-            <Badge variant="success">Cosmetic-only checkout</Badge>
-            <CardTitle className="flex items-center gap-2">
-              <ShoppingCart className="h-5 w-5 text-primary" />
-              Cart
+            <Badge variant="success">Cosmetic-only shop</Badge>
+            <CardTitle className="display-font flex items-center gap-2 text-3xl">
+              <ShoppingCart className="h-5 w-5 text-amber-200" />
+              Server Cart
             </CardTitle>
             <CardDescription>
-              Payments run through Stripe or PayPal. RealFiction never stores raw card data.
+              Pay safely with card, Apple Pay, Google Pay, or PayPal.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-5">
@@ -197,12 +201,12 @@ export function Storefront({ products }: { products: StoreProduct[] }) {
 
             <div className="grid gap-3">
               {cartLines.length === 0 ? (
-                <div className="rounded-lg border border-dashed border-border p-5 text-sm text-muted-foreground">
+                <div className="rounded-lg border border-dashed border-amber-200/18 bg-black/18 p-5 text-sm text-muted-foreground">
                   Add cosmetics, supporter ranks, particles, pets, lobby perks, or gift cards.
                 </div>
               ) : (
                 cartLines.map((item) => (
-                  <div key={item.product.id} className="rounded-lg border border-border bg-background/45 p-3">
+                  <div key={item.product.id} className="rounded-lg border border-amber-200/14 bg-black/24 p-3">
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <div className="font-semibold">{item.product.name}</div>
@@ -210,7 +214,7 @@ export function Storefront({ products }: { products: StoreProduct[] }) {
                       </div>
                       <button
                         aria-label={`Remove ${item.product.name}`}
-                        className="rounded-md p-2 text-muted-foreground hover:bg-white/8 hover:text-foreground"
+                        className="rounded-md p-2 text-muted-foreground hover:bg-amber-200/10 hover:text-amber-100"
                         onClick={() =>
                           setCart((current) => current.filter((line) => line.productId !== item.product.id))
                         }
@@ -247,17 +251,17 @@ export function Storefront({ products }: { products: StoreProduct[] }) {
 
             <div className="flex items-center justify-between border-t border-border pt-4">
               <span className="text-sm text-muted-foreground">Total</span>
-              <strong className="font-mono text-xl">{formatCurrency(total)}</strong>
+              <strong className="font-mono text-xl text-amber-100">{formatCurrency(total)}</strong>
             </div>
 
             <div className="grid gap-2">
               <Button disabled={cartLines.length === 0} onClick={() => checkout("stripe")} type="button">
                 <CreditCard className="h-4 w-4" />
-                Stripe checkout
+                Pay with card
               </Button>
               <Button disabled={cartLines.length === 0} onClick={() => checkout("paypal")} type="button" variant="outline">
                 <Gift className="h-4 w-4" />
-                PayPal checkout
+                Pay with PayPal
               </Button>
             </div>
 

@@ -15,23 +15,23 @@
 @theme inline {
   --color-background: #06101c;
   --color-foreground: #f5f8ff;
-  --color-card: #0a1726;
+  --color-card: #0c1722;
   --color-card-foreground: #f5f8ff;
-  --color-popover: #0a1726;
+  --color-popover: #0c1722;
   --color-popover-foreground: #f5f8ff;
-  --color-primary: #47c7ff;
-  --color-primary-foreground: #04111d;
-  --color-secondary: #142235;
-  --color-secondary-foreground: #e7f1ff;
-  --color-muted: #111c2d;
-  --color-muted-foreground: #9fb1c8;
-  --color-accent: #173556;
+  --color-primary: #f2c66d;
+  --color-primary-foreground: #1a1308;
+  --color-secondary: #142131;
+  --color-secondary-foreground: #f4ead0;
+  --color-muted: #101b2a;
+  --color-muted-foreground: #a9b8c7;
+  --color-accent: #1d3f35;
   --color-accent-foreground: #f5f8ff;
   --color-destructive: #ff5f73;
   --color-destructive-foreground: #fff7f8;
-  --color-border: rgba(163, 197, 255, 0.16);
-  --color-input: rgba(163, 197, 255, 0.18);
-  --color-ring: #47c7ff;
+  --color-border: rgba(242, 198, 109, 0.16);
+  --color-input: rgba(242, 198, 109, 0.18);
+  --color-ring: #f2c66d;
   --font-sans: "Inter", "Geist", ui-sans-serif, system-ui, sans-serif;
   --font-display: "RealFiction Display", "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-minecraft: "RealFiction Minecraft", ui-monospace, monospace;
@@ -51,11 +51,12 @@ body {
   min-height: 100vh;
   margin: 0;
   background:
-    linear-gradient(180deg, rgba(6, 16, 28, 0.9), rgba(6, 16, 28, 0.98)),
-    linear-gradient(90deg, rgba(71, 199, 255, 0.09) 1px, transparent 1px),
-    linear-gradient(0deg, rgba(236, 176, 87, 0.045) 1px, transparent 1px),
+    radial-gradient(circle at top, rgba(35, 78, 67, 0.24), transparent 34rem),
+    linear-gradient(180deg, rgba(6, 16, 28, 0.92), rgba(6, 16, 28, 0.98)),
+    linear-gradient(90deg, rgba(242, 198, 109, 0.055) 1px, transparent 1px),
+    linear-gradient(0deg, rgba(105, 81, 49, 0.075) 1px, transparent 1px),
     #06101c;
-  background-size: auto, 64px 64px, 64px 64px, auto;
+  background-size: auto, auto, 64px 64px, 64px 64px, auto;
   color: #f5f8ff;
   font-family: var(--font-sans);
   text-rendering: optimizeLegibility;
@@ -76,7 +77,7 @@ select {
 }
 
 ::selection {
-  background: rgba(71, 199, 255, 0.35);
+  background: rgba(242, 198, 109, 0.35);
 }
 
 .minecraft-font {
@@ -93,12 +94,51 @@ select {
 }
 
 .premium-surface {
-  border: 1px solid rgba(163, 197, 255, 0.16);
+  border: 1px solid rgba(242, 198, 109, 0.16);
   background:
-    linear-gradient(145deg, rgba(14, 30, 49, 0.92), rgba(6, 16, 28, 0.74)),
-    linear-gradient(90deg, rgba(71, 199, 255, 0.08), rgba(236, 176, 87, 0.05));
+    linear-gradient(145deg, rgba(14, 26, 35, 0.94), rgba(6, 16, 28, 0.76)),
+    linear-gradient(90deg, rgba(242, 198, 109, 0.08), rgba(50, 184, 129, 0.07));
   box-shadow: 0 22px 80px rgba(0, 0, 0, 0.34);
   backdrop-filter: blur(18px);
+}
+
+.minecraft-hero {
+  background-color: #06101c;
+}
+
+.minecraft-panel {
+  border: 1px solid rgba(242, 198, 109, 0.18);
+  border-radius: var(--radius);
+  background:
+    linear-gradient(145deg, rgba(12, 22, 31, 0.9), rgba(6, 16, 28, 0.78)),
+    linear-gradient(90deg, rgba(85, 54, 28, 0.18), rgba(22, 73, 58, 0.14));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 26px 80px rgba(0, 0, 0, 0.36);
+  backdrop-filter: blur(18px);
+}
+
+.minecraft-card {
+  border: 1px solid rgba(242, 198, 109, 0.14);
+  border-radius: var(--radius);
+  background:
+    linear-gradient(180deg, rgba(13, 25, 35, 0.88), rgba(7, 16, 27, 0.92)),
+    linear-gradient(90deg, rgba(242, 198, 109, 0.05), rgba(45, 159, 106, 0.04));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 18px 60px rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(16px);
+  transition:
+    border-color 200ms ease,
+    transform 200ms ease,
+    box-shadow 200ms ease;
+}
+
+.minecraft-card:hover {
+  border-color: rgba(242, 198, 109, 0.36);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 24px 80px rgba(0, 0, 0, 0.36);
 }
 
 .pixel-grid {
