@@ -135,6 +135,89 @@ walkSpeed:
   enabled: true
   speed: 0.26
 
+# ---------------------------------------------------------------------------
+# Cosmetics Phase 1. Cosmetic only: no gameplay advantages.
+# ---------------------------------------------------------------------------
+cosmetics:
+  enabled: true
+  gui:
+    title: "&aRealFiction Cosmetics"
+    size: 45
+  categories:
+    pets:
+      enabled: true
+      name: "&aPets"
+      material: BONE
+      permission: "realfiction.pets.pack"
+    particles:
+      enabled: true
+      name: "&aParticles"
+      material: EMERALD
+      permission: "realfiction.particles.vault"
+    trails:
+      enabled: true
+      name: "&fTrails"
+      material: FEATHER
+      permission: "realfiction.particles.vault"
+    username-colors:
+      enabled: true
+      name: "&bUsername Colors"
+      material: NAME_TAG
+      permission: "realfiction.username.colors"
+    lobby-flight:
+      enabled: true
+      name: "&bLobby Flight"
+      material: ELYTRA
+      permission: "realfiction.lobby.flight"
+  options:
+    pets:
+      pet-pack:
+        name: "&aPets Pack"
+        material: BONE
+        permission: "realfiction.pets.pack"
+        placeholder: true
+        lore:
+          - "&7Pet AI is coming soon."
+    particles:
+      emerald-aura:
+        name: "&aEmerald Aura"
+        material: EMERALD
+        permission: "realfiction.particles.vault"
+        particle: HAPPY_VILLAGER
+        lore:
+          - "&7A soft lobby sparkle."
+    trails:
+      cloud-trail:
+        name: "&fCloud Trail"
+        material: FEATHER
+        permission: "realfiction.particles.vault"
+        particle: CLOUD
+        lore:
+          - "&7A light trail as you move."
+    username-colors:
+      green:
+        name: "&aGreen Name"
+        material: LIME_DYE
+        permission: "realfiction.username.colors"
+        color: "&a"
+      gold:
+        name: "&6Gold Name"
+        material: GOLD_INGOT
+        permission: "realfiction.username.colors"
+        color: "&6"
+      aqua:
+        name: "&bAqua Name"
+        material: DIAMOND
+        permission: "realfiction.username.colors"
+        color: "&b"
+    lobby-flight:
+      toggle:
+        name: "&bLobby Flight"
+        material: FEATHER
+        permission: "realfiction.lobby.flight"
+        lore:
+          - "&7Turn lobby flight on or off."
+
 # Sidebar scoreboard.
 scoreboard:
   enabled: true

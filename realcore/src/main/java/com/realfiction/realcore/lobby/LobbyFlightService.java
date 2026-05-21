@@ -4,6 +4,7 @@ import com.realfiction.realcore.scheduler.RealCoreScheduler;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Predicate;
 import org.bukkit.GameMode;
 import org.bukkit.Sound;
 import org.bukkit.entity.Player;
@@ -17,6 +18,7 @@ import org.bukkit.util.Vector;
 public final class LobbyFlightService {
   private final RealCoreScheduler scheduler;
   private final Map<UUID, Float> previousWalkSpeeds = new ConcurrentHashMap<>();
+  private Predicate<Player> flightEnabledPredicate = ignored -> true;
 
   public LobbyFlightService(RealCoreScheduler scheduler) {
     this.scheduler = scheduler;
@@ -29,6 +31,10 @@ public final class LobbyFlightService {
       }
       applyNow(player, config);
     });
+  }
+
+  public void setFlightEnabledPredicate(Predicate<Player> flightEnabledPredicate) {
+    this.flightEnabledPredicate = flightEnabledPredicate == null ? ignored -> true : flightEnabledPredicate;
   }
 
   public void handleToggleFlight(PlayerToggleFlightEvent event, LobbyConfig config) {
@@ -73,7 +79,8 @@ public final class LobbyFlightService {
       boolean inLobby = config.isLobbyWorld(player.getWorld().getName());
       boolean hasPaidFlight = inLobby
           && config.flight().enabled()
-          && player.hasPermission(config.flight().permission());
+          && player.hasPermission(config.flight().permission())
+          && flightEnabledPredicate.test(player);
 
       if (inLobby) {
         applyWalkSpeed(player, config);
@@ -129,6 +136,8 @@ public final class LobbyFlightService {
     if (mode == GameMode.CREATIVE || mode == GameMode.SPECTATOR) {
       return false;
     }
-    return !config.flight().enabled() || !player.hasPermission(config.flight().permission());
+    return !config.flight().enabled()
+        || !player.hasPermission(config.flight().permission())
+        || !flightEnabledPredicate.test(player);
   }
 }
