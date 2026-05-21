@@ -80,6 +80,14 @@ export const gamemodes = [
     signal: "Seasonal conflict"
   },
   {
+    name: "Arcade",
+    href: "/updates",
+    image: "/images/parkour.png",
+    icon: PartyPopper,
+    summary: "Fast minigames, parkour challenges, quick matches, and rotating server events.",
+    signal: "Quick play"
+  },
+  {
     name: "BedWars",
     href: "/updates",
     image: "/images/bedwars.png",
@@ -104,7 +112,7 @@ export const gamemodes = [
     signal: "Live events"
   },
   {
-    name: "LobbyGames",
+    name: "Lobby Games",
     href: "/store",
     image: "/images/hero1.png",
     icon: Zap,
@@ -120,7 +128,7 @@ export const storeProducts: StoreProduct[] = [
     category: "supporter",
     priceCents: 699,
     summary: "Monthly supporter rank with profile style, chat flair, and lobby cosmetics.",
-    details: ["No gameplay advantage", "Monthly supporter badge", "Cosmetic permissions", "Priority support queue"],
+    details: ["No gameplay advantage", "Monthly supporter badge", "Cosmetic perks", "Helpful support access"],
     fulfillment: "subscription",
     durationDays: 30,
     featured: true,
@@ -153,7 +161,7 @@ export const storeProducts: StoreProduct[] = [
     category: "particles",
     priceCents: 799,
     summary: "Cinematic trails, celebration effects, and lobby visual effects.",
-    details: ["Lobby and cosmetic-safe effects", "Toggleable presets", "Profile showcase support", "Queue-based delivery"],
+    details: ["Lobby and cosmetic-safe effects", "Toggleable presets", "Profile showcase support", "Delivered to your account"],
     fulfillment: "permanent",
     accent: "violet"
   },
@@ -162,8 +170,8 @@ export const storeProducts: StoreProduct[] = [
     name: "Username Colors",
     category: "identity",
     priceCents: 499,
-    summary: "Curated chat colors and nameplate identity styles powered by LuckPerms.",
-    details: ["Approved palette", "Works with prefixes", "No staff impersonation colors", "Instant website sync"],
+    summary: "Curated chat colors and nameplate identity styles for your in-game look.",
+    details: ["Approved palette", "Works with prefixes", "No staff impersonation colors", "Works with your profile"],
     fulfillment: "permanent",
     accent: "rose"
   },
@@ -173,7 +181,7 @@ export const storeProducts: StoreProduct[] = [
     category: "lobby",
     priceCents: 599,
     summary: "Smooth lobby flight for hubs, spawn showcases, and event spaces.",
-    details: ["Lobby-only convenience", "No survival or PvP impact", "Expires cleanly if timed", "Folia-safe fulfillment"],
+    details: ["Lobby-only convenience", "No survival or PvP impact", "Easy to turn on or off", "Made for hub areas"],
     fulfillment: "permanent",
     accent: "sky"
   },
@@ -194,7 +202,7 @@ export const storeProducts: StoreProduct[] = [
     category: "gift-cards",
     priceCents: 2500,
     summary: "Send store credit for cosmetics, supporter ranks, and visual profile perks.",
-    details: ["Redeemable account credit", "Fraud-checked redemption", "Balance tracking", "Gift-friendly checkout"],
+    details: ["Store credit for RealFiction", "Safe redemption", "Easy balance view", "Gift-friendly checkout"],
     fulfillment: "consumable",
     accent: "amber"
   }
@@ -218,61 +226,61 @@ export const productCategories: Array<{
 export const voteSites = [
   {
     name: "MinecraftServers.org",
-    href: "https://minecraftservers.org",
+    href: "https://minecraftservers.org/vote/558530",
     reward: "Vote key + streak XP",
     cooldownHours: 24
   },
   {
-    name: "PlanetMinecraft",
-    href: "https://planetminecraft.com",
+    name: "PlanetMinecraft.com",
+    href: "https://www.planetminecraft.com/server/real-fiction/vote/",
     reward: "Vote key + profile points",
     cooldownHours: 24
   },
   {
-    name: "Minecraft-MP",
-    href: "https://minecraft-mp.com",
+    name: "Minecraft MP",
+    href: "https://minecraft-mp.com/server/326865/vote/",
     reward: "Vote key + daily progress",
     cooldownHours: 24
   },
   {
     name: "TopG",
-    href: "https://topg.org",
+    href: "https://topg.org/minecraft-servers/server-669450",
     reward: "Vote key + streak shield",
     cooldownHours: 24
   },
   {
     name: "Minecraft Menu",
-    href: "https://minecraft.menu",
+    href: "https://minecraft.menu/server-realfiction.4130/vote",
     reward: "Vote key",
     cooldownHours: 24
   },
   {
     name: "Servers-Minecraft",
-    href: "https://servers-minecraft.net",
+    href: "https://servers-minecraft.net/server-realfiction.40945",
     reward: "Vote key + monthly score",
     cooldownHours: 24
   },
   {
     name: "Minecraft.Buzz",
-    href: "https://minecraft.buzz",
+    href: "https://minecraft.buzz/vote/12880",
     reward: "Vote key",
     cooldownHours: 24
   },
   {
     name: "CurseForge",
-    href: "https://www.curseforge.com/minecraft/servers",
+    href: "https://www.curseforge.com/servers/minecraft/game/realfiction/vote",
     reward: "Vote key + cosmetic chance",
     cooldownHours: 24
   },
   {
     name: "mclist.io",
-    href: "https://mclist.io",
+    href: "https://mclist.io/server/65417-realfiction-live-realfiction-minigames-smp-f/vote",
     reward: "Vote key",
     cooldownHours: 24
   },
   {
     name: "MCSL",
-    href: "https://minecraft-server-list.com",
+    href: "https://minecraft-server-list.com/server/501080/vote/",
     reward: "Vote key + leaderboard score",
     cooldownHours: 24
   }
@@ -360,12 +368,12 @@ export const rules = [
 export const updates = [
   {
     version: "Platform 2.0",
-    title: "RealFiction Platform Foundation",
+    title: "New RealFiction Site Foundation",
     date: "2026-05-20",
-    type: "Platform",
+    type: "Website",
     summary:
-      "New account, vote, store, and fulfillment architecture for a full custom RealFiction ecosystem.",
-    tags: ["Next.js", "Supabase", "Cloudflare", "Store"]
+      "A refreshed home for accounts, store checkout, voting, live maps, support, and server rewards.",
+    tags: ["Website", "Accounts", "Store"]
   },
   {
     version: "Network Ops",
@@ -382,27 +390,27 @@ export const updates = [
     date: "2026-05-20",
     type: "Community",
     summary:
-      "Vote sites, streaks, monthly top voters, cooldowns, analytics, and claimable reward queues are planned in one flow.",
+      "Vote sites, streaks, monthly top voters, cooldowns, and reward progress are planned in one flow.",
     tags: ["Voting", "Rewards", "Leaderboard"]
   }
 ]
 
 export const architectureHighlights = [
   {
-    title: "Cloudflare first",
-    body: "Next.js App Router ships to Cloudflare Pages through OpenNext, with API routes running as Worker-compatible functions."
+    title: "Fast website",
+    body: "RealFiction pages are built to feel quick, clean, and easy to use on desktop or mobile."
   },
   {
-    title: "Supabase as the source of truth",
-    body: "Auth, PostgreSQL, RLS, entitlements, orders, reward queues, vote history, gift cards, audit logs, and support tickets live in Supabase."
+    title: "Player accounts",
+    body: "Players can keep purchases, votes, linked Minecraft names, and support requests in one simple place."
   },
   {
-    title: "Plugin-delivered rewards",
-    body: "RealCore polls signed reward queues, talks to LuckPerms, and delivers cosmetics or timed ranks safely for online and offline players."
+    title: "Server rewards",
+    body: "Cosmetics, supporter perks, and vote rewards are delivered to the right Minecraft account."
   },
   {
-    title: "No pay-to-win boundary",
-    body: "Store schema and fulfillment types are constrained around cosmetics, identity, profile style, lobby convenience, and supporter status."
+    title: "Fair store",
+    body: "The shop stays focused on cosmetics, identity, profile style, lobby fun, and supporter status."
   }
 ]
 
@@ -410,22 +418,22 @@ export const accountPanels = [
   {
     title: "Minecraft Link",
     status: "Ready for verification",
-    body: "Link a Java or Bedrock account through a one-time code and lock purchases to verified ownership."
+    body: "Link a Java or Bedrock account through a one-time code so rewards land on the right player."
   },
   {
     title: "Purchase History",
-    status: "Webhook backed",
-    body: "Stripe, PayPal, gift card, coupon, and refund events reconcile into immutable order records."
+    status: "Receipt ready",
+    body: "View store orders, supporter perks, refunds, gift cards, and checkout receipts."
   },
   {
     title: "Owned Cosmetics",
     status: "Synced to server",
-    body: "Permanent unlocks, supporter perks, lobby effects, particles, pets, and profile frames stay tied to account entitlements."
+    body: "Permanent unlocks, supporter perks, lobby effects, particles, pets, and profile frames stay tied to your account."
   },
   {
     title: "Security",
-    status: "RLS enforced",
-    body: "Auth sessions, device review, linked-account changes, support actions, and fulfillment events are audit logged."
+    status: "Protected",
+    body: "Review sign-in state, linked-account changes, support requests, and account safety."
   }
 ]
 
@@ -438,7 +446,7 @@ export const socials = [
 
 export const trustPillars = [
   { label: "Cosmetics only", icon: Sparkles },
-  { label: "RLS everywhere", icon: ShieldCheck },
-  { label: "Webhook verified", icon: BadgeCheck },
-  { label: "Idempotent rewards", icon: Medal }
+  { label: "Secure checkout", icon: ShieldCheck },
+  { label: "Verified rewards", icon: BadgeCheck },
+  { label: "Fair play", icon: Medal }
 ]

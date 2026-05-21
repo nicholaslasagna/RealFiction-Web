@@ -1,111 +1,62 @@
 import type { Metadata } from "next"
+import Image from "next/image"
 import Link from "next/link"
-import { Fingerprint, History, LockKeyhole, PackageCheck, Settings, ShieldCheck, UserRound } from "lucide-react"
+import { ArrowLeft, ShieldCheck } from "lucide-react"
 
-import { Reveal } from "@/components/reveal"
-import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { accountPanels } from "@/lib/data"
+import { AccountAuthCard } from "@/components/account-auth-card"
 
 export const metadata: Metadata = {
-  title: "Account",
+  title: "Sign In",
   description:
-    "RealFiction account dashboard for Minecraft linking, purchases, cosmetics, subscriptions, votes, rewards, and security."
+    "Sign in or create a RealFiction account for Minecraft linking, cosmetics, purchases, voting rewards, and support."
 }
-
-const dashboardRows = [
-  { label: "Purchase history", value: "Orders, refunds, receipts", icon: History },
-  { label: "Owned cosmetics", value: "Pets, particles, chat colors", icon: PackageCheck },
-  { label: "Active subscriptions", value: "RealVIP and timed perks", icon: ShieldCheck },
-  { label: "Security settings", value: "Sessions, email, linked accounts", icon: LockKeyhole }
-]
 
 export default function AccountPage() {
   return (
-    <section className="container-shell py-14">
-      <Reveal className="grid gap-8 lg:grid-cols-[0.95fr_1.05fr]">
-        <div>
-          <Badge variant="default">
-            <UserRound className="mr-1.5 h-3.5 w-3.5" />
-            Account ecosystem
-          </Badge>
-          <h1 className="display-font mt-5 text-5xl font-semibold leading-tight md:text-6xl">Dashboard</h1>
-          <p className="mt-5 max-w-2xl text-lg leading-8 text-muted-foreground">
-            Supabase Auth becomes the identity layer for purchases, Minecraft linking, vote history,
-            reward claims, gift card balances, profile customization, and support security.
-          </p>
-          <div className="mt-7 flex flex-col gap-3 sm:flex-row">
-            <Button asChild size="lg">
-              <Link href="/store">Start with store</Link>
-            </Button>
-            <Button asChild size="lg" variant="outline">
-              <Link href="/vote">View voting</Link>
-            </Button>
-          </div>
-        </div>
+    <section className="relative isolate min-h-screen overflow-hidden">
+      <div className="absolute inset-0 -z-30">
+        <Image
+          alt="RealFiction Minecraft background"
+          src="/images/hero2.png"
+          fill
+          priority
+          className="scale-105 object-cover opacity-44 blur-[2px]"
+          sizes="100vw"
+        />
+      </div>
+      <div className="absolute inset-0 -z-20 bg-[radial-gradient(circle_at_50%_46%,rgba(242,198,109,0.18),transparent_27rem),radial-gradient(circle_at_70%_72%,rgba(129,55,116,0.38),transparent_36rem),linear-gradient(135deg,rgba(6,16,28,0.82),rgba(42,21,55,0.78),rgba(6,16,28,0.94))]" />
+      <div className="pixel-grid opacity-30" />
 
-        <Card>
-          <CardHeader>
-            <Badge variant="success">Supabase Auth</Badge>
-            <CardTitle>Sign in</CardTitle>
-            <CardDescription>Email magic links, OAuth providers, and future Minecraft verification codes.</CardDescription>
-          </CardHeader>
-          <CardContent className="grid gap-4">
-            <Input placeholder="email@example.com" type="email" />
-            <Button type="button">
-              <Fingerprint className="h-4 w-4" />
-              Request sign-in link
-            </Button>
-            <p className="text-sm text-muted-foreground">
-              Auth is scaffolded for Supabase. Environment variables and redirect URLs are configured during deployment.
-            </p>
-          </CardContent>
-        </Card>
-      </Reveal>
+      <div className="container-shell flex min-h-screen flex-col">
+        <header className="flex h-24 items-center justify-between gap-4">
+          <Link className="flex items-center gap-3" href="/">
+            <Image
+              alt="RealFiction"
+              src="/images/logo1.png"
+              width={174}
+              height={54}
+              className="drop-shadow-[0_12px_28px_rgba(0,0,0,0.5)]"
+            />
+          </Link>
+          <Link
+            className="inline-flex items-center gap-2 rounded-md border border-white/12 bg-black/24 px-3 py-2 text-sm font-semibold text-muted-foreground backdrop-blur transition hover:border-amber-200/35 hover:text-amber-100"
+            href="/"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Home
+          </Link>
+        </header>
 
-      <Reveal className="mt-10 grid gap-5 md:grid-cols-2">
-        {accountPanels.map((panel) => (
-          <Card key={panel.title}>
-            <CardHeader>
-              <Badge variant="outline">{panel.status}</Badge>
-              <CardTitle>{panel.title}</CardTitle>
-              <CardDescription>{panel.body}</CardDescription>
-            </CardHeader>
-          </Card>
-        ))}
-      </Reveal>
-
-      <Reveal className="mt-10">
-        <div className="premium-surface rounded-lg p-6 md:p-8">
-          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-            <div>
-              <Badge variant="warning">
-                <Settings className="mr-1.5 h-3.5 w-3.5" />
-                Dashboard modules
-              </Badge>
-              <h2 className="mt-4 text-2xl font-semibold">Production account surface</h2>
+        <div className="grid flex-1 place-items-center py-8">
+          <div className="w-full">
+            <div className="mx-auto mb-5 flex w-fit items-center gap-2 rounded-md border border-emerald-300/18 bg-black/28 px-3 py-2 text-xs font-semibold text-emerald-100 backdrop-blur">
+              <ShieldCheck className="h-3.5 w-3.5" />
+              Secure RealFiction account
             </div>
-            <Button asChild variant="outline">
-              <Link href="/contact">Need support</Link>
-            </Button>
-          </div>
-          <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-            {dashboardRows.map((row) => {
-              const Icon = row.icon
-
-              return (
-                <div key={row.label} className="rounded-lg border border-border bg-background/45 p-5">
-                  <Icon className="h-5 w-5 text-primary" />
-                  <h3 className="mt-4 font-semibold">{row.label}</h3>
-                  <p className="mt-2 text-sm text-muted-foreground">{row.value}</p>
-                </div>
-              )
-            })}
+            <AccountAuthCard />
           </div>
         </div>
-      </Reveal>
+      </div>
     </section>
   )
 }

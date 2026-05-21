@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next"
 
 import "@/app/globals.css"
+import { SiteChrome } from "@/components/site-chrome"
 import { SiteFooter } from "@/components/site-footer"
 import { SiteHeader } from "@/components/site-header"
 
@@ -14,8 +15,8 @@ export const metadata: Metadata = {
     "RealFiction is a non pay-to-win Minecraft network with SMP, Factions, Arcade, BedWars, Murder Mystery, tournaments, maps, voting, accounts, and cosmetics.",
   openGraph: {
     title: "RealFiction",
-    description:
-      "A premium Minecraft platform for community gameplay, fair cosmetics, voting, maps, accounts, and updates.",
+  description:
+    "A premium Minecraft network for community gameplay, fair cosmetics, voting, maps, accounts, and updates.",
     url: "https://realfiction.live",
     siteName: "RealFiction",
     images: [
@@ -32,7 +33,7 @@ export const metadata: Metadata = {
   twitter: {
     card: "summary_large_image",
     title: "RealFiction",
-    description: "Premium non pay-to-win Minecraft network and platform.",
+    description: "Premium non pay-to-win Minecraft network.",
     images: ["/images/hero1.png"]
   }
 }
@@ -52,9 +53,9 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
-        <SiteHeader />
-        <main className="min-h-screen pt-20">{children}</main>
-        <SiteFooter />
+        <SiteChrome header={<SiteHeader />} footer={<SiteFooter />}>
+          {children}
+        </SiteChrome>
       </body>
     </html>
   )

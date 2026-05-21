@@ -8,7 +8,7 @@ export default function NotFound() {
       <p className="minecraft-font text-sm text-primary">404</p>
       <h1 className="display-font max-w-2xl text-5xl font-semibold">This portal is not on the network.</h1>
       <p className="max-w-xl text-muted-foreground">
-        The page may have moved during the platform migration. Head back to the RealFiction home base.
+        The page may have moved. Head back to the RealFiction home base.
       </p>
       <Button asChild>
         <Link href="/">Return home</Link>

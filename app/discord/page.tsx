@@ -23,8 +23,8 @@ export default function DiscordPage() {
           </Badge>
           <h1 className="display-font mt-5 text-5xl font-semibold leading-tight md:text-6xl">Discord</h1>
           <p className="mt-5 max-w-2xl text-lg leading-8 text-muted-foreground">
-            Events, support, updates, vote reminders, tournament notices, Discord supporter sync,
-            staff announcements, and community highlights.
+            Events, support, screenshots, updates, vote reminders, tournament notices, staff
+            announcements, and community highlights.
           </p>
           <div className="mt-7 flex flex-col gap-3 sm:flex-row">
             <Button asChild size="lg">
@@ -40,18 +40,18 @@ export default function DiscordPage() {
         </div>
 
         <div className="grid gap-5">
-          <Card>
+          <Card className="minecraft-card">
             <CardHeader>
-              <UsersRound className="h-5 w-5 text-primary" />
+              <UsersRound className="h-5 w-5 text-amber-200" />
               <CardTitle>Online members</CardTitle>
               <CardDescription>
                 Discord widget integration is ready for a server widget ID or bot-backed member endpoint.
               </CardDescription>
             </CardHeader>
           </Card>
-          <Card>
+          <Card className="minecraft-card">
             <CardHeader>
-              <Radio className="h-5 w-5 text-primary" />
+              <Radio className="h-5 w-5 text-emerald-200" />
               <CardTitle>Live network announcements</CardTitle>
               <CardDescription>
                 Updates, maintenance, launches, votes, and tournament cards can publish to web and Discord together.
