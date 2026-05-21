@@ -423,8 +423,8 @@ export const rules = [
   {
     category: "Economy",
     items: [
-      "Do not scam through ambiguous trades, fake ranks, or off-platform payment promises.",
-      "Chargebacks, payment fraud, and gift card abuse are investigated through audit logs.",
+      "Do not scam through confusing trades, fake ranks, or outside payment promises.",
+      "Chargebacks, payment fraud, and gift card abuse are reviewed by staff.",
       "Cosmetic purchases do not protect players from moderation action."
     ]
   },
@@ -448,7 +448,7 @@ export const rules = [
     category: "Security",
     items: [
       "Never share account credentials, one-time verification codes, or payment session links.",
-      "Linked Minecraft accounts can be reverified through the account dashboard.",
+      "Linked Minecraft accounts can be checked again on your account page.",
       "Suspicious purchases, gift redemptions, and voting patterns may be temporarily held."
     ]
   }
@@ -456,7 +456,7 @@ export const rules = [
 
 export const updates = [
   {
-    version: "Platform 2.0",
+    version: "Site 2.0",
     title: "New RealFiction Site Foundation",
     date: "2026-05-20",
     type: "Website",

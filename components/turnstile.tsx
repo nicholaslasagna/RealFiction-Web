@@ -14,8 +14,8 @@ declare global {
   }
 }
 
-// Cloudflare's documented "always passes" test site key. Used only until a real
-// NEXT_PUBLIC_TURNSTILE_SITE_KEY is configured, so the widget renders in dev.
+// Cloudflare's documented local test key. Never use it in production because
+// the widget displays a "testing only" warning to visitors.
 const TEST_SITE_KEY = "1x00000000000000000000AA"
 
 export function Turnstile({
@@ -27,9 +27,16 @@ export function Turnstile({
 }) {
   const containerRef = useRef<HTMLDivElement>(null)
   const widgetIdRef = useRef<string | null>(null)
-  const siteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || TEST_SITE_KEY
+  const siteKey =
+    process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ||
+    (process.env.NODE_ENV === "production" ? "" : TEST_SITE_KEY)
 
   useEffect(() => {
+    if (!siteKey) {
+      onToken(null)
+      return
+    }
+
     let cancelled = false
     const scriptSrc = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit"
 
@@ -41,6 +48,8 @@ export function Turnstile({
       widgetIdRef.current = window.turnstile.render(containerRef.current, {
         sitekey: siteKey,
         theme: "dark",
+        size: "flexible",
+        "response-field": false,
         callback: (token: string) => onToken(token),
         "expired-callback": () => onToken(null),
         "error-callback": () => onToken(null)
@@ -77,6 +86,16 @@ export function Turnstile({
       }
     }
   }, [onToken, siteKey])
+
+  if (!siteKey) {
+    return (
+      <div className={className}>
+        <div className="rounded-md border border-amber-200/18 bg-black/24 px-4 py-3 text-center text-sm text-muted-foreground">
+          Cloudflare check is being set up.
+        </div>
+      </div>
+    )
+  }
 
   return <div ref={containerRef} className={className} />
 }

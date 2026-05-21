@@ -19,6 +19,8 @@ export function AccountAuthCard() {
   const [busy, setBusy] = useState(false)
   const [captchaToken, setCaptchaToken] = useState<string | null>(null)
   const [captchaKey, setCaptchaKey] = useState(0)
+  const cloudflareCheckEnabled =
+    Boolean(process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY) || process.env.NODE_ENV !== "production"
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -175,13 +177,14 @@ export function AccountAuthCard() {
         </button>
 
         <div className="grid gap-2 text-sm font-bold text-slate-100">
-          Security check
-          <div className="flex justify-center rounded-lg border border-white/10 bg-white/[0.035] p-3">
+          Cloudflare check
+          <div className="flex min-h-[86px] justify-center rounded-lg border border-white/10 bg-white/[0.035] p-3">
             <Turnstile key={captchaKey} onToken={setCaptchaToken} />
           </div>
+          <p className="text-xs font-medium text-muted-foreground">Protected by Cloudflare.</p>
         </div>
 
-        <Button className="h-12 w-full text-base" disabled={busy || !captchaToken} type="submit">
+        <Button className="h-12 w-full text-base" disabled={busy || (cloudflareCheckEnabled && !captchaToken)} type="submit">
           <Fingerprint className="h-4 w-4" />
           {busy ? "Working..." : mode === "signin" ? "Sign in" : "Create account"}
         </Button>

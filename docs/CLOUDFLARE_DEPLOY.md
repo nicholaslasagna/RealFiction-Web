@@ -44,9 +44,10 @@ passes its token to Supabase as `captchaToken`. To enable real verification:
 3. Supabase dashboard → Authentication → Bot & Abuse Protection → enable
    Turnstile and paste the **secret key** (Supabase verifies the token server-side).
 
-Until the site key is set, the widget falls back to Cloudflare's always-pass
-**test key** so the form still works in dev/preview — but it provides no real
-protection, so set the real key before launch.
+In local development only, the widget uses Cloudflare's always-pass **test key**.
+Production never uses the test key, because it shows a "testing only" warning to
+visitors. If the production site key is missing, the page shows a small setup
+message instead of the test widget.
 
 Without the two Supabase `NEXT_PUBLIC_*` values at build time, the account
 sign-in UI stays disabled (the header simply shows **Sign in** and the form is

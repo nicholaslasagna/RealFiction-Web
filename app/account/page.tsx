@@ -1,7 +1,7 @@
 import type { Metadata } from "next"
 import Image from "next/image"
 import Link from "next/link"
-import { ArrowLeft, ShieldCheck } from "lucide-react"
+import { ArrowLeft } from "lucide-react"
 
 import { AccountAuthCard } from "@/components/account-auth-card"
 
@@ -16,7 +16,8 @@ export default function AccountPage() {
     <section className="relative isolate min-h-screen overflow-hidden">
       <div className="absolute inset-0 -z-30">
         <Image
-          alt="RealFiction Minecraft background"
+          alt=""
+          aria-hidden="true"
           src="/images/hero2.png"
           fill
           priority
@@ -47,12 +48,8 @@ export default function AccountPage() {
           </Link>
         </header>
 
-        <div className="grid flex-1 place-items-center py-8">
-          <div className="w-full">
-            <div className="mx-auto mb-5 flex w-fit items-center gap-2 rounded-md border border-emerald-300/18 bg-black/28 px-3 py-2 text-xs font-semibold text-emerald-100 backdrop-blur">
-              <ShieldCheck className="h-3.5 w-3.5" />
-              Secure RealFiction account
-            </div>
+        <div className="flex flex-1 items-center justify-center py-8">
+          <div className="flex w-full flex-col items-center">
             <AccountAuthCard />
           </div>
         </div>
