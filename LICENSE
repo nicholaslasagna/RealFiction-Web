@@ -1,0 +1,30 @@
+RealFiction Platform — Proprietary License
+
+Copyright © 2018–2026 RealFiction. All rights reserved.
+
+This repository and its contents (the "Software") — including but not limited to
+the RealFiction website, platform backend, Cloudflare Workers/Functions,
+Supabase schema and migrations, payment and entitlement logic, reward queue,
+account and voting systems, the RealCore plugin integration layer,
+documentation, and associated brand assets — are the proprietary and
+confidential property of RealFiction.
+
+All rights are reserved. No license or right, express or implied, is granted to
+any person or entity to use, copy, reproduce, modify, adapt, merge, publish,
+distribute, sublicense, sell, host, or create derivative works of the Software,
+in whole or in part, without the prior written permission of RealFiction.
+
+Unauthorized copying, distribution, modification, public display, deployment, or
+use of the Software, via any medium, is strictly prohibited.
+
+The names, logos, and brand assets "RealFiction" and "RealCore" are trademarks
+of RealFiction and may not be used without prior written permission.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
+COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY, WHETHER
+IN AN ACTION OF CONTRACT, TORT, OR OTHERWISE, ARISING FROM, OUT OF, OR IN
+CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+For licensing inquiries, contact: business@realfiction.live
