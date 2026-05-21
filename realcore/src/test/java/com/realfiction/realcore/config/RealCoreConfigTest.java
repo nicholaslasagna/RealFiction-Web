@@ -1,0 +1,75 @@
+package com.realfiction.realcore.config;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import org.bukkit.configuration.InvalidConfigurationException;
+import org.bukkit.configuration.file.YamlConfiguration;
+import org.junit.jupiter.api.Test;
+
+final class RealCoreConfigTest {
+  @Test
+  void loadsAndNormalizesStagingConfig() throws InvalidConfigurationException {
+    YamlConfiguration yaml = new YamlConfiguration();
+    yaml.loadFromString("""
+        baseUrl: "https://staging.realfiction.live/"
+        serverId: "Lobby1"
+        serverGroup: "global"
+        hmacSecret: "test-secret"
+        pollIntervalSeconds: 2
+        requestTimeoutSeconds: 1
+        pollLimit: 500
+        debug: true
+        capabilities:
+          - luckperms
+          - vote_rewards
+        linking:
+          platform: "JAVA"
+        rewards:
+          productPermissions:
+            lobby-flight: "realfiction.lobby.flight"
+          commands:
+            byRewardKey:
+              vote.standard:
+                - "eco give {player} 250"
+        """);
+
+    RealCoreConfig config = RealCoreConfig.from(yaml);
+
+    assertEquals("https://staging.realfiction.live", config.baseUrl().toString());
+    assertEquals("Lobby1", config.serverId());
+    assertEquals("global", config.serverGroup());
+    assertEquals(5, config.pollInterval().toSeconds());
+    assertEquals(2, config.requestTimeout().toSeconds());
+    assertEquals(100, config.pollLimit());
+    assertTrue(config.debug());
+    assertTrue(config.hmacSecretConfigured());
+    assertEquals("java", config.linkPlatform());
+    assertEquals("realfiction.lobby.flight", config.productPermissions().get("lobby-flight"));
+    assertEquals(1, config.commandsByRewardKey().get("vote.standard").size());
+  }
+
+  @Test
+  void detectsMissingHmacSecret() throws InvalidConfigurationException {
+    YamlConfiguration yaml = new YamlConfiguration();
+    yaml.loadFromString("""
+        hmacSecret: "CHANGE_ME"
+        """);
+
+    RealCoreConfig config = RealCoreConfig.from(yaml);
+
+    assertFalse(config.hmacSecretConfigured());
+  }
+
+  @Test
+  void rejectsRelativeBaseUrl() throws InvalidConfigurationException {
+    YamlConfiguration yaml = new YamlConfiguration();
+    yaml.loadFromString("""
+        baseUrl: "realfiction.live"
+        """);
+
+    assertThrows(IllegalArgumentException.class, () -> RealCoreConfig.from(yaml));
+  }
+}

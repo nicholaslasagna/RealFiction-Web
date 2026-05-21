@@ -1,0 +1,51 @@
+# RealCore connects a Minecraft server to the RealFiction website.
+# Never paste this file publicly. hmacSecret is private.
+
+baseUrl: "https://realfiction.live"
+serverId: "lobby-1"
+serverGroup: "global"
+hmacSecret: "CHANGE_ME"
+
+pollIntervalSeconds: 30
+requestTimeoutSeconds: 10
+pollLimit: 25
+debug: false
+
+capabilities:
+  - luckperms
+  - cosmetics
+  - vote_rewards
+  - console_commands
+
+linking:
+  platform: "java"
+
+rewards:
+  # RealCore refuses unsafe rewards. Leave this false unless staff are testing.
+  allowUnsafeRewards: false
+
+  # Local permission mapping for cosmetic products that do not carry a specific
+  # LuckPerms permission in the website payload yet.
+  productPermissions:
+    realpets-pack: "realfiction.pets.pack"
+    particle-vault: "realfiction.particles.vault"
+    username-colors: "realfiction.username.colors"
+    lobby-flight: "realfiction.lobby.flight"
+    cosmetic-atelier: "realfiction.cosmetics.atelier"
+
+  # Console command rewards. These run from console after a reward is polled.
+  # Placeholders: {player}, {uuid}, {rewardKey}, {rewardId}, {quantity},
+  # {serverId}, {productSlug}
+  commands:
+    byRewardKey:
+      vote.standard:
+        - "eco give {player} 250"
+      vote.milestone.5:
+        - "eco give {player} 500"
+      vote.milestone.15:
+        - "eco give {player} 1000"
+      vote.milestone.30:
+        - "eco give {player} 1500"
+      vote.milestone.75:
+        - "eco give {player} 2500"
+    byProductSlug: {}
