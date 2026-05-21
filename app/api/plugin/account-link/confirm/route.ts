@@ -4,8 +4,6 @@ import { confirmMinecraftAccountLink } from "@/lib/account-link-server"
 import { parsePluginJson, requirePluginAuth } from "@/lib/plugin-auth"
 import { safeJsonError } from "@/lib/security"
 
-export const runtime = "edge"
-
 const confirmSchema = z.object({
   serverId: z.string().trim().min(2).max(80).optional(),
   verificationCode: z.string().trim().min(6).max(32),

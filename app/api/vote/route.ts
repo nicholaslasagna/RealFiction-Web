@@ -9,8 +9,6 @@ import {
 } from "@/lib/security"
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role"
 
-export const runtime = "edge"
-
 const voteWebhookSchema = z.object({
   site: z.string().trim().min(2).max(80),
   minecraftUsername: z.string().trim().min(3).max(16).regex(/^[A-Za-z0-9_]+$/),

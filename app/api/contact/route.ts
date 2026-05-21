@@ -4,8 +4,6 @@ import { safeJsonError, sha256Hex } from "@/lib/security"
 import { getAuthenticatedUser } from "@/lib/supabase/server"
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role"
 
-export const runtime = "edge"
-
 const RATE_LIMIT_WINDOW_MS = 10 * 60 * 1000
 const RATE_LIMIT_MAX = 5
 

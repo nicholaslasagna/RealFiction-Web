@@ -5,8 +5,6 @@ import { getAuthenticatedUser } from "@/lib/supabase/server"
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role"
 import { ensureProfileForUser } from "@/lib/store-server"
 
-export const runtime = "edge"
-
 const startLinkSchema = z.object({
   minecraftUsername: z.string().trim().min(3).max(16).regex(/^[A-Za-z0-9_]+$/),
   platform: z.enum(["java", "bedrock"]).default("java")

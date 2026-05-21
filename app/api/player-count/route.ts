@@ -1,5 +1,3 @@
-export const runtime = "edge"
-
 type McSrvStatResponse = {
   online?: boolean
   players?: {

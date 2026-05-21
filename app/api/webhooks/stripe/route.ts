@@ -10,8 +10,6 @@ import {
   revokeOrder
 } from "@/lib/store-server"
 
-export const runtime = "edge"
-
 function toHex(buffer: ArrayBuffer) {
   return [...new Uint8Array(buffer)].map((byte) => byte.toString(16).padStart(2, "0")).join("")
 }

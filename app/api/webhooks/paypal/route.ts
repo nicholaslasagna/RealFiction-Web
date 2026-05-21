@@ -8,8 +8,6 @@ import {
   revokeOrder
 } from "@/lib/store-server"
 
-export const runtime = "edge"
-
 async function verifyPayPalWebhook(request: Request, body: unknown) {
   const webhookId = process.env.PAYPAL_WEBHOOK_ID
 

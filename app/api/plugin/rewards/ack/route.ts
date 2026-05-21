@@ -4,8 +4,6 @@ import { parsePluginJson, requirePluginAuth } from "@/lib/plugin-auth"
 import { describeError, safeJsonError } from "@/lib/security"
 import { callServiceRoleRpc } from "@/lib/supabase/service-role-rest"
 
-export const runtime = "edge"
-
 const MISSING_SCHEMA_CODES = new Set(["42883", "42P01", "42704"])
 
 const ackSchema = z.object({

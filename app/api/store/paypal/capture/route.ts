@@ -3,8 +3,6 @@ import { NextResponse } from "next/server"
 import { capturePayPalOrder } from "@/lib/payments"
 import { markOrderPaidAndFulfill } from "@/lib/store-server"
 
-export const runtime = "edge"
-
 export async function GET(request: Request) {
   const url = new URL(request.url)
   const localOrderId = url.searchParams.get("order_id")

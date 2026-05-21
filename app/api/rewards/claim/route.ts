@@ -4,8 +4,6 @@ import { safeJsonError } from "@/lib/security"
 import { getAuthenticatedUser } from "@/lib/supabase/server"
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role"
 
-export const runtime = "edge"
-
 // Plugin delivery transitions (processing/delivered/failed) moved to the atomic,
 // replay-protected, claimed_by_server-guarded plugin routes:
 //   POST /api/plugin/rewards/poll

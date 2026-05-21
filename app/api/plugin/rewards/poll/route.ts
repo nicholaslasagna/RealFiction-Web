@@ -5,8 +5,6 @@ import { formatRealCoreReward, type RewardQueueRow } from "@/lib/realcore-reward
 import { describeError, safeJsonError } from "@/lib/security"
 import { callServiceRoleRpc } from "@/lib/supabase/service-role-rest"
 
-export const runtime = "edge"
-
 // Postgres error codes that mean the production database is missing the
 // RealFiction migrations (undefined function / table). Surfaced as 503 with a
 // clear server-side log so operators can spot an unmigrated database.
