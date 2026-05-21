@@ -1,8 +1,8 @@
 "use client"
 
 import Link from "next/link"
-import { ArrowLeft, Fingerprint, LockKeyhole, Mail, MailCheck, ShieldQuestion, UserRound } from "lucide-react"
-import { FormEvent, useState } from "react"
+import { ArrowLeft, Fingerprint, LockKeyhole, Mail, ShieldQuestion, UserRound } from "lucide-react"
+import { FormEvent, useEffect, useState } from "react"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -22,6 +22,17 @@ export function AccountAuthCard() {
   const [mfaFactorId, setMfaFactorId] = useState<string | null>(null)
   const [captchaToken, setCaptchaToken] = useState<string | null>(null)
   const [captchaKey, setCaptchaKey] = useState(0)
+  const [resendCooldown, setResendCooldown] = useState(0)
+
+  // Counts the resend cooldown down once per second. Matches the Supabase
+  // per-user email interval (60s) so resending can't hit the rate limit.
+  useEffect(() => {
+    if (resendCooldown <= 0) {
+      return
+    }
+    const timer = window.setTimeout(() => setResendCooldown((seconds) => Math.max(0, seconds - 1)), 1000)
+    return () => window.clearTimeout(timer)
+  }, [resendCooldown])
 
   const cloudflareCheckEnabled =
     Boolean(process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY) || process.env.NODE_ENV !== "production"
@@ -72,6 +83,7 @@ export function AccountAuthCard() {
           return
         }
         setSent({ kind: "reset", email })
+        setResendCooldown(60)
         return
       }
 
@@ -121,6 +133,7 @@ export function AccountAuthCard() {
         return
       }
       setSent({ kind: "confirm", email })
+      setResendCooldown(60)
     } finally {
       resetCaptcha()
       setBusy(false)
@@ -152,7 +165,7 @@ export function AccountAuthCard() {
   }
 
   async function resend() {
-    if (!sent) {
+    if (!sent || resendCooldown > 0) {
       return
     }
     const supabase = getSupabaseBrowserClient()
@@ -168,13 +181,14 @@ export function AccountAuthCard() {
       await supabase.auth.resend({ type: "signup", email: sent.email })
     }
     setBusy(false)
+    setResendCooldown(60)
     setNotice({ kind: "info", text: "Sent again. It can take a minute to arrive." })
   }
 
   return (
     <div className="mx-auto w-full max-w-[520px] rounded-lg border border-amber-200/12 bg-[#080d18]/92 p-6 shadow-[0_30px_90px_rgba(0,0,0,0.48)] backdrop-blur-xl md:p-9">
       {sent ? (
-        <EmailSentPanel sent={sent} busy={busy} notice={notice} onResend={resend} onBack={() => switchMode("signin")} />
+        <EmailSentPanel sent={sent} busy={busy} cooldown={resendCooldown} notice={notice} onResend={resend} onBack={() => switchMode("signin")} />
       ) : mfaFactorId ? (
         <MfaPanel busy={busy} notice={notice} onSubmit={verifyMfa} onBack={() => switchMode("signin")} />
       ) : (
@@ -343,30 +357,44 @@ function NoticeLine({ notice }: { notice: NonNullable<Notice> }) {
 function EmailSentPanel({
   sent,
   busy,
+  cooldown,
   notice,
   onResend,
   onBack
 }: {
   sent: NonNullable<SentPanel>
   busy: boolean
+  cooldown: number
   notice: Notice
   onResend: () => void
   onBack: () => void
 }) {
+  const isConfirm = sent.kind === "confirm"
+
   return (
-    <div className="text-center">
-      <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full border border-emerald-300/25 bg-emerald-400/12 text-emerald-200">
-        <MailCheck className="h-8 w-8" />
+    <div className="rf-fade-up text-center">
+      <div className="mx-auto h-20 w-20">
+        <svg viewBox="0 0 52 52" className="h-20 w-20" aria-hidden="true">
+          <circle className="rf-check-ring" cx="26" cy="26" r="24" fill="none" stroke="#34d399" strokeWidth="3" />
+          <path
+            className="rf-check-mark"
+            d="M15 27 l7 7 l15 -16"
+            fill="none"
+            stroke="#34d399"
+            strokeWidth="4"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
       </div>
-      <h1 className="display-font mt-6 text-3xl font-semibold text-white md:text-4xl">Check your email</h1>
+      <h1 className="display-font mt-5 text-3xl font-semibold text-white md:text-4xl">
+        {isConfirm ? "Email verification sent" : "Reset link sent"}
+      </h1>
       <p className="mx-auto mt-3 max-w-sm text-sm leading-6 text-muted-foreground">
-        {sent.kind === "confirm"
-          ? "We sent a confirmation link to"
-          : "We sent a password reset link to"}{" "}
-        <span className="font-semibold text-amber-100">{sent.email}</span>.{" "}
-        {sent.kind === "confirm"
-          ? "Click it to finish creating your account, then come back and sign in."
-          : "Click it to choose a new password."}
+        {isConfirm
+          ? "Check your email to finish joining. We sent a verification link to"
+          : "Check your email to choose a new password. We sent a link to"}{" "}
+        <span className="font-semibold text-amber-100">{sent.email}</span>.
       </p>
       <p className="mx-auto mt-3 max-w-sm text-xs text-muted-foreground">
         Can&rsquo;t find it? Check spam, or resend below.
@@ -379,8 +407,8 @@ function EmailSentPanel({
       ) : null}
 
       <div className="mt-6 grid gap-2">
-        <Button disabled={busy} onClick={onResend} type="button" variant="outline">
-          {busy ? "Sending..." : "Resend email"}
+        <Button disabled={busy || cooldown > 0} onClick={onResend} type="button" variant="outline">
+          {busy ? "Sending..." : cooldown > 0 ? `Resend in ${cooldown}s` : "Resend email"}
         </Button>
         <Button onClick={onBack} type="button" variant="ghost">
           <ArrowLeft className="h-4 w-4" />
