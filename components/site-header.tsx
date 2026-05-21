@@ -128,7 +128,14 @@ export function SiteHeader() {
                     onClick={() => setAccountOpen(false)}
                     className="block px-3 py-2.5 text-sm text-slate-200 transition hover:bg-amber-200/10 hover:text-amber-100"
                   >
-                    Account &amp; settings
+                    Account
+                  </Link>
+                  <Link
+                    href="/account/settings"
+                    onClick={() => setAccountOpen(false)}
+                    className="block px-3 py-2.5 text-sm text-slate-200 transition hover:bg-amber-200/10 hover:text-amber-100"
+                  >
+                    Settings
                   </Link>
                   <button
                     type="button"
@@ -184,7 +191,14 @@ export function SiteHeader() {
                     onClick={() => setOpen(false)}
                     className="rounded-md px-3 py-3 text-sm font-bold uppercase tracking-[0.08em] text-slate-300 hover:bg-amber-200/10 hover:text-amber-100"
                   >
-                    Account &amp; settings
+                    Account
+                  </Link>
+                  <Link
+                    href="/account/settings"
+                    onClick={() => setOpen(false)}
+                    className="rounded-md px-3 py-3 text-sm font-bold uppercase tracking-[0.08em] text-slate-300 hover:bg-amber-200/10 hover:text-amber-100"
+                  >
+                    Settings
                   </Link>
                   <button
                     type="button"

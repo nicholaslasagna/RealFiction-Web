@@ -13,7 +13,9 @@ export function SiteChrome({
   header: ReactNode
 }) {
   const pathname = usePathname()
-  const isAuthPage = pathname === "/account"
+  // /account and its sub-pages (settings, reset-password) use their own focused
+  // layout, so the global header/footer are hidden there.
+  const isAuthPage = pathname === "/account" || pathname.startsWith("/account/")
 
   return (
     <>
