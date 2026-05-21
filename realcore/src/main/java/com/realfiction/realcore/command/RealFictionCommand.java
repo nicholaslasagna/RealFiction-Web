@@ -24,6 +24,10 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
 
   @Override
   public boolean onCommand(@NotNull CommandSender sender, @NotNull Command command, @NotNull String label, String[] args) {
+    if ("cosmetics".equalsIgnoreCase(command.getName())) {
+      return handleCosmetics(sender);
+    }
+
     String sub = args.length >= 1 ? args[0].toLowerCase(java.util.Locale.ROOT) : "";
 
     switch (sub) {
@@ -37,6 +41,8 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
         return handleOpenMenu(sender, "game-menu");
       case "lobbies":
         return handleOpenMenu(sender, "lobby-selector");
+      case "cosmetics":
+        return handleCosmetics(sender);
       case "spawn":
         return handleSpawn(sender);
       case "setspawn":
@@ -145,12 +151,28 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
     return true;
   }
 
+  private boolean handleCosmetics(CommandSender sender) {
+    if (!(sender instanceof Player player)) {
+      send(sender, "Only players can open cosmetics.");
+      return true;
+    }
+    if (plugin.cosmeticsManager() == null) {
+      send(player, ChatColor.RED + "Cosmetics are not ready yet.");
+      return true;
+    }
+    plugin.cosmeticsManager().open(player);
+    return true;
+  }
+
   private boolean handleHelp(CommandSender sender, String label) {
     send(sender, ChatColor.GOLD + "RealFiction");
     send(sender, ChatColor.YELLOW + "Use " + ChatColor.WHITE + "/" + label + " link <code>" + ChatColor.YELLOW + " to link your account.");
     if (canUsePlayerCommand(sender)) {
       send(sender, ChatColor.YELLOW + "Use " + ChatColor.WHITE + "/" + label + " menu" + ChatColor.YELLOW + " for the game menu, "
           + ChatColor.WHITE + "/" + label + " lobbies" + ChatColor.YELLOW + ", or " + ChatColor.WHITE + "/" + label + " spawn" + ChatColor.YELLOW + ".");
+    }
+    if (sender instanceof Player) {
+      send(sender, ChatColor.YELLOW + "Use " + ChatColor.WHITE + "/" + label + " cosmetics" + ChatColor.YELLOW + " to open cosmetics.");
     }
     if (sender.hasPermission("realcore.admin")) {
       send(sender, ChatColor.YELLOW + "Admin: " + ChatColor.WHITE + "/" + label + " status|reload|setspawn");
@@ -194,6 +216,7 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
       send(sender, ChatColor.YELLOW + "Menus: " + ChatColor.WHITE + menus
           + ChatColor.GRAY + " (" + lobby.menuRegistry().count() + ")");
     }
+    send(sender, ChatColor.YELLOW + "Cosmetics: " + statusText(plugin.cosmeticsManager() != null));
   }
 
   private String statusText(boolean ok) {
@@ -221,6 +244,9 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
         options.add("menu");
         options.add("lobbies");
         options.add("spawn");
+      }
+      if (sender instanceof Player) {
+        options.add("cosmetics");
       }
       if (sender.hasPermission("realcore.admin")) {
         options.add("status");

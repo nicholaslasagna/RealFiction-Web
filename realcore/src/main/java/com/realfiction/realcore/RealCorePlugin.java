@@ -3,6 +3,9 @@ package com.realfiction.realcore;
 import com.realfiction.realcore.api.PlatformApiClient;
 import com.realfiction.realcore.command.RealFictionCommand;
 import com.realfiction.realcore.config.RealCoreConfig;
+import com.realfiction.realcore.cosmetics.CosmeticsConfig;
+import com.realfiction.realcore.cosmetics.CosmeticsListener;
+import com.realfiction.realcore.cosmetics.CosmeticsManager;
 import com.realfiction.realcore.linking.AccountLinkService;
 import com.realfiction.realcore.lobby.LobbyItemListener;
 import com.realfiction.realcore.lobby.LobbyListener;
@@ -27,6 +30,7 @@ public final class RealCorePlugin extends JavaPlugin {
   private AccountLinkService accountLinkService;
   private RewardPoller rewardPoller;
   private LobbyManager lobbyManager;
+  private CosmeticsManager cosmeticsManager;
   private boolean servicesLoaded;
 
   @Override
@@ -39,6 +43,7 @@ public final class RealCorePlugin extends JavaPlugin {
       return;
     }
 
+    setupCosmetics();
     setupLobby();
 
     RealFictionCommand commandExecutor = new RealFictionCommand(this);
@@ -53,11 +58,24 @@ public final class RealCorePlugin extends JavaPlugin {
       lobbyManager.shutdown();
       lobbyManager = null;
     }
+    if (cosmeticsManager != null) {
+      cosmeticsManager.stop();
+      cosmeticsManager = null;
+    }
     stopServices(true);
+  }
+
+  private void setupCosmetics() {
+    cosmeticsManager = new CosmeticsManager(this, scheduler, this::lobbyManager, CosmeticsConfig.from(getConfig()));
+    getServer().getPluginManager().registerEvents(new CosmeticsListener(cosmeticsManager), this);
+    cosmeticsManager.start();
   }
 
   private void setupLobby() {
     lobbyManager = new LobbyManager(this, scheduler, getConfig());
+    if (cosmeticsManager != null) {
+      lobbyManager.flightService().setFlightEnabledPredicate(cosmeticsManager::isLobbyFlightSelected);
+    }
     var pluginManager = getServer().getPluginManager();
     pluginManager.registerEvents(new LobbyListener(lobbyManager), this);
     pluginManager.registerEvents(new LobbyProtectionListener(lobbyManager), this);
@@ -91,6 +109,9 @@ public final class RealCorePlugin extends JavaPlugin {
 
       if (lobbyManager != null) {
         lobbyManager.reload(getConfig());
+      }
+      if (cosmeticsManager != null) {
+        cosmeticsManager.reload(CosmeticsConfig.from(getConfig()));
       }
 
       if (!realCoreConfig.hmacSecretConfigured()) {
@@ -142,8 +163,12 @@ public final class RealCorePlugin extends JavaPlugin {
     return lobbyManager;
   }
 
+  public CosmeticsManager cosmeticsManager() {
+    return cosmeticsManager;
+  }
+
   private List<String> registerCommands(RealFictionCommand commandExecutor) {
-    List<String> labels = List.of("realfiction", "rf", "realcore");
+    List<String> labels = List.of("realfiction", "rf", "realcore", "cosmetics");
     for (String label : labels) {
       PluginCommand command = Objects.requireNonNull(getCommand(label), label + " command missing");
       command.setExecutor(commandExecutor);
@@ -153,7 +178,7 @@ public final class RealCorePlugin extends JavaPlugin {
   }
 
   private List<String> registeredCommandLabels() {
-    return List.of("realfiction", "rf", "realcore");
+    return List.of("realfiction", "rf", "realcore", "cosmetics");
   }
 
   private void logStartupSummary(String action, List<String> commandLabels) {
@@ -164,6 +189,7 @@ public final class RealCorePlugin extends JavaPlugin {
     String polling = rewardPollingActive() ? "ready" : "not ready";
     String websiteAuth = config != null && config.hmacSecretConfigured() ? "ready" : "not ready";
     String luckPerms = luckPermsAvailable() ? "ready" : "not ready";
+    String cosmetics = cosmeticsManager == null ? "not loaded" : "ready";
     String commands = "/" + String.join(", /", commandLabels);
     String menus = lobbyManager == null ? "not loaded" : String.join(", ", lobbyManager.menuRegistry().keys());
 
@@ -174,6 +200,7 @@ public final class RealCorePlugin extends JavaPlugin {
     getLogger().info("| Reward polling: " + polling);
     getLogger().info("| Website auth: " + websiteAuth);
     getLogger().info("| LuckPerms: " + luckPerms);
+    getLogger().info("| Cosmetics: " + cosmetics);
     getLogger().info("| Commands: " + commands);
     getLogger().info("| Menus: " + (menus.isBlank() ? "none" : menus));
     getLogger().info("+--------------------------------------------------+");
@@ -184,7 +211,8 @@ public final class RealCorePlugin extends JavaPlugin {
     boolean missingLobbyDefaults = !getConfig().isConfigurationSection("menus")
         || !getConfig().isConfigurationSection("doubleJump")
         || !getConfig().isConfigurationSection("walkSpeed")
-        || !getConfig().isConfigurationSection("proxy.serverAliases");
+        || !getConfig().isConfigurationSection("proxy.serverAliases")
+        || !getConfig().isConfigurationSection("cosmetics");
     if (!missingLobbyDefaults) {
       return;
     }
