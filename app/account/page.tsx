@@ -10,6 +10,7 @@ import {
   MapPinned,
   Palette,
   Plane,
+  Settings,
   Sparkles,
   Star,
   UserRound,
@@ -319,6 +320,15 @@ export default async function AccountPage() {
             />
           </Link>
           <div className="flex items-center gap-2">
+            {user ? (
+              <Link
+                className="inline-flex items-center gap-2 rounded-md border border-white/12 bg-black/24 px-3 py-2 text-sm font-semibold text-muted-foreground backdrop-blur transition hover:border-amber-200/35 hover:text-amber-100"
+                href="/account/settings"
+              >
+                <Settings className="h-4 w-4" />
+                Settings
+              </Link>
+            ) : null}
             {user ? <AccountSignOutButton /> : null}
             <Link
               className="inline-flex items-center gap-2 rounded-md border border-white/12 bg-black/24 px-3 py-2 text-sm font-semibold text-muted-foreground backdrop-blur transition hover:border-amber-200/35 hover:text-amber-100"

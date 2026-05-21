@@ -16,9 +16,11 @@ type AccountLinkCardProps = {
 }
 
 type LinkStartResponse = {
-  verificationCode?: string
-  command?: string
-  expiresAt?: string
+  linkRequest?: {
+    verificationCode?: string
+    command?: string
+    expiresAt?: string
+  }
   error?: string
 }
 
@@ -63,15 +65,16 @@ export function AccountLinkCard({
         body: JSON.stringify({ minecraftUsername: minecraftName, platform: "java" })
       })
       const data = (await response.json()) as LinkStartResponse
+      const linkRequest = data.linkRequest
 
-      if (!response.ok || !data.verificationCode || !data.command) {
+      if (!response.ok || !linkRequest?.verificationCode || !linkRequest?.command) {
         setMessage(data.error ?? "We could not make a link code yet. Try again in a moment.")
         return
       }
 
-      setCode(data.verificationCode)
-      setCommand(data.command)
-      setExpiresAt(data.expiresAt ?? null)
+      setCode(linkRequest.verificationCode)
+      setCommand(linkRequest.command)
+      setExpiresAt(linkRequest.expiresAt ?? null)
       setMessage("Jump in-game and run the command below.")
     } catch {
       setMessage("We could not make a link code yet. Try again in a moment.")
