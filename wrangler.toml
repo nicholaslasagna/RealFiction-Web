@@ -1,4 +1,4 @@
-name = "realfiction-platform"
+name = "realfiction"
 main = ".open-next/worker.js"
 compatibility_date = "2026-05-20"
 compatibility_flags = ["nodejs_compat", "global_fetch_strictly_public"]
