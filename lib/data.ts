@@ -387,19 +387,22 @@ export const mapEndpoints = [
     name: "RealFiction Map",
     url: "https://map.realfiction.live",
     description: "Primary SMP world map, claims, settlements, and major community builds.",
-    icon: MapPinned
+    icon: MapPinned,
+    embeddable: false
   },
   {
-    name: "RealFiction Map 2",
+    name: "Factions",
     url: "https://map2.realfiction.live",
-    description: "Secondary world map and seasonal map spaces.",
-    icon: Boxes
+    description: "Factions world map, territory lines, and seasonal bases.",
+    icon: Swords,
+    embeddable: true
   },
   {
     name: "RealAnarchy Map",
     url: "https://map.realanarchy.live",
     description: "RealAnarchy world map and independent network surface.",
-    icon: ShieldCheck
+    icon: ShieldCheck,
+    embeddable: true
   }
 ]
 
