@@ -64,7 +64,7 @@ export function MapTabs() {
             className="h-[620px] w-full bg-background"
             loading="lazy"
             referrerPolicy="no-referrer"
-            src={active.url}
+            src={active.embedUrl ?? active.url}
             title={active.name}
           />
         ) : (

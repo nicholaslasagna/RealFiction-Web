@@ -386,13 +386,17 @@ export const mapEndpoints = [
   {
     name: "RealFiction Map",
     url: "https://map.realfiction.live",
+    // Full app URL (with query) frames where the bare domain refuses. World/center
+    // are a placeholder until the exact working URL is confirmed.
+    embedUrl: "https://map.realfiction.live/?world=world&renderer=vintage_story&zoom=0&x=0&z=0",
     description: "Primary SMP world map, claims, settlements, and major community builds.",
     icon: MapPinned,
-    embeddable: false
+    embeddable: true
   },
   {
     name: "Factions",
     url: "https://map2.realfiction.live",
+    embedUrl: "https://map2.realfiction.live/?world=Factions&renderer=vintage_story&zoom=0&x=967&z=1001",
     description: "Factions world map, territory lines, and seasonal bases.",
     icon: Swords,
     embeddable: true
@@ -400,6 +404,7 @@ export const mapEndpoints = [
   {
     name: "RealAnarchy Map",
     url: "https://map.realanarchy.live",
+    embedUrl: "https://map.realanarchy.live",
     description: "RealAnarchy world map and independent network surface.",
     icon: ShieldCheck,
     embeddable: true
