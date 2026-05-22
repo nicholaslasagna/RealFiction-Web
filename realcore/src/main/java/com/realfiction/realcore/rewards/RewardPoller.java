@@ -121,18 +121,46 @@ public final class RewardPoller {
     if (reward == null || reward.id == null) {
       return CompletableFuture.completedFuture(null);
     }
+
+    // Defensive: the website already filters by group, but never apply a reward
+    // that is targeted at a different server group than this backend.
+    String group = reward.serverGroup;
+    if (group != null && !group.isBlank()
+        && !group.equalsIgnoreCase("global")
+        && !group.equalsIgnoreCase(config.serverGroup())) {
+      plugin.getLogger().warning("Skipped reward (wrong server group: " + group + ") rewardKey=" + reward.rewardKey
+          + " (this server group=" + config.serverGroup() + ")");
+      return CompletableFuture.completedFuture(RewardDeliveryResult.failed(reward.id, "Wrong server group: " + group));
+    }
+
     if (!deliveredThisRun.add(reward.id)) {
       plugin.getLogger().warning("Skipping duplicate reward in same plugin run: rewardId=" + reward.id);
       return CompletableFuture.completedFuture(null);
     }
 
-    plugin.getLogger().info("Delivering rewardId=" + reward.id + " action=" + reward.action() + " rewardKey=" + reward.rewardKey);
+    String who = playerLabel(reward);
+    if (reward.attempts > 1) {
+      plugin.getLogger().info("Retrying reward " + reward.rewardKey + " -> " + who
+          + " (attempt " + reward.attempts + ", id=" + reward.id + ")");
+    } else {
+      plugin.getLogger().info("Claimed reward " + reward.rewardKey + " -> " + who + " (id=" + reward.id + ")");
+    }
+
     return dispatcher.dispatch(reward).thenApply(result -> {
       if (result != null && result.delivered()) {
-        plugin.getLogger().info("Delivered rewardId=" + reward.id + " rewardKey=" + reward.rewardKey);
+        plugin.getLogger().info("Delivered reward " + reward.rewardKey + " -> " + who);
       }
       return result;
     });
+  }
+
+  private String playerLabel(RewardPayload reward) {
+    String name = reward.minecraftUsername();
+    if (name != null && !name.isBlank()) {
+      return name;
+    }
+    String uuid = reward.minecraftUuid();
+    return uuid == null || uuid.isBlank() ? "unknown" : uuid;
   }
 
   private CompletableFuture<Void> flushPendingAcks() {

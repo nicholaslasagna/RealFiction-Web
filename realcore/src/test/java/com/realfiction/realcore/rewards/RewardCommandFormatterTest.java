@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import com.realfiction.realcore.api.dto.RewardPayload;
 import com.realfiction.realcore.config.RealCoreConfig;
+import com.realfiction.realcore.config.ServerModules;
 import java.net.URI;
 import java.time.Duration;
 import java.util.List;
@@ -30,7 +31,10 @@ final class RewardCommandFormatterTest {
         Map.of("lobby-flight", List.of("lp user {uuid} permission set {productSlug} true")),
         Map.of("vote.standard", List.of("Thanks for voting on {voteSite}, {player}!")),
         false,
-        Map.of()
+        Map.of(),
+        "Lobby 1",
+        false,
+        ServerModules.defaults()
     );
 
     RewardPayload reward = new RewardPayload();

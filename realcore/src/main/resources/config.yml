@@ -2,14 +2,44 @@
 # Never paste this file publicly. hmacSecret is private.
 
 baseUrl: "https://realfiction.live"
-serverId: "lobby-1"
-serverGroup: "global"
+
+# Unique identity for THIS backend. Every server on the network MUST use a
+# different id. group lets website rewards target a set of servers
+# (e.g. lobby/smp/arcade/anarchy/factions); 'global' rewards deliver anywhere.
+# (Legacy flat keys serverId/serverGroup still work if this block is absent.)
+server:
+  id: "lobby-1"
+  group: "lobby"
+  displayName: "Lobby 1"
+  # If true, RealCore disables itself when another live backend already owns this
+  # id. Default false logs a severe warning and keeps running.
+  refuseOnDuplicate: false
+
 hmacSecret: "CHANGE_ME"
 
 pollIntervalSeconds: 30
 requestTimeoutSeconds: 10
 pollLimit: 25
 debug: false
+
+# Per-backend feature toggles, so one jar can run different roles per server.
+# Enforced now: rewards (reward delivery poller), cosmetics (cosmetics GUI),
+# lobby (lobby manager + its menus/scoreboard/flight/protection). The rest are
+# reserved/forward-looking. Omit this block to enable everything (current Lobby1
+# behavior). Examples:
+#   SMP:      rewards: true, cosmetics: false, lobby: false
+#   Arcade:   rewards: true, cosmetics: true,  lobby: true
+#   Anarchy:  rewards: true, cosmetics: false, lobby: false
+modules:
+  rewards: true
+  cosmetics: true
+  lobby: true
+  menus: true
+  scoreboards: true
+  economy: true
+  votes: true
+  punishments: false
+  chat: false
 
 capabilities:
   - luckperms

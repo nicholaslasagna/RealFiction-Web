@@ -4,6 +4,8 @@ import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.realfiction.realcore.api.dto.AckRewardsRequest;
 import com.realfiction.realcore.api.dto.AckRewardsResponse;
+import com.realfiction.realcore.api.dto.HeartbeatRequest;
+import com.realfiction.realcore.api.dto.HeartbeatResponse;
 import com.realfiction.realcore.api.dto.LinkConfirmRequest;
 import com.realfiction.realcore.api.dto.LinkConfirmResponse;
 import com.realfiction.realcore.api.dto.PollRewardsRequest;
@@ -40,6 +42,10 @@ public final class PlatformApiClient implements Closeable {
 
   public CompletableFuture<AckRewardsResponse> ackRewards(AckRewardsRequest request) {
     return post("/api/plugin/rewards/ack", request, AckRewardsResponse.class);
+  }
+
+  public CompletableFuture<HeartbeatResponse> heartbeat(HeartbeatRequest request) {
+    return post("/api/plugin/server/heartbeat", request, HeartbeatResponse.class);
   }
 
   private <T> CompletableFuture<T> post(String path, Object payload, Class<T> responseType) {

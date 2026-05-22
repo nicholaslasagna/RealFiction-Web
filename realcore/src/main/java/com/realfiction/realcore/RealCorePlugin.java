@@ -1,6 +1,8 @@
 package com.realfiction.realcore;
 
 import com.realfiction.realcore.api.PlatformApiClient;
+import com.realfiction.realcore.api.dto.HeartbeatRequest;
+import com.realfiction.realcore.api.dto.HeartbeatResponse;
 import com.realfiction.realcore.command.RealFictionCommand;
 import com.realfiction.realcore.config.RealCoreConfig;
 import com.realfiction.realcore.cosmetics.CosmeticsConfig;
@@ -16,9 +18,13 @@ import com.realfiction.realcore.menu.MenuListener;
 import com.realfiction.realcore.rewards.RewardDispatcher;
 import com.realfiction.realcore.rewards.RewardPoller;
 import com.realfiction.realcore.scheduler.RealCoreScheduler;
+import com.realfiction.realcore.scheduler.ScheduledTaskHandle;
 import com.realfiction.realcore.scheduler.SchedulerFactory;
 import java.util.List;
 import java.util.Objects;
+import java.util.UUID;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.bukkit.command.PluginCommand;
 import org.bukkit.plugin.java.JavaPlugin;
 

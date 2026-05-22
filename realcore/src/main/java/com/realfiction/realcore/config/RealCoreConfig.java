@@ -27,13 +27,21 @@ public record RealCoreConfig(
     Map<String, List<String>> commandsByProductSlug,
     Map<String, List<String>> playerMessagesByRewardKey,
     boolean rewardBroadcastsEnabled,
-    Map<String, List<String>> broadcastMessagesByRewardKey
+    Map<String, List<String>> broadcastMessagesByRewardKey,
+    String displayName,
+    boolean refuseOnDuplicateServerId,
+    ServerModules modules
 ) {
   public static RealCoreConfig from(FileConfiguration config) {
     URI baseUrl = URI.create(trimTrailingSlash(config.getString("baseUrl", "https://realfiction.live")));
     validateBaseUrl(baseUrl);
-    String serverId = cleanString(config, "serverId", "lobby-1");
-    String serverGroup = cleanString(config, "serverGroup", "global");
+    // Prefer the nested server.* block; fall back to the legacy flat keys so an
+    // existing deployed config keeps working unchanged.
+    String serverId = firstNonBlank(config.getString("server.id"), config.getString("serverId"), "lobby-1");
+    String serverGroup = firstNonBlank(config.getString("server.group"), config.getString("serverGroup"), "global");
+    String displayName = firstNonBlank(config.getString("server.displayName"), config.getString("displayName"), serverId);
+    boolean refuseOnDuplicateServerId = config.getBoolean("server.refuseOnDuplicate", false);
+    ServerModules modules = ServerModules.from(config.getConfigurationSection("modules"));
     String hmacSecret = cleanString(config, "hmacSecret", "");
     if (serverId.isBlank()) {
       throw new IllegalArgumentException("serverId must not be blank.");
@@ -69,7 +77,10 @@ public record RealCoreConfig(
         readStringListMap(config.getConfigurationSection("rewards.commands.byProductSlug")),
         readStringListMap(config.getConfigurationSection("rewards.messages.player.byRewardKey")),
         config.getBoolean("rewards.messages.broadcast.enabled", false),
-        readStringListMap(config.getConfigurationSection("rewards.messages.broadcast.byRewardKey"))
+        readStringListMap(config.getConfigurationSection("rewards.messages.broadcast.byRewardKey")),
+        displayName,
+        refuseOnDuplicateServerId,
+        modules
     );
   }
 
@@ -88,6 +99,15 @@ public record RealCoreConfig(
   private static String cleanString(FileConfiguration config, String path, String defaultValue) {
     String value = config.getString(path);
     return value == null ? defaultValue.trim() : value.trim();
+  }
+
+  private static String firstNonBlank(String... values) {
+    for (String value : values) {
+      if (value != null && !value.isBlank()) {
+        return value.trim();
+      }
+    }
+    return "";
   }
 
   private static void validateBaseUrl(URI baseUrl) {
