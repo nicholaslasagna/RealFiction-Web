@@ -250,12 +250,13 @@ queued for RealCore. Entitlement and reward history is never deleted.
 
 ## Vote Reward Lifecycle
 
-1. Vote webhook passes shared-secret verification.
-2. Vote log is persisted with idempotency.
-3. Vote streaks update atomically via `apply_vote_streak`.
-4. Safe vote reward is queued; a milestone reward is queued when monthly votes hit 5, 15, 30, or 75.
-5. RealCore polls and delivers the vote and milestone rewards.
-6. RealCore acknowledges final status.
+1. Vote sites send public vote traffic to Velocity NuVotifier.
+2. `RealVoteBridge` receives the NuVotifier event on Velocity and forwards it to `/api/vote` with RealCore-style HMAC auth.
+3. Vote log is persisted with idempotency.
+4. Vote streaks update atomically via `apply_vote_streak`.
+5. Safe vote reward is queued; a milestone reward is queued when monthly votes hit 5, 15, 30, or 75.
+6. RealCore polls and delivers the vote and milestone rewards on the backend server.
+7. RealCore acknowledges final status.
 
 ## Package Layout
 

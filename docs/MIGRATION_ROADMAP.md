@@ -83,8 +83,9 @@ Next plugin work:
 
 ## Phase 7: Voting Cutover
 
-- Connect vote site callbacks or a NuVotifier bridge to the hardened vote endpoint.
-- Normalize site-specific payloads into the current vote contract.
+- Install `RealVoteBridge` on the Velocity proxy, where NuVotifier is the only public vote receiver.
+- Forward NuVotifier vote events to `/api/vote` with RealCore-style HMAC auth.
+- Normalize NuVotifier service names into the current vote contract.
 - Configure anti-abuse signals and cooldown enforcement.
 - Validate leaderboard and streak behavior in staging.
 - Add Discord vote reminders after the core vote path is stable.

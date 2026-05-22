@@ -31,7 +31,7 @@ RealFiction is now structured as a Cloudflare Pages compatible Next.js App Route
 - `GET /api/store/paypal/capture`: captures a PayPal checkout return and only fulfills if the returned PayPal order references the same local order id.
 - `POST /api/webhooks/stripe`: verifies Stripe signatures, persists webhook events, fulfills paid orders idempotently, and revokes orders on `charge.refunded` / `charge.dispute.created`.
 - `POST /api/webhooks/paypal`: verifies PayPal webhook transmission, persists webhook events, fulfills paid orders idempotently, and revokes orders on refund/reversal/dispute events.
-- `POST /api/vote`: requires `VOTE_WEBHOOK_SECRET`, persists vote logs, updates streaks atomically, queues the vote reward, and queues monthly milestone rewards.
+- `POST /api/vote`: accepts RealCore/RealVoteBridge HMAC auth via `REALCORE_PLUGIN_SECRET`; optional legacy `VOTE_WEBHOOK_SECRET` fallback is supported for old vote callbacks. It persists vote logs, updates streaks atomically, queues the vote reward, and queues monthly milestone rewards.
 - `POST /api/rewards/claim`: authenticated owner-only; expedites delivery of the user's own pending reward. Plugin delivery transitions live in `/api/plugin/rewards/poll` and `/api/plugin/rewards/ack`.
 - `POST /api/plugin/account-link/confirm`: RealCore-facing account link confirmation with plugin auth.
 - `POST /api/plugin/rewards/poll`: plugin-authenticated atomic reward polling and claiming.
@@ -152,15 +152,17 @@ Stripe and PayPal webhook routes:
 
 Implemented flow:
 
-1. Vote callback must include the configured shared secret.
-2. Server validates site, username, vote token, and timestamp.
-3. Server resolves an active vote site.
-4. Server matches a verified Java Minecraft link when available.
-5. Vote is persisted with a hashed idempotency key.
-6. Duplicate votes with the same idempotency key return accepted duplicate.
-7. Streak counters update atomically through `apply_vote_streak` (current/longest/monthly/total with gap-based reset).
-8. A safe vote reward is placed into `reward_queue` and linked through `vote_rewards`.
-9. When monthly votes hit a milestone (5, 15, 30, 75), a safe milestone reward is queued with a per-month idempotency key.
+1. Vote sites send public vote traffic only to Velocity NuVotifier.
+2. `RealVoteBridge` listens on Velocity and forwards the vote to `/api/vote`.
+3. `/api/vote` accepts RealCore-style HMAC plugin auth, with the legacy shared vote secret kept only for staging compatibility.
+4. Server validates site, username, vote token, timestamp, and optional address hash.
+5. Server resolves an active vote site, including NuVotifier service-name aliases.
+6. Server matches a verified Java Minecraft link when available.
+7. Vote is persisted with a hashed idempotency key.
+8. Duplicate votes with the same idempotency key return accepted duplicate.
+9. Streak counters update atomically through `apply_vote_streak` (current/longest/monthly/total with gap-based reset).
+10. A safe vote reward is placed into `reward_queue` and linked through `vote_rewards`.
+11. When monthly votes hit a milestone (5, 15, 30, 75), a safe milestone reward is queued with a per-month idempotency key.
 
 Vote routes do not grant rewards directly.
 
@@ -206,7 +208,7 @@ PAYPAL_CLIENT_ID
 PAYPAL_CLIENT_SECRET
 PAYPAL_WEBHOOK_ID
 PAYPAL_ENVIRONMENT
-VOTE_WEBHOOK_SECRET
+VOTE_WEBHOOK_SECRET (optional legacy vote callback fallback)
 REALCORE_PLUGIN_SECRET
 REALCORE_ALLOW_SHARED_SECRET
 PLAYER_COUNT_ENDPOINT
