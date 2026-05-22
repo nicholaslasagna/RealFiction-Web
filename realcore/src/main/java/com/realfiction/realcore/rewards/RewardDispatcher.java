@@ -66,6 +66,19 @@ public final class RewardDispatcher {
       tasks.add(scheduler.dispatchConsoleCommand(RewardCommandFormatter.applyPlaceholders(command, reward, config.serverId())));
     }
 
+    for (String message : playerMessagesFor(reward)) {
+      String player = reward.minecraftUsername();
+      if (notBlank(player)) {
+        tasks.add(scheduler.dispatchConsoleCommand("tellraw " + player + " " + jsonText(message)));
+      }
+    }
+
+    if (config.rewardBroadcastsEnabled()) {
+      for (String message : broadcastMessagesFor(reward)) {
+        tasks.add(scheduler.dispatchConsoleCommand("broadcast " + message));
+      }
+    }
+
     if (isGiftCard(reward)) {
       return CompletableFuture.completedFuture(RewardDeliveryResult.failed(reward.id, "Gift card rewards must be delivered by the website."));
     }
@@ -112,6 +125,44 @@ public final class RewardDispatcher {
     return null;
   }
 
+  private List<String> playerMessagesFor(RewardPayload reward) {
+    return formatMessages(config.playerMessagesByRewardKey().get(reward.rewardKey), reward);
+  }
+
+  private List<String> broadcastMessagesFor(RewardPayload reward) {
+    return formatMessages(config.broadcastMessagesByRewardKey().get(reward.rewardKey), reward);
+  }
+
+  private List<String> formatMessages(List<String> messages, RewardPayload reward) {
+    if (messages == null || messages.isEmpty()) {
+      return List.of();
+    }
+    List<String> formatted = new ArrayList<>();
+    for (String message : messages) {
+      if (message != null && !message.isBlank()) {
+        formatted.add(RewardCommandFormatter.applyPlaceholders(message, reward, config.serverId()));
+      }
+    }
+    return formatted;
+  }
+
+  private String jsonText(String value) {
+    StringBuilder out = new StringBuilder("{\"text\":\"");
+    for (int i = 0; i < value.length(); i++) {
+      char ch = value.charAt(i);
+      switch (ch) {
+        case '\\' -> out.append("\\\\");
+        case '"' -> out.append("\\\"");
+        case '\n' -> out.append("\\n");
+        case '\r' -> out.append("\\r");
+        case '\t' -> out.append("\\t");
+        default -> out.append(ch);
+      }
+    }
+    out.append("\"}");
+    return out.toString();
+  }
+
   private UUID parseUuid(String value) {
     if (!notBlank(value)) {
       return null;
@@ -139,7 +190,7 @@ public final class RewardDispatcher {
     if (message == null || message.isBlank()) {
       message = cursor.getClass().getSimpleName();
     }
-    plugin.getLogger().warning("Reward delivery failed: " + message);
+    plugin.getLogger().log(java.util.logging.Level.WARNING, "Reward delivery failed: " + message, error);
     return message.length() > 450 ? message.substring(0, 450) : message;
   }
 

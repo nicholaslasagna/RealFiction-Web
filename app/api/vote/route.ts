@@ -54,21 +54,6 @@ function hasPluginAuthHeaders(request: Request) {
 async function authorizeVoteRequest(request: Request, rawBody: string) {
   const pluginHeaders = hasPluginAuthHeaders(request)
 
-  // Safe diagnostic: shows which auth branch a request takes and the signed
-  // request shape. No secrets or signatures are logged. Remove once the vote
-  // pipeline is confirmed healthy in production.
-  console.info("vote_auth_branch", {
-    branch: pluginHeaders ? "hmac" : "legacy",
-    method: request.method,
-    path: new URL(request.url).pathname,
-    bodyLength: rawBody.length,
-    serverId: request.headers.get("x-realfiction-plugin-server-id") ?? null,
-    hasTimestamp: Boolean(request.headers.get("x-realfiction-plugin-timestamp")),
-    hasNonce: Boolean(request.headers.get("x-realfiction-plugin-nonce")),
-    hasSignature: Boolean(request.headers.get("x-realfiction-plugin-signature")),
-    hasLegacySecret: Boolean(request.headers.get("x-realfiction-vote-secret"))
-  })
-
   if (pluginHeaders) {
     return requirePluginAuth(request, rawBody, "vote")
   }
@@ -205,6 +190,13 @@ export async function POST(request: Request) {
       throw new Error("Could not persist vote.")
     }
 
+    console.info("vote_stored", {
+      voteId: vote.id,
+      site: site.slug,
+      minecraftUsername: parsed.data.minecraftUsername,
+      linked: Boolean(link?.user_id)
+    })
+
     const key = monthKey(votedAt)
     const username = link?.minecraft_username ?? parsed.data.minecraftUsername
 
@@ -285,6 +277,16 @@ export async function POST(request: Request) {
         .maybeSingle()
 
       milestoneQueued = Boolean(milestoneRow?.id)
+
+      if (milestoneQueued) {
+        console.info("vote_milestone_queued", {
+          voteId: vote.id,
+          rewardQueueId: milestoneRow?.id ?? null,
+          milestone,
+          monthlyVotes,
+          minecraftUsername: username
+        })
+      }
     }
 
     return Response.json({

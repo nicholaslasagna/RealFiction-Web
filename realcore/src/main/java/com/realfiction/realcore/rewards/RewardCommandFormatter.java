@@ -28,6 +28,7 @@ final class RewardCommandFormatter {
     String player = firstNonBlank(reward.minecraftUsername(), reward.minecraftUuid(), "unknown");
     String uuid = firstNonBlank(reward.minecraftUuid(), "");
     String productSlug = reward.delivery == null ? "" : firstNonBlank(reward.delivery.productSlug, "");
+    String voteSite = reward.delivery == null ? "" : firstNonBlank(reward.delivery.voteSite, "");
     String quantity = reward.delivery == null ? "1" : Integer.toString(Math.max(1, reward.delivery.quantity));
 
     return command
@@ -38,7 +39,8 @@ final class RewardCommandFormatter {
         .replace("{rewardId}", firstNonBlank(reward.id, "unknown"))
         .replace("{quantity}", quantity)
         .replace("{serverId}", serverId)
-        .replace("{productSlug}", productSlug);
+        .replace("{productSlug}", productSlug)
+        .replace("{voteSite}", voteSite);
   }
 
   private static String firstNonBlank(String... values) {
