@@ -38,6 +38,9 @@ public final class RealCorePlugin extends JavaPlugin {
   private LobbyManager lobbyManager;
   private CosmeticsManager cosmeticsManager;
   private boolean servicesLoaded;
+  private final String instanceId = UUID.randomUUID().toString();
+  private final AtomicBoolean duplicateServerIdHandled = new AtomicBoolean(false);
+  private ScheduledTaskHandle heartbeatTask;
 
   @Override
   public void onEnable() {
@@ -49,8 +52,16 @@ public final class RealCorePlugin extends JavaPlugin {
       return;
     }
 
-    setupCosmetics();
-    setupLobby();
+    if (realCoreConfig.modules().cosmetics()) {
+      setupCosmetics();
+    } else {
+      getLogger().info("Cosmetics module disabled by modules.cosmetics.");
+    }
+    if (realCoreConfig.modules().lobby()) {
+      setupLobby();
+    } else {
+      getLogger().info("Lobby module disabled by modules.lobby.");
+    }
 
     RealFictionCommand commandExecutor = new RealFictionCommand(this);
     List<String> commandLabels = registerCommands(commandExecutor);
@@ -68,6 +79,7 @@ public final class RealCorePlugin extends JavaPlugin {
       cosmeticsManager.stop();
       cosmeticsManager = null;
     }
+    releaseHeartbeat();
     stopServices(true);
   }
 
@@ -128,7 +140,12 @@ public final class RealCorePlugin extends JavaPlugin {
         return true;
       }
 
-      rewardPoller.start();
+      if (realCoreConfig.modules().rewards()) {
+        rewardPoller.start();
+      } else {
+        getLogger().info("Reward delivery poller disabled by modules.rewards.");
+      }
+      startHeartbeat();
       if (logSummary) {
         logStartupSummary("reloaded", registeredCommandLabels());
       }
@@ -192,7 +209,15 @@ public final class RealCorePlugin extends JavaPlugin {
     String version = getDescription().getVersion();
     String schedulerName = scheduler == null ? "not loaded" : scheduler.name();
     String serverId = config == null ? "not loaded" : config.serverId();
-    String polling = rewardPollingActive() ? "ready" : "not ready";
+    String serverGroup = config == null ? "not loaded" : config.serverGroup();
+    String displayName = config == null ? "not loaded" : config.displayName();
+    String moduleSummary = config == null ? "not loaded" : config.modules().summary();
+    String polling;
+    if (config != null && !config.modules().rewards()) {
+      polling = "disabled (module off)";
+    } else {
+      polling = rewardPollingActive() ? "ready" : "not ready";
+    }
     String websiteAuth = config != null && config.hmacSecretConfigured() ? "ready" : "not ready";
     String luckPerms = luckPermsAvailable() ? "ready" : "not ready";
     String cosmetics = cosmeticsManager == null ? "not loaded" : "ready";
@@ -202,7 +227,9 @@ public final class RealCorePlugin extends JavaPlugin {
     getLogger().info("+--------------------------------------------------+");
     getLogger().info("| RealCore " + version + " " + action);
     getLogger().info("| Scheduler: " + schedulerName);
-    getLogger().info("| Server ID: " + serverId);
+    getLogger().info("| Server: " + serverId + " (" + displayName + ", group: " + serverGroup + ")");
+    getLogger().info("| Instance: " + instanceId);
+    getLogger().info("| Modules: " + moduleSummary);
     getLogger().info("| Reward polling: " + polling);
     getLogger().info("| Website auth: " + websiteAuth);
     getLogger().info("| LuckPerms: " + luckPerms);
@@ -210,6 +237,70 @@ public final class RealCorePlugin extends JavaPlugin {
     getLogger().info("| Commands: " + commands);
     getLogger().info("| Menus: " + (menus.isBlank() ? "none" : menus));
     getLogger().info("+--------------------------------------------------+");
+  }
+
+  private void startHeartbeat() {
+    if (scheduler == null || apiClient == null || realCoreConfig == null || !realCoreConfig.hmacSecretConfigured()) {
+      return;
+    }
+    // Identity heartbeat runs regardless of modules: the website uses it to spot
+    // two backends sharing one serverId. First beat at +1s acts as the startup
+    // duplicate-id check; it is async so it never blocks (Folia-safe) enable.
+    heartbeatTask = scheduler.runAsyncRepeating(this::heartbeatTick, 1, 30);
+  }
+
+  private void heartbeatTick() {
+    PlatformApiClient client = this.apiClient;
+    RealCoreConfig cfg = this.realCoreConfig;
+    if (client == null || cfg == null) {
+      return;
+    }
+    HeartbeatRequest request =
+        new HeartbeatRequest(cfg.serverId(), instanceId, cfg.serverGroup(), cfg.displayName(), false);
+    client.heartbeat(request)
+        .thenAccept(this::handleHeartbeat)
+        .exceptionally(error -> {
+          if (cfg.debug()) {
+            getLogger().warning("Server heartbeat failed: " + error.getMessage());
+          }
+          return null;
+        });
+  }
+
+  private void handleHeartbeat(HeartbeatResponse response) {
+    if (response == null || !response.conflict) {
+      return;
+    }
+    if (!duplicateServerIdHandled.compareAndSet(false, true)) {
+      return;
+    }
+    RealCoreConfig cfg = this.realCoreConfig;
+    String serverId = cfg == null ? "?" : cfg.serverId();
+    getLogger().severe("Another live backend already uses serverId '" + serverId + "' (active instance "
+        + (response.activeInstance == null ? "unknown" : response.activeInstance) + "). Give each server a unique server.id.");
+    if (cfg != null && cfg.refuseOnDuplicateServerId()) {
+      getLogger().severe("server.refuseOnDuplicate is true; disabling RealCore to avoid a split identity.");
+      RealCoreScheduler sched = this.scheduler;
+      if (sched != null) {
+        sched.runGlobal(() -> getServer().getPluginManager().disablePlugin(this));
+      } else {
+        getServer().getPluginManager().disablePlugin(this);
+      }
+    }
+  }
+
+  private void releaseHeartbeat() {
+    PlatformApiClient client = this.apiClient;
+    RealCoreConfig cfg = this.realCoreConfig;
+    if (client == null || cfg == null || !cfg.hmacSecretConfigured()) {
+      return;
+    }
+    try {
+      client.heartbeat(new HeartbeatRequest(cfg.serverId(), instanceId, cfg.serverGroup(), cfg.displayName(), true))
+          .get(2, TimeUnit.SECONDS);
+    } catch (Exception ignored) {
+      // Best-effort release; a stale registry row simply ages out via the timeout.
+    }
   }
 
   private void mergeBundledConfigDefaults() {
@@ -230,6 +321,10 @@ public final class RealCorePlugin extends JavaPlugin {
 
   private void stopServices(boolean closeScheduler) {
     servicesLoaded = false;
+    if (heartbeatTask != null) {
+      heartbeatTask.cancel();
+      heartbeatTask = null;
+    }
     if (rewardPoller != null) {
       rewardPoller.stop();
       rewardPoller = null;
