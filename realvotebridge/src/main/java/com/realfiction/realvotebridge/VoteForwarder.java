@@ -30,6 +30,17 @@ public final class VoteForwarder implements Closeable {
     String message = HmacSigner.signedMessage(config.serverId(), timestamp, nonce, "POST", VOTE_PATH, rawBody);
     String signature = HmacSigner.sign(config.hmacSecret(), message);
 
+    if (config.debug()) {
+      // Safe diagnostic: no secret or signature is logged, only the signed shape.
+      logger.info(
+          "Vote signing: serverId={} method=POST path={} timestamp={} nonceLength={} bodyLength={}",
+          config.serverId(),
+          VOTE_PATH,
+          timestamp,
+          nonce.length(),
+          rawBody.length());
+    }
+
     HttpRequest request = HttpRequest.newBuilder(config.resolve(VOTE_PATH))
         .timeout(config.requestTimeout().plus(Duration.ofSeconds(2)))
         .header("content-type", "application/json")
