@@ -1,6 +1,6 @@
 "use client"
 
-import { Copy, Link2, RefreshCw, ShieldCheck } from "lucide-react"
+import { Copy, Link2, RefreshCw, ShieldCheck, Unlink } from "lucide-react"
 import { FormEvent, useEffect, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 
@@ -39,6 +39,10 @@ export function AccountLinkCard({
   const [copied, setCopied] = useState(false)
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
+  const [secondsLeft, setSecondsLeft] = useState<number | null>(null)
+  const [unlinkConfirm, setUnlinkConfirm] = useState(false)
+  const [unlinking, setUnlinking] = useState(false)
+  const [unlinkMessage, setUnlinkMessage] = useState<string | null>(null)
 
   useEffect(() => {
     if (!code || linked) {
@@ -51,6 +55,51 @@ export function AccountLinkCard({
 
     return () => window.clearInterval(timer)
   }, [code, linked, router, startTransition])
+
+  useEffect(() => {
+    if (!code || !expiresAt || linked) {
+      setSecondsLeft(null)
+      return
+    }
+
+    const target = new Date(expiresAt).getTime()
+    const tick = () => {
+      const remaining = Math.max(0, Math.ceil((target - Date.now()) / 1000))
+      setSecondsLeft(remaining)
+      if (remaining <= 0) {
+        setCode(null)
+        setCommand(null)
+        setExpiresAt(null)
+        setMessage("That code expired. Tap Link Account for a fresh one.")
+      }
+    }
+
+    tick()
+    const timer = window.setInterval(tick, 1000)
+    return () => window.clearInterval(timer)
+  }, [code, expiresAt, linked])
+
+  async function unlinkAccount() {
+    setUnlinking(true)
+    setUnlinkMessage(null)
+
+    try {
+      const response = await fetch("/api/account/link/unlink", { method: "POST" })
+
+      if (!response.ok) {
+        const data = (await response.json().catch(() => ({}))) as { error?: string }
+        setUnlinkMessage(data.error ?? "We could not unlink right now. Try again in a moment.")
+        return
+      }
+
+      setUnlinkConfirm(false)
+      startTransition(() => router.refresh())
+    } catch {
+      setUnlinkMessage("We could not unlink right now. Try again in a moment.")
+    } finally {
+      setUnlinking(false)
+    }
+  }
 
   async function startLink(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -109,6 +158,50 @@ export function AccountLinkCard({
             <p className="mt-4 text-sm leading-6 text-muted-foreground">
               Your rewards and cosmetics can now find you in-game.
             </p>
+
+            <div className="mt-5 border-t border-white/10 pt-4">
+              {unlinkConfirm ? (
+                <div className="rounded-lg border border-rose-300/20 bg-rose-300/5 p-4">
+                  <p className="text-sm leading-6 text-rose-100">
+                    Unlink {minecraftUsername}? Your in-game perks come off this account right away. You keep
+                    everything you bought — link any account later to use them again.
+                  </p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <Button
+                      className="bg-rose-500/90 text-white hover:bg-rose-500"
+                      disabled={unlinking}
+                      onClick={unlinkAccount}
+                      type="button"
+                    >
+                      <Unlink className="h-4 w-4" />
+                      {unlinking ? "Unlinking..." : "Yes, unlink"}
+                    </Button>
+                    <Button disabled={unlinking} onClick={() => setUnlinkConfirm(false)} type="button" variant="ghost">
+                      Keep linked
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <Button
+                  className="text-muted-foreground hover:text-rose-100"
+                  onClick={() => {
+                    setUnlinkMessage(null)
+                    setUnlinkConfirm(true)
+                  }}
+                  type="button"
+                  variant="ghost"
+                >
+                  <Unlink className="h-4 w-4" />
+                  Unlink this account
+                </Button>
+              )}
+
+              {unlinkMessage ? (
+                <p className="mt-3 rounded-md border border-rose-300/18 bg-rose-300/10 p-3 text-sm text-rose-100">
+                  {unlinkMessage}
+                </p>
+              ) : null}
+            </div>
           </div>
         </div>
       </div>
@@ -159,7 +252,11 @@ export function AccountLinkCard({
             </Button>
           </div>
           <p className="mt-3 text-sm text-muted-foreground">
-            {expiresAt ? `This code lasts a short time. ` : null}
+            {secondsLeft !== null ? (
+              <span className={cn("font-bold", secondsLeft <= 10 ? "text-rose-200" : "text-amber-100")}>
+                Expires in {secondsLeft}s — run it before it disappears.{" "}
+              </span>
+            ) : null}
             This page checks for your link automatically.
           </p>
         </div>

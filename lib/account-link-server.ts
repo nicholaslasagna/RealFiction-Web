@@ -70,6 +70,22 @@ export async function confirmMinecraftAccountLink(input: ConfirmMinecraftLinkInp
     throw new Error("Could not update linked profile.")
   }
 
+  // Enforce one active Minecraft link per web account and move any owned
+  // entitlements onto the newly linked account (for their remaining duration).
+  // Any other previously-verified account has its live grants stripped here, so
+  // a single purchase can never benefit two accounts at once. Non-fatal: the
+  // link itself already succeeded, so a transient failure is logged, not thrown.
+  const { error: applyError } = await supabase.rpc("apply_minecraft_link", {
+    p_user_id: link.user_id,
+    p_link_id: updatedLink.id,
+    p_minecraft_uuid: input.minecraftUuid,
+    p_minecraft_username: input.minecraftUsername
+  })
+
+  if (applyError) {
+    console.error("account_link_apply_effects_error", applyError)
+  }
+
   return {
     userId: link.user_id as string,
     minecraftUuid: input.minecraftUuid,

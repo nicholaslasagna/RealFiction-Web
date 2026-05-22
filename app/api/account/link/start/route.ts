@@ -30,7 +30,11 @@ export async function POST(request: Request) {
     const supabase = getSupabaseServiceRoleClient()
     const code = createVerificationCode()
     const codeHash = await sha256Hex(code)
-    const expiresAt = new Date(Date.now() + 20 * 60 * 1000).toISOString()
+    // Codes are short-lived on purpose: 60 seconds from the moment the player
+    // requests one. After that they must request a fresh code, so a code never
+    // lingers in the system waiting to be used.
+    const LINK_CODE_TTL_MS = 60 * 1000
+    const expiresAt = new Date(Date.now() + LINK_CODE_TTL_MS).toISOString()
 
     const { data: existingLink, error: existingError } = await supabase
       .from("minecraft_account_links")
@@ -48,9 +52,9 @@ export async function POST(request: Request) {
       return Response.json({ error: "Minecraft account is already linked." }, { status: 409 })
     }
 
-    if (existingLink?.status === "revoked") {
-      return Response.json({ error: "Minecraft account link is revoked." }, { status: 409 })
-    }
+    // A "revoked" link here means the player previously unlinked this account (or
+    // it was superseded by linking a different one). They own it, so let them
+    // request a fresh code and re-link — the upsert below resets it to pending.
 
     await supabase
       .from("minecraft_account_links")
