@@ -13,6 +13,7 @@ Premium Minecraft network platform for RealFiction.
 - Supabase Auth/PostgreSQL/RLS
 - Stripe Checkout and PayPal Checkout route contracts
 - RealCore plugin architecture for Minecraft fulfillment
+- RealVoteBridge for Velocity NuVotifier vote ingestion
 
 ## Local Development
 
@@ -37,6 +38,7 @@ Cloudflare Worker output is configured through `wrangler.toml`. The build step i
 
 - [Architecture](docs/ARCHITECTURE.md)
 - [RealCore Plugin](docs/REALCORE_PLUGIN.md)
+- [RealVoteBridge](realvotebridge/README.md)
 - [Migration Roadmap](docs/MIGRATION_ROADMAP.md)
 - [Cloudflare Deploy & Env Vars](docs/CLOUDFLARE_DEPLOY.md)
 - [Cloudflare Rate Limiting](docs/CLOUDFLARE_RATELIMIT.md)

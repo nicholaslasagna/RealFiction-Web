@@ -7,35 +7,111 @@ import {
   sha256Hex,
   verifySharedSecret
 } from "@/lib/security"
+import { requirePluginAuth } from "@/lib/plugin-auth"
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role"
 
 const voteWebhookSchema = z.object({
   site: z.string().trim().min(2).max(80),
   minecraftUsername: z.string().trim().min(3).max(16).regex(/^[A-Za-z0-9_]+$/),
   voteToken: z.string().trim().min(8).max(240),
-  votedAt: z.string().datetime().optional()
+  votedAt: z.string().datetime().optional(),
+  address: z.string().trim().min(1).max(120).optional()
 })
+
+const voteSiteAliases: Record<string, string> = {
+  minecraftserversorg: "minecraftservers-org",
+  planetminecraft: "planetminecraft",
+  planetminecraftcom: "planetminecraft",
+  minecraftmp: "minecraft-mp",
+  minecraftmpcom: "minecraft-mp",
+  topg: "topg",
+  topgorg: "topg",
+  minecraftmenu: "minecraft-menu",
+  serversminecraft: "servers-minecraft",
+  minecraftbuzz: "minecraft-buzz",
+  curseforge: "curseforge",
+  mclistio: "mclist-io",
+  mcsl: "mcsl"
+}
 
 function monthKey(date: Date) {
   return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`
 }
 
-export async function POST(request: Request) {
-  let expectedSecret: string
+function voteSiteLookupKey(site: string) {
+  return site.toLowerCase().replace(/[^a-z0-9]/g, "")
+}
 
-  try {
-    expectedSecret = requireConfiguredSecret("VOTE_WEBHOOK_SECRET")
-  } catch {
-    return safeJsonError("Vote webhook is not configured.", 503)
+function hasPluginAuthHeaders(request: Request) {
+  return [
+    "x-realfiction-plugin-server-id",
+    "x-realfiction-plugin-timestamp",
+    "x-realfiction-plugin-nonce",
+    "x-realfiction-plugin-signature"
+  ].some((header) => Boolean(request.headers.get(header)))
+}
+
+async function authorizeVoteRequest(request: Request, rawBody: string) {
+  const pluginHeaders = hasPluginAuthHeaders(request)
+
+  // Safe diagnostic: shows which auth branch a request takes and the signed
+  // request shape. No secrets or signatures are logged. Remove once the vote
+  // pipeline is confirmed healthy in production.
+  console.info("vote_auth_branch", {
+    branch: pluginHeaders ? "hmac" : "legacy",
+    method: request.method,
+    path: new URL(request.url).pathname,
+    bodyLength: rawBody.length,
+    serverId: request.headers.get("x-realfiction-plugin-server-id") ?? null,
+    hasTimestamp: Boolean(request.headers.get("x-realfiction-plugin-timestamp")),
+    hasNonce: Boolean(request.headers.get("x-realfiction-plugin-nonce")),
+    hasSignature: Boolean(request.headers.get("x-realfiction-plugin-signature")),
+    hasLegacySecret: Boolean(request.headers.get("x-realfiction-vote-secret"))
+  })
+
+  if (pluginHeaders) {
+    return requirePluginAuth(request, rawBody, "vote")
   }
 
   const providedSecret = getRequestSecret(request, "x-realfiction-vote-secret")
 
-  if (!verifySharedSecret(providedSecret, expectedSecret)) {
-    return Response.json({ error: "Unauthorized vote webhook." }, { status: 401 })
+  if (!providedSecret) {
+    return { ok: false as const, response: Response.json({ error: "Unauthorized vote webhook." }, { status: 401 }) }
   }
 
-  const body = await request.json().catch(() => null)
+  let expectedSecret: string
+  try {
+    expectedSecret = requireConfiguredSecret("VOTE_WEBHOOK_SECRET")
+  } catch {
+    return { ok: false as const, response: Response.json({ error: "Unauthorized vote webhook." }, { status: 401 }) }
+  }
+
+  if (!verifySharedSecret(providedSecret, expectedSecret)) {
+    return { ok: false as const, response: Response.json({ error: "Unauthorized vote webhook." }, { status: 401 }) }
+  }
+
+  return {
+    ok: true as const,
+    mode: "shared-secret" as const,
+    serverId: request.headers.get("x-realfiction-plugin-server-id") ?? "vote-webhook"
+  }
+}
+
+export async function POST(request: Request) {
+  const rawBody = await request.text()
+  const auth = await authorizeVoteRequest(request, rawBody)
+
+  if (!auth.ok) {
+    return auth.response
+  }
+
+  const body = (() => {
+    try {
+      return JSON.parse(rawBody || "null") as unknown
+    } catch {
+      return null
+    }
+  })()
   const parsed = voteWebhookSchema.safeParse(body)
 
   if (!parsed.success) {
@@ -46,6 +122,14 @@ export async function POST(request: Request) {
     const supabase = getSupabaseServiceRoleClient()
     const votedAt = parsed.data.votedAt ? new Date(parsed.data.votedAt) : new Date()
     const idempotencyKey = await sha256Hex(`${parsed.data.site}:${parsed.data.voteToken}`)
+    const ipHash = parsed.data.address ? await sha256Hex(parsed.data.address) : null
+
+    console.info("vote_received", {
+      site: parsed.data.site,
+      minecraftUsername: parsed.data.minecraftUsername,
+      authMode: auth.mode,
+      serverId: auth.serverId
+    })
 
     const { data: siteBySlug, error: siteBySlugError } = await supabase
       .from("vote_sites")
@@ -71,7 +155,21 @@ export async function POST(request: Request) {
       throw new Error("Could not load vote site.")
     }
 
-    const site = siteBySlug ?? siteByName
+    const aliasSlug = voteSiteAliases[voteSiteLookupKey(parsed.data.site)]
+    const { data: siteByAlias, error: siteByAliasError } = siteBySlug || siteByName || !aliasSlug
+      ? { data: null, error: null }
+      : await supabase
+          .from("vote_sites")
+          .select("id, slug, name, reward_key, active")
+          .eq("slug", aliasSlug)
+          .eq("active", true)
+          .maybeSingle()
+
+    if (siteByAliasError) {
+      throw new Error("Could not load vote site.")
+    }
+
+    const site = siteBySlug ?? siteByName ?? siteByAlias
 
     if (!site) {
       return Response.json({ error: "Unknown vote site." }, { status: 404 })
@@ -92,6 +190,7 @@ export async function POST(request: Request) {
         minecraft_uuid: link?.minecraft_uuid ?? null,
         minecraft_username: parsed.data.minecraftUsername,
         provider_event_id: parsed.data.voteToken,
+        ip_hash: ipHash,
         idempotency_key: idempotencyKey,
         voted_at: votedAt.toISOString()
       })
@@ -148,6 +247,13 @@ export async function POST(request: Request) {
         reward_key: rewardKey
       })
     }
+
+    console.info("vote_reward_queued", {
+      voteId: vote.id,
+      rewardQueueId: rewardQueue?.id ?? null,
+      rewardKey,
+      minecraftUsername: username
+    })
 
     // Cumulative monthly-vote milestones. Each successful vote increments the
     // counter by one, so an exact match fires a milestone once; the idempotency

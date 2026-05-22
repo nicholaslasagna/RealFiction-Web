@@ -1,0 +1,10 @@
+# RealVoteBridge runs on the Velocity proxy.
+# It receives NuVotifier vote events and forwards them to RealFiction.
+# Never share hmacSecret publicly.
+
+enabled: true
+baseUrl: "https://realfiction.live"
+serverId: "velocity"
+hmacSecret: "CHANGE_ME"
+requestTimeoutSeconds: 10
+debug: false

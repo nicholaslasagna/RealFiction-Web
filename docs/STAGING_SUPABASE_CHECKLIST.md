@@ -69,7 +69,7 @@ Then verify from the deployed site with staging environment variables:
 
 - `/api/store/checkout` creates a pending local order before Stripe/PayPal checkout.
 - Stripe and PayPal webhook replays do not duplicate reward rows.
-- `/api/vote` rejects missing or invalid `VOTE_WEBHOOK_SECRET`.
+- `/api/vote` accepts valid RealVoteBridge HMAC auth without `VOTE_WEBHOOK_SECRET`, and rejects missing/invalid auth.
 - `/api/plugin/rewards/poll` rejects missing auth.
 - `/api/plugin/rewards/poll` accepts HMAC auth and marks pending rows `processing`.
 - `/api/plugin/rewards/ack` marks processing rows `delivered` or `failed`.

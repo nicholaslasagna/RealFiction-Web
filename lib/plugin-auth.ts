@@ -53,16 +53,33 @@ export async function requirePluginAuth(request: Request, rawBody: string, route
 
   if (serverId && timestamp && nonce && signature) {
     const timestampNumber = Number(timestamp)
+    const skewMs = Number.isFinite(timestampNumber) ? Date.now() - timestampNumber : null
 
-    if (!Number.isFinite(timestampNumber) || Math.abs(Date.now() - timestampNumber) > HMAC_WINDOW_MS) {
+    if (skewMs === null || Math.abs(skewMs) > HMAC_WINDOW_MS) {
+      console.warn("plugin_auth_timestamp_rejected", { route: routeName, serverId, skewMs, windowMs: HMAC_WINDOW_MS })
       return { ok: false, response: Response.json({ error: "Plugin signature expired." }, { status: 401 }) }
     }
 
     const pathname = new URL(request.url).pathname
     const signedMessage = `${serverId}.${timestamp}.${nonce}.${request.method.toUpperCase()}.${pathname}.${rawBody}`
     const expectedSignature = await hmacSha256Hex(expectedSecret, signedMessage)
+    const providedSignature = signature.toLowerCase()
 
-    if (!constantTimeEqual(signature.toLowerCase(), expectedSignature)) {
+    if (!constantTimeEqual(providedSignature, expectedSignature)) {
+      // Safe diagnostic: lengths + short prefixes only (never full signatures or
+      // the secret), plus the signed-message shape so a body/path/method drift is
+      // visible. Remove once the pipeline is confirmed healthy.
+      console.warn("plugin_auth_signature_mismatch", {
+        route: routeName,
+        serverId,
+        method: request.method.toUpperCase(),
+        path: pathname,
+        bodyLength: rawBody.length,
+        providedLength: providedSignature.length,
+        expectedLength: expectedSignature.length,
+        providedPrefix: providedSignature.slice(0, 8),
+        expectedPrefix: expectedSignature.slice(0, 8)
+      })
       return { ok: false, response: Response.json({ error: "Unauthorized." }, { status: 401 }) }
     }
 
@@ -87,6 +104,7 @@ export async function requirePluginAuth(request: Request, rawBody: string, route
     const { error } = nonceResult
 
     if (error?.code === "23505" || error?.status === 409) {
+      console.warn("plugin_auth_nonce_replay", { route: routeName, serverId })
       return { ok: false, response: Response.json({ error: "Plugin request replay rejected." }, { status: 401 }) }
     }
 
@@ -95,7 +113,22 @@ export async function requirePluginAuth(request: Request, rawBody: string, route
       return { ok: false, response: safeJsonError("Plugin authorization could not be verified.", 503) }
     }
 
+    console.info("plugin_auth_ok", { route: routeName, serverId, mode: "hmac" })
     return { ok: true, mode: "hmac", serverId }
+  }
+
+  // At least one plugin header was present but not the full set — surface which
+  // names are missing so a client header-name typo is obvious in the logs.
+  if (serverId || timestamp || nonce || signature) {
+    console.warn("plugin_auth_missing_headers", {
+      route: routeName,
+      present: {
+        serverId: Boolean(serverId),
+        timestamp: Boolean(timestamp),
+        nonce: Boolean(nonce),
+        signature: Boolean(signature)
+      }
+    })
   }
 
   if (isSharedSecretAuthAllowed()) {

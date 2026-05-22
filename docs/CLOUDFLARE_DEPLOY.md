@@ -66,8 +66,8 @@ route handlers and never reach the browser.
 | `PAYPAL_CLIENT_ID` / `PAYPAL_CLIENT_SECRET` | PayPal checkout + capture |
 | `PAYPAL_WEBHOOK_ID` | PayPal webhook verification |
 | `PAYPAL_ENVIRONMENT` | `sandbox` or `live` (config, not secret) |
-| `VOTE_WEBHOOK_SECRET` | Vote callback authentication |
-| `REALCORE_PLUGIN_SECRET` | RealCore HMAC plugin auth |
+| `VOTE_WEBHOOK_SECRET` | Optional legacy vote callback fallback |
+| `REALCORE_PLUGIN_SECRET` | RealCore and RealVoteBridge HMAC auth |
 | `REALCORE_ALLOW_SHARED_SECRET` | Leave **unset** in production (HMAC only) |
 
 `PLAYER_COUNT_ENDPOINT` is **not** required — the player count uses the public
