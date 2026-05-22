@@ -59,10 +59,15 @@ export async function POST(request: Request) {
         if (error.code && MISSING_SCHEMA_CODES.has(error.code)) {
           return safeJsonError("Reward backend is not ready.", 503)
         }
+        // Surface the underlying RPC error (code + short message) to the plugin
+        // log. These are Postgres/PostgREST diagnostics, not secrets, and make a
+        // failing ack diagnosable in-game/server-side instead of a generic string.
+        const detail = error.code ? `code ${error.code}` : "unknown error"
+        const message = typeof error.message === "string" ? error.message.slice(0, 140) : ""
         results.push({
           rewardId: delivery.rewardId,
           accepted: false,
-          error: "Reward acknowledgement failed."
+          error: `Reward ack RPC failed (${detail})${message ? `: ${message}` : ""}`
         })
         continue
       }

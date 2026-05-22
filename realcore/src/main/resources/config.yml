@@ -60,6 +60,12 @@ rewards:
   # RealCore refuses unsafe rewards. Leave this false unless staff are testing.
   allowUnsafeRewards: false
 
+  # Usernames whose votes are placeholders/tests (e.g. PlanetMinecraft sends a
+  # "PMC" test vote). These never run reward commands and are settled as failed.
+  # Remove the entry (or set an empty list) to disable skipping.
+  skipUsernames:
+    - PMC
+
   # Local permission mapping for cosmetic products that do not carry a specific
   # LuckPerms permission in the website payload yet.
   productPermissions:

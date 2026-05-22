@@ -9,6 +9,7 @@ import java.net.URI;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
 
 final class RewardCommandFormatterTest {
@@ -34,7 +35,8 @@ final class RewardCommandFormatterTest {
         Map.of(),
         "Lobby 1",
         false,
-        ServerModules.defaults()
+        ServerModules.defaults(),
+        Set.of()
     );
 
     RewardPayload reward = new RewardPayload();

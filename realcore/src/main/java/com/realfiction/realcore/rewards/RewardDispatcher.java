@@ -190,7 +190,7 @@ public final class RewardDispatcher {
     if (message == null || message.isBlank()) {
       message = cursor.getClass().getSimpleName();
     }
-    plugin.getLogger().warning("Reward delivery failed: " + message);
+    plugin.getLogger().log(java.util.logging.Level.WARNING, "Reward delivery failed: " + message, error);
     return message.length() > 450 ? message.substring(0, 450) : message;
   }
 

@@ -2,6 +2,7 @@ package com.realfiction.realcore.rewards;
 
 import com.realfiction.realcore.RealCorePlugin;
 import com.realfiction.realcore.api.PlatformApiClient;
+import com.realfiction.realcore.api.PlatformApiException;
 import com.realfiction.realcore.api.dto.AckRewardsRequest;
 import com.realfiction.realcore.api.dto.AckRewardsResponse;
 import com.realfiction.realcore.api.dto.PollRewardsRequest;
@@ -12,12 +13,14 @@ import com.realfiction.realcore.scheduler.RealCoreScheduler;
 import com.realfiction.realcore.scheduler.ScheduledTaskHandle;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.logging.Level;
 
 public final class RewardPoller {
   private final RealCorePlugin plugin;
@@ -29,6 +32,7 @@ public final class RewardPoller {
   private final AtomicBoolean running = new AtomicBoolean(false);
   private final Set<String> deliveredThisRun = ConcurrentHashMap.newKeySet();
   private final Queue<AckRewardsRequest.Delivery> pendingAcks = new ConcurrentLinkedQueue<>();
+  private final RewardLedger ledger;
   private ScheduledTaskHandle taskHandle;
 
   public RewardPoller(RealCorePlugin plugin, RealCoreConfig config, RealCoreScheduler scheduler, PlatformApiClient apiClient, RewardDispatcher dispatcher) {
@@ -37,12 +41,14 @@ public final class RewardPoller {
     this.scheduler = scheduler;
     this.apiClient = apiClient;
     this.dispatcher = dispatcher;
+    this.ledger = new RewardLedger(plugin.getDataFolder().toPath().resolve("delivered-rewards.log"), plugin.getLogger());
   }
 
   public void start() {
     if (!running.compareAndSet(false, true)) {
       return;
     }
+    ledger.load();
     taskHandle = scheduler.runAsyncRepeating(this::tickSafely, 3, config.pollInterval().toSeconds());
   }
 
@@ -66,7 +72,7 @@ public final class RewardPoller {
     flushPendingAcks()
         .thenCompose(ignored -> pollAndDeliver())
         .exceptionally(error -> {
-          plugin.getLogger().warning("Reward poll failed: " + cleanMessage(error));
+          plugin.getLogger().log(Level.WARNING, "Reward poll failed: " + describeFailure(error), error);
           return null;
         })
         .whenComplete((ignored, error) -> tickRunning.set(false));
@@ -122,6 +128,17 @@ public final class RewardPoller {
       return CompletableFuture.completedFuture(null);
     }
 
+    String who = playerLabel(reward);
+
+    // Idempotency: if this reward's effects already ran on this server (e.g. the
+    // previous ack failed and the row was reclaimed), do NOT execute again - only
+    // re-acknowledge it as delivered. This prevents duplicate money/perks.
+    if (ledger.wasDelivered(reward.id)) {
+      plugin.getLogger().info("Reward already delivered locally; re-acking only: "
+          + reward.rewardKey + " -> " + who + " (id=" + reward.id + ")");
+      return CompletableFuture.completedFuture(RewardDeliveryResult.delivered(reward.id));
+    }
+
     // Defensive: the website already filters by group, but never apply a reward
     // that is targeted at a different server group than this backend.
     String group = reward.serverGroup;
@@ -133,12 +150,21 @@ public final class RewardPoller {
       return CompletableFuture.completedFuture(RewardDeliveryResult.failed(reward.id, "Wrong server group: " + group));
     }
 
+    // Skip placeholder/test votes (e.g. the PlanetMinecraft "PMC" test vote) so
+    // they never run economy commands for a non-real player. Acked as failed so
+    // the row is settled and not retried.
+    String username = reward.minecraftUsername();
+    if (username != null && config.skipUsernames().contains(username.toLowerCase(Locale.ROOT))) {
+      plugin.getLogger().info("Skipped test/placeholder vote for username '" + username + "' (configured skip).");
+      return CompletableFuture.completedFuture(
+          RewardDeliveryResult.failed(reward.id, "Skipped configured test username: " + username));
+    }
+
     if (!deliveredThisRun.add(reward.id)) {
       plugin.getLogger().warning("Skipping duplicate reward in same plugin run: rewardId=" + reward.id);
       return CompletableFuture.completedFuture(null);
     }
 
-    String who = playerLabel(reward);
     if (reward.attempts > 1) {
       plugin.getLogger().info("Retrying reward " + reward.rewardKey + " -> " + who
           + " (attempt " + reward.attempts + ", id=" + reward.id + ")");
@@ -148,6 +174,9 @@ public final class RewardPoller {
 
     return dispatcher.dispatch(reward).thenApply(result -> {
       if (result != null && result.delivered()) {
+        // Persist BEFORE the ack so a subsequent ack failure cannot cause a
+        // second execution on the next poll.
+        ledger.markDelivered(reward.id);
         plugin.getLogger().info("Delivered reward " + reward.rewardKey + " -> " + who);
       }
       return result;
@@ -188,7 +217,8 @@ public final class RewardPoller {
         .handle((response, error) -> {
       if (RewardAckRetryPolicy.shouldRetry(response, error)) {
         if (error != null) {
-          plugin.getLogger().warning("Could not acknowledge rewards; will retry later: " + cleanMessage(error));
+          plugin.getLogger().log(Level.WARNING,
+              "Could not acknowledge rewards; will retry later: " + describeFailure(error), error);
         } else {
           plugin.getLogger().warning("Reward acknowledgement was not fully accepted; will retry later.");
         }
@@ -219,5 +249,18 @@ public final class RewardPoller {
     }
     String message = cursor.getMessage();
     return message == null || message.isBlank() ? cursor.getClass().getSimpleName() : message;
+  }
+
+  // Includes the HTTP status for website API failures so a 4xx/5xx is visible in
+  // logs without dumping secrets. Full stack traces are logged separately.
+  private String describeFailure(Throwable error) {
+    Throwable cursor = error;
+    while (cursor.getCause() != null) {
+      cursor = cursor.getCause();
+    }
+    if (cursor instanceof PlatformApiException api) {
+      return "HTTP " + api.statusCode() + " " + cleanMessage(error);
+    }
+    return cleanMessage(error);
   }
 }

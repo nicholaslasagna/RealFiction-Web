@@ -4,9 +4,11 @@ import java.net.URI;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
 
@@ -30,7 +32,8 @@ public record RealCoreConfig(
     Map<String, List<String>> broadcastMessagesByRewardKey,
     String displayName,
     boolean refuseOnDuplicateServerId,
-    ServerModules modules
+    ServerModules modules,
+    Set<String> skipUsernames
 ) {
   public static RealCoreConfig from(FileConfiguration config) {
     URI baseUrl = URI.create(trimTrailingSlash(config.getString("baseUrl", "https://realfiction.live")));
@@ -42,6 +45,19 @@ public record RealCoreConfig(
     String displayName = firstNonBlank(config.getString("server.displayName"), config.getString("displayName"), serverId);
     boolean refuseOnDuplicateServerId = config.getBoolean("server.refuseOnDuplicate", false);
     ServerModules modules = ServerModules.from(config.getConfigurationSection("modules"));
+    // Usernames whose votes are placeholders/tests (e.g. PlanetMinecraft "PMC")
+    // and must never run reward commands. Absent key defaults to ["pmc"]; an
+    // explicit (even empty) list disables/overrides the default.
+    Set<String> skipUsernames = new HashSet<>();
+    if (config.isList("rewards.skipUsernames")) {
+      for (String name : config.getStringList("rewards.skipUsernames")) {
+        if (name != null && !name.isBlank()) {
+          skipUsernames.add(name.trim().toLowerCase(Locale.ROOT));
+        }
+      }
+    } else {
+      skipUsernames.add("pmc");
+    }
     String hmacSecret = cleanString(config, "hmacSecret", "");
     if (serverId.isBlank()) {
       throw new IllegalArgumentException("serverId must not be blank.");
@@ -80,7 +96,8 @@ public record RealCoreConfig(
         readStringListMap(config.getConfigurationSection("rewards.messages.broadcast.byRewardKey")),
         displayName,
         refuseOnDuplicateServerId,
-        modules
+        modules,
+        Set.copyOf(skipUsernames)
     );
   }
 
