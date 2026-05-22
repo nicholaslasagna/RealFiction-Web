@@ -19,14 +19,17 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
+import java.util.logging.Logger;
 
 public final class PlatformApiClient implements Closeable {
   private final RealCoreConfig config;
+  private final Logger logger;
   private final Gson gson = new Gson();
   private final HttpClient httpClient;
 
-  public PlatformApiClient(RealCoreConfig config) {
+  public PlatformApiClient(RealCoreConfig config, Logger logger) {
     this.config = config;
+    this.logger = logger;
     this.httpClient = HttpClient.newBuilder()
         .connectTimeout(config.requestTimeout())
         .build();
@@ -68,7 +71,24 @@ public final class PlatformApiClient implements Closeable {
         .build();
 
     return httpClient.sendAsync(request, HttpResponse.BodyHandlers.ofString())
-        .thenApply(response -> parseResponse(response, responseType));
+        .thenApply(response -> {
+          // Log the exact HTTP status + (truncated) response body for API calls.
+          // Always for >=400; on debug for everything. Response bodies carry no
+          // secrets (the HMAC is request-side), so this is safe to log and makes
+          // a failing ack/poll diagnosable directly from the server console.
+          if (logger != null && (config.debug() || response.statusCode() >= 400)) {
+            logger.info("API " + path + " -> HTTP " + response.statusCode() + " body=" + truncateBody(response.body()));
+          }
+          return parseResponse(response, responseType);
+        });
+  }
+
+  private static String truncateBody(String body) {
+    if (body == null || body.isBlank()) {
+      return "";
+    }
+    String trimmed = body.strip();
+    return trimmed.length() > 500 ? trimmed.substring(0, 500) + "..." : trimmed;
   }
 
   private <T> T parseResponse(HttpResponse<String> response, Class<T> responseType) {
