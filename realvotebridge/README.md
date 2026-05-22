@@ -50,3 +50,8 @@ debug: false
 - NuVotifier is optional. If it is missing, RealVoteBridge starts but stays idle.
 - Never paste `hmacSecret` into chat, logs, screenshots, or public files.
 - VotingPlugin rewards must stay disabled. RealCore is the only in-game reward delivery system.
+- Velocity NuVotifier should be the only public vote receiver. Backend
+  plugin-messaging forwarding is not needed for RealFiction rewards once
+  RealVoteBridge is active. It is harmless only if no backend plugin consumes
+  forwarded votes or gives rewards, but disabling it is cleaner and avoids
+  noisy legacy vote paths.

@@ -24,7 +24,10 @@ public record RealCoreConfig(
     boolean allowUnsafeRewards,
     Map<String, String> productPermissions,
     Map<String, List<String>> commandsByRewardKey,
-    Map<String, List<String>> commandsByProductSlug
+    Map<String, List<String>> commandsByProductSlug,
+    Map<String, List<String>> playerMessagesByRewardKey,
+    boolean rewardBroadcastsEnabled,
+    Map<String, List<String>> broadcastMessagesByRewardKey
 ) {
   public static RealCoreConfig from(FileConfiguration config) {
     URI baseUrl = URI.create(trimTrailingSlash(config.getString("baseUrl", "https://realfiction.live")));
@@ -63,7 +66,10 @@ public record RealCoreConfig(
         allowUnsafeRewards,
         readStringMap(config.getConfigurationSection("rewards.productPermissions")),
         readStringListMap(config.getConfigurationSection("rewards.commands.byRewardKey")),
-        readStringListMap(config.getConfigurationSection("rewards.commands.byProductSlug"))
+        readStringListMap(config.getConfigurationSection("rewards.commands.byProductSlug")),
+        readStringListMap(config.getConfigurationSection("rewards.messages.player.byRewardKey")),
+        config.getBoolean("rewards.messages.broadcast.enabled", false),
+        readStringListMap(config.getConfigurationSection("rewards.messages.broadcast.byRewardKey"))
     );
   }
 

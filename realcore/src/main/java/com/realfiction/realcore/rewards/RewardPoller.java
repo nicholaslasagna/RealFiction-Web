@@ -127,7 +127,12 @@ public final class RewardPoller {
     }
 
     plugin.getLogger().info("Delivering rewardId=" + reward.id + " action=" + reward.action() + " rewardKey=" + reward.rewardKey);
-    return dispatcher.dispatch(reward);
+    return dispatcher.dispatch(reward).thenApply(result -> {
+      if (result != null && result.delivered()) {
+        plugin.getLogger().info("Delivered rewardId=" + reward.id + " rewardKey=" + reward.rewardKey);
+      }
+      return result;
+    });
   }
 
   private CompletableFuture<Void> flushPendingAcks() {

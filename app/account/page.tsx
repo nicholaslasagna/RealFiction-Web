@@ -89,6 +89,9 @@ type RewardRow = {
     displayName?: string
     productName?: string
     description?: string
+    vote_site?: string
+    milestone?: number
+    monthly_votes?: number
   } | null
 }
 
@@ -212,7 +215,45 @@ function rewardLabel(status: string) {
   return labels[status] ?? "Checking"
 }
 
-function rewardName(row: RewardRow) {
+const voteRewardAmounts: Record<string, number> = {
+  "vote.standard": 250,
+  "vote.milestone.5": 500,
+  "vote.milestone.15": 1000,
+  "vote.milestone.30": 1500,
+  "vote.milestone.75": 2500
+}
+
+const voteSiteNames: Record<string, string> = {
+  "minecraftservers-org": "MinecraftServers.org",
+  planetminecraft: "PlanetMinecraft",
+  "minecraft-mp": "Minecraft-MP",
+  topg: "TopG",
+  "minecraft-menu": "Minecraft Menu",
+  "servers-minecraft": "Servers-Minecraft",
+  "minecraft-buzz": "Minecraft.Buzz",
+  curseforge: "CurseForge",
+  "mclist-io": "mclist.io",
+  mcsl: "MCSL"
+}
+
+function voteSiteName(slug?: string | null) {
+  if (!slug) {
+    return "a vote site"
+  }
+
+  return voteSiteNames[slug] ?? slug.replace(/[-_]/g, " ")
+}
+
+function rewardTitle(row: RewardRow) {
+  if (row.reward_key === "vote.standard") {
+    return `Voted on ${voteSiteName(row.payload?.vote_site)}`
+  }
+
+  if (row.reward_key.startsWith("vote.milestone.")) {
+    const milestone = row.payload?.milestone ?? Number(row.reward_key.replace("vote.milestone.", ""))
+    return `${milestone} vote bonus`
+  }
+
   if (row.payload?.displayName) {
     return row.payload.displayName
   }
@@ -223,9 +264,18 @@ function rewardName(row: RewardRow) {
 
   return row.reward_key
     .replace(/^product:/, "")
-    .replace(/^vote:/, "Vote reward: ")
-    .replace(/[-_]/g, " ")
+    .replace(/^vote\./, "Vote reward ")
+    .replace(/[._-]/g, " ")
     .replace(/\b\w/g, (letter) => letter.toUpperCase())
+}
+
+function rewardDetail(row: RewardRow) {
+  const amount = voteRewardAmounts[row.reward_key]
+  if (amount) {
+    return `Earned $${amount}`
+  }
+
+  return row.payload?.description ?? formatDate(row.created_at)
 }
 
 async function getAccountData(): Promise<AccountData> {
@@ -583,8 +633,10 @@ function RecentRewards({ rewards }: { rewards: RewardRow[] }) {
             <div key={reward.id} className="rounded-lg border border-white/10 bg-black/24 p-4">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <p className="font-semibold text-white">{rewardName(reward)}</p>
-                  <p className="mt-1 text-sm text-muted-foreground">{formatDate(reward.created_at)}</p>
+                  <p className="font-semibold text-white">{rewardTitle(reward)}</p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {rewardDetail(reward)} · {formatDate(reward.created_at)}
+                  </p>
                 </div>
                 <Badge variant={reward.status === "delivered" ? "success" : "outline"}>
                   {rewardLabel(reward.status)}

@@ -159,6 +159,11 @@ Placeholders:
 - `{quantity}`
 - `{serverId}`
 - `{productSlug}`
+- `{voteSite}`
+
+Vote reward player messages are also configured in `config.yml` under
+`rewards.messages`. Broadcasts are disabled by default and can be enabled only
+when staff want public vote announcements.
 
 Keep command rewards fair. Do not add paid kits, combat boosts, economy multipliers for store purchases, claim advantages, PvP advantages, or server-balance perks.
 

@@ -165,6 +165,9 @@ Implemented flow:
 11. When monthly votes hit a milestone (5, 15, 30, 75), a safe milestone reward is queued with a per-month idempotency key.
 
 Vote routes do not grant rewards directly.
+NuVotifier backend plugin-messaging forwarding is not required for this path;
+disable it once RealVoteBridge is the confirmed receiver unless another
+non-reward backend listener still needs those events.
 
 ## Reward Delivery
 

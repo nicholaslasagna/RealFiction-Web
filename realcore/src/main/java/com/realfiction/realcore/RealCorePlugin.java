@@ -212,7 +212,8 @@ public final class RealCorePlugin extends JavaPlugin {
         || !getConfig().isConfigurationSection("doubleJump")
         || !getConfig().isConfigurationSection("walkSpeed")
         || !getConfig().isConfigurationSection("proxy.serverAliases")
-        || !getConfig().isConfigurationSection("cosmetics");
+        || !getConfig().isConfigurationSection("cosmetics")
+        || !getConfig().isConfigurationSection("rewards.messages");
     if (!missingLobbyDefaults) {
       return;
     }

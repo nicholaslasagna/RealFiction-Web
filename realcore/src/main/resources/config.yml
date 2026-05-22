@@ -41,7 +41,7 @@ rewards:
 
   # Console command rewards. These run from console after a reward is polled.
   # Placeholders: {player}, {uuid}, {rewardKey}, {rewardId}, {quantity},
-  # {serverId}, {productSlug}
+  # {serverId}, {productSlug}, {voteSite}
   commands:
     byRewardKey:
       vote.standard:
@@ -55,6 +55,35 @@ rewards:
       vote.milestone.75:
         - "eco give {player} 2500"
     byProductSlug: {}
+
+  # Friendly player messages after a reward is delivered. These also use the
+  # placeholders above and run safely from the server scheduler.
+  messages:
+    player:
+      byRewardKey:
+        vote.standard:
+          - "Thanks for voting for RealFiction! You earned $250."
+        vote.milestone.5:
+          - "Vote streak bonus! You earned an extra $500."
+        vote.milestone.15:
+          - "Vote streak bonus! You earned an extra $1000."
+        vote.milestone.30:
+          - "Vote streak bonus! You earned an extra $1500."
+        vote.milestone.75:
+          - "Huge vote streak bonus! You earned an extra $2500."
+    broadcast:
+      enabled: false
+      byRewardKey:
+        vote.standard:
+          - "{player} voted for RealFiction and earned a reward!"
+        vote.milestone.5:
+          - "{player} hit a 5 vote streak and earned a bonus!"
+        vote.milestone.15:
+          - "{player} hit a 15 vote streak and earned a bonus!"
+        vote.milestone.30:
+          - "{player} hit a 30 vote streak and earned a bonus!"
+        vote.milestone.75:
+          - "{player} hit a 75 vote streak and earned a bonus!"
 
 # ---------------------------------------------------------------------------
 # Lobby module (replaces PhoenixLobby). Everything below is local to this

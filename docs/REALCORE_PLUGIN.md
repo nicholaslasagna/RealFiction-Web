@@ -258,6 +258,12 @@ queued for RealCore. Entitlement and reward history is never deleted.
 6. RealCore polls and delivers the vote and milestone rewards on the backend server.
 7. RealCore acknowledges final status.
 
+NuVotifier backend plugin-messaging forwarding is not part of the RealFiction
+reward path. It can be disabled after RealVoteBridge is confirmed active, as
+long as no other staff-approved backend plugin still needs forwarded vote
+events. Leaving it enabled is only harmless when backend vote listeners do not
+grant rewards.
+
 ## Package Layout
 
 ```text

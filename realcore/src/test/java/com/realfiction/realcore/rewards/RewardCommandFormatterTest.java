@@ -27,7 +27,10 @@ final class RewardCommandFormatterTest {
         false,
         Map.of(),
         Map.of("vote.standard", List.of("eco give {player} {quantity}")),
-        Map.of("lobby-flight", List.of("lp user {uuid} permission set {productSlug} true"))
+        Map.of("lobby-flight", List.of("lp user {uuid} permission set {productSlug} true")),
+        Map.of("vote.standard", List.of("Thanks for voting on {voteSite}, {player}!")),
+        false,
+        Map.of()
     );
 
     RewardPayload reward = new RewardPayload();
@@ -38,6 +41,7 @@ final class RewardCommandFormatterTest {
     reward.target.minecraftUsername = "RealPlayer";
     reward.delivery = new RewardPayload.Delivery();
     reward.delivery.productSlug = "lobby-flight";
+    reward.delivery.voteSite = "mclist.io";
     reward.delivery.quantity = 3;
 
     List<String> commands = RewardCommandFormatter.commandsFor(config, reward);
@@ -50,6 +54,10 @@ final class RewardCommandFormatterTest {
     assertEquals(
         "lp user 11111111-1111-1111-1111-111111111111 permission set lobby-flight true",
         RewardCommandFormatter.applyPlaceholders(commands.get(1), reward, config.serverId())
+    );
+    assertEquals(
+        "Thanks for voting on mclist.io, RealPlayer!",
+        RewardCommandFormatter.applyPlaceholders(config.playerMessagesByRewardKey().get("vote.standard").get(0), reward, config.serverId())
     );
   }
 }
