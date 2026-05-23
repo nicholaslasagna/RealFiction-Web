@@ -71,8 +71,8 @@ function formatSeconds(seconds: number) {
 
 function avatarUrl(uuid: string | null) {
   if (!uuid) return null
-  const cleaned = uuid.replace(/-/g, "").trim()
-  if (cleaned.length !== 32) return null
+  const cleaned = uuid.replace(/-/g, "").trim().toLowerCase()
+  if (!/^[0-9a-f]{32}$/.test(cleaned)) return null
   return `https://crafatar.com/avatars/${cleaned}?size=48&overlay`
 }
 
