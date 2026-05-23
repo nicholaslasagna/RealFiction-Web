@@ -11,6 +11,8 @@ import org.bukkit.configuration.ConfigurationSection;
  *   <li>{@code rewards} - the website reward delivery poller (votes + store grants)</li>
  *   <li>{@code cosmetics} - the in-game cosmetics GUI/manager</li>
  *   <li>{@code lobby} - the lobby manager (menus, scoreboard, flight, protection, items)</li>
+ *   <li>{@code playtime} - network playtime session tracking</li>
+ *   <li>{@code stats} - generic stat leaderboard cache for placeholders</li>
  * </ul>
  * The remaining flags ({@code menus}, {@code scoreboards}, {@code economy},
  * {@code votes}, {@code punishments}, {@code chat}) are parsed and reported for
@@ -32,10 +34,11 @@ public record ServerModules(
     boolean votes,
     boolean punishments,
     boolean chat,
-    boolean playtime
+    boolean playtime,
+    boolean stats
 ) {
   public static ServerModules defaults() {
-    return new ServerModules(true, true, true, true, true, true, true, false, false, true);
+    return new ServerModules(true, true, true, true, true, true, true, false, false, true, true);
   }
 
   public static ServerModules from(ConfigurationSection section) {
@@ -57,7 +60,9 @@ public record ServerModules(
         section.getBoolean("chat", false),
         // Network playtime tracking; enabled everywhere by default so totals
         // span every backend.
-        section.getBoolean("playtime", true)
+        section.getBoolean("playtime", true),
+        // Generic stat leaderboard cache (playtime/votes/economy/...).
+        section.getBoolean("stats", true)
     );
   }
 
@@ -73,6 +78,7 @@ public record ServerModules(
     appendFlag(builder, "punishments", punishments);
     appendFlag(builder, "chat", chat);
     appendFlag(builder, "playtime", playtime);
+    appendFlag(builder, "stats", stats);
     return builder.toString();
   }
 

@@ -3,7 +3,9 @@ package com.realfiction.realcore.command;
 import com.realfiction.realcore.RealCorePlugin;
 import com.realfiction.realcore.config.RealCoreConfig;
 import com.realfiction.realcore.lobby.LobbyManager;
+import com.realfiction.realcore.playtime.PlaytimeTracker;
 import com.realfiction.realcore.scheduler.RealCoreScheduler;
+import com.realfiction.realcore.stats.NetworkStatService;
 import java.util.ArrayList;
 import java.util.List;
 import org.bukkit.ChatColor;
@@ -35,6 +37,8 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
         return handleReload(sender);
       case "status":
         return handleStatus(sender);
+      case "stats":
+        return handleStats(sender);
       case "rewards":
         return handleRewards(sender);
       case "link":
@@ -197,7 +201,7 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
       send(sender, ChatColor.YELLOW + "Use " + ChatColor.WHITE + "/" + label + " cosmetics" + ChatColor.YELLOW + " to open cosmetics.");
     }
     if (sender.hasPermission("realcore.admin")) {
-      send(sender, ChatColor.YELLOW + "Admin: " + ChatColor.WHITE + "/" + label + " status|rewards|reload|setspawn");
+      send(sender, ChatColor.YELLOW + "Admin: " + ChatColor.WHITE + "/" + label + " status|stats|rewards|reload|setspawn");
     }
     return true;
   }
@@ -241,6 +245,63 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
           + ChatColor.GRAY + " (" + lobby.menuRegistry().count() + ")");
     }
     send(sender, ChatColor.YELLOW + "Cosmetics: " + statusText(plugin.cosmeticsManager() != null));
+    appendPlaytimeStatus(sender, config);
+    appendNetworkStatsStatus(sender, config);
+  }
+
+  private void appendPlaytimeStatus(CommandSender sender, RealCoreConfig config) {
+    if (!config.modules().playtime()) {
+      send(sender, ChatColor.YELLOW + "Playtime: " + ChatColor.GRAY + "disabled (module off)");
+      return;
+    }
+    PlaytimeTracker tracker = plugin.playtimeTracker();
+    if (tracker == null) {
+      send(sender, ChatColor.YELLOW + "Playtime: " + ChatColor.RED + "not ready");
+      return;
+    }
+    send(sender, ChatColor.YELLOW + "Playtime: " + ChatColor.GREEN + "ready"
+        + ChatColor.GRAY + " (" + tracker.activeSessionCount() + " active, "
+        + tracker.pendingEventCount() + " pending)");
+  }
+
+  private void appendNetworkStatsStatus(CommandSender sender, RealCoreConfig config) {
+    if (!config.modules().stats()) {
+      send(sender, ChatColor.YELLOW + "Stat cache: " + ChatColor.GRAY + "disabled (module off)");
+      return;
+    }
+    NetworkStatService stats = plugin.networkStatService();
+    if (stats == null) {
+      send(sender, ChatColor.YELLOW + "Stat cache: " + ChatColor.RED + "not ready");
+      return;
+    }
+    long ago = stats.lastRefreshAgoSeconds();
+    send(sender, ChatColor.YELLOW + "Stat cache: " + ChatColor.GREEN + stats.cachedKeyCount() + " keys"
+        + ChatColor.GRAY + ", top " + stats.configuredTopN()
+        + ", every " + stats.refreshIntervalSeconds() + "s");
+    send(sender, ChatColor.YELLOW + "Stat refresh: " + ChatColor.WHITE + stats.refreshSuccessCount()
+        + " ok / " + stats.refreshFailureCount() + " fail"
+        + (ago >= 0 ? ChatColor.GRAY + ", last " + ago + "s ago" : ChatColor.GRAY + ", never refreshed"));
+    String failure = stats.lastFailureMessage();
+    if (failure != null && !failure.isBlank()) {
+      send(sender, ChatColor.YELLOW + "Last stat error: " + ChatColor.RED + failure);
+    }
+    send(sender, ChatColor.YELLOW + "Stat keys: " + ChatColor.WHITE + String.join(", ", stats.configuredStatKeys()));
+  }
+
+  private boolean handleStats(CommandSender sender) {
+    if (!sender.hasPermission("realcore.admin")) {
+      send(sender, ChatColor.RED + "You do not have permission to do that.");
+      return true;
+    }
+    RealCoreConfig config = plugin.realCoreConfig();
+    if (config == null) {
+      send(sender, ChatColor.RED + "Config is not loaded.");
+      return true;
+    }
+    send(sender, ChatColor.GOLD + "RealCore Network Stats");
+    appendPlaytimeStatus(sender, config);
+    appendNetworkStatsStatus(sender, config);
+    return true;
   }
 
   private String statusText(boolean ok) {
@@ -274,6 +335,7 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
       }
       if (sender.hasPermission("realcore.admin")) {
         options.add("status");
+        options.add("stats");
         options.add("rewards");
         options.add("reload");
         options.add("setspawn");

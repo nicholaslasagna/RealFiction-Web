@@ -2,6 +2,9 @@ package com.realfiction.realcore.playtime;
 
 import com.realfiction.realcore.RealCorePlugin;
 import com.realfiction.realcore.api.dto.PlaytimeLeaderboardResponse;
+import com.realfiction.realcore.api.dto.StatLeaderboardResponse;
+import com.realfiction.realcore.stats.NetworkStatService;
+import com.realfiction.realcore.stats.StatPlaceholders;
 import java.util.List;
 import java.util.Locale;
 import me.clip.placeholderapi.expansion.PlaceholderExpansion;
@@ -17,6 +20,10 @@ import org.bukkit.OfflinePlayer;
  *   <li>{@code %realcore_playtime_total_top_<n>_name%} / {@code _time} / {@code _seconds}</li>
  *   <li>{@code %realcore_playtime_<group>_top_<n>_name%} (lobby/smp/factions/anarchy/arcade)</li>
  *   <li>{@code %realcore_playtime_player_total%}</li>
+ *   <li>{@code %realcore_stat_<key>_top_<n>_name|value|time|seconds|uuid%} — for keys
+ *       starting with {@code playtime.}, {@code _time} / {@code _seconds} format seconds;
+ *       {@code _value} stays raw. Uses {@link com.realfiction.realcore.stats.NetworkStatService}
+ *       (not the legacy playtime leaderboard cache; see that class for dual-cache notes).</li>
  * </ul>
  */
 public final class PlaytimePlaceholders extends PlaceholderExpansion {
@@ -50,12 +57,19 @@ public final class PlaytimePlaceholders extends PlaceholderExpansion {
 
   @Override
   public String onRequest(OfflinePlayer player, String params) {
+    String raw = params == null ? "" : params.toLowerCase(Locale.ROOT);
+
+    // Generic, reusable stat placeholders: stat_<key>_top_<n>_<name|value|uuid>.
+    if (raw.startsWith("stat_")) {
+      return statPlaceholder(raw.substring("stat_".length()));
+    }
+
+    // Backwards-compatible playtime placeholders below.
     PlaytimeTracker tracker = plugin.playtimeTracker();
-    String key = params == null ? "" : params.toLowerCase(Locale.ROOT);
-    if (!key.startsWith("playtime_")) {
+    if (!raw.startsWith("playtime_")) {
       return null;
     }
-    key = key.substring("playtime_".length());
+    String key = raw.substring("playtime_".length());
 
     if (key.equals("player_total")) {
       if (tracker == null || player == null) {
@@ -96,5 +110,32 @@ public final class PlaytimePlaceholders extends PlaceholderExpansion {
       };
     }
     return null;
+  }
+
+  private String statPlaceholder(String afterStat) {
+    StatPlaceholders.TopRequest top = StatPlaceholders.parseTop(afterStat);
+    if (top == null) {
+      return null;
+    }
+    NetworkStatService stats = plugin.networkStatService();
+    List<StatLeaderboardResponse.Entry> board = stats == null ? List.of() : stats.top(top.statKey());
+    boolean playtime = StatPlaceholders.isPlaytimeStatKey(top.statKey());
+    if (top.rank() < 1 || top.rank() > board.size()) {
+      return switch (top.field()) {
+        case "name" -> "";
+        case "time" -> playtime ? "0m" : "0";
+        default -> "0";
+      };
+    }
+    StatLeaderboardResponse.Entry entry = board.get(top.rank() - 1);
+    long seconds = (long) entry.value;
+    return switch (top.field()) {
+      case "name" -> entry.displayName != null ? entry.displayName : "?";
+      case "value" -> StatPlaceholders.formatValue(entry.value);
+      case "time" -> playtime ? PlaytimeFormat.human(seconds) : StatPlaceholders.formatValue(entry.value);
+      case "seconds" -> playtime ? Long.toString(seconds) : StatPlaceholders.formatValue(entry.value);
+      case "uuid" -> entry.subjectId != null ? entry.subjectId : "";
+      default -> null;
+    };
   }
 }

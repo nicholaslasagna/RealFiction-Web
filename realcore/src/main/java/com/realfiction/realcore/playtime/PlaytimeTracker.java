@@ -8,6 +8,7 @@ import com.realfiction.realcore.api.dto.PlaytimeSyncRequest;
 import com.realfiction.realcore.config.PlaytimeConfig;
 import com.realfiction.realcore.config.RealCoreConfig;
 import com.realfiction.realcore.scheduler.RealCoreScheduler;
+import com.realfiction.realcore.stats.NetworkStatService;
 import com.realfiction.realcore.scheduler.ScheduledTaskHandle;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -33,6 +34,11 @@ import java.util.logging.Level;
  * <p>Each connection gets a client session id, and every report carries the
  * cumulative "seconds since join" for that session, so the website adds only the
  * positive delta - duplicate/retried flushes (including a re-sent end) add zero.
+ *
+ * <p>Leaderboard cache here backs legacy {@code %realcore_playtime_*%} placeholders
+ * ({@code playtime_leaderboard} RPC). Generic {@code %realcore_stat_playtime.*%}
+ * placeholders use {@link NetworkStatService} instead; see that class for how the
+ * two caches converge.
  */
 public final class PlaytimeTracker {
   private final RealCorePlugin plugin;
@@ -188,6 +194,10 @@ public final class PlaytimeTracker {
         }
       } else {
         lastSyncAtMillis = System.currentTimeMillis();
+        NetworkStatService stats = plugin.networkStatService();
+        if (stats != null) {
+          stats.refreshPlaytimeKeys();
+        }
       }
       return null;
     });

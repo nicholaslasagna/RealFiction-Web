@@ -14,11 +14,13 @@ import com.realfiction.realcore.lobby.LobbyListener;
 import com.realfiction.realcore.lobby.LobbyManager;
 import com.realfiction.realcore.lobby.LobbyProtectionListener;
 import com.realfiction.realcore.config.PlaytimeConfig;
+import com.realfiction.realcore.config.StatsConfig;
 import com.realfiction.realcore.luckperms.LuckPermsService;
 import com.realfiction.realcore.menu.MenuListener;
 import com.realfiction.realcore.playtime.PlaytimeListener;
 import com.realfiction.realcore.playtime.PlaytimePlaceholders;
 import com.realfiction.realcore.playtime.PlaytimeTracker;
+import com.realfiction.realcore.stats.NetworkStatService;
 import com.realfiction.realcore.rewards.RewardDispatcher;
 import com.realfiction.realcore.rewards.RewardPoller;
 import com.realfiction.realcore.scheduler.RealCoreScheduler;
@@ -47,6 +49,7 @@ public final class RealCorePlugin extends JavaPlugin {
   private final AtomicBoolean duplicateServerIdHandled = new AtomicBoolean(false);
   private ScheduledTaskHandle heartbeatTask;
   private PlaytimeTracker playtimeTracker;
+  private NetworkStatService networkStatService;
 
   @Override
   public void onEnable() {
@@ -163,6 +166,11 @@ public final class RealCorePlugin extends JavaPlugin {
       } else {
         getLogger().info("Playtime module disabled by modules.playtime.");
       }
+      if (shouldRunNetworkStats()) {
+        setupNetworkStats();
+      } else {
+        getLogger().info("Network stat cache disabled (modules.stats or stats.enabled).");
+      }
       if (logSummary) {
         logStartupSummary("reloaded", registeredCommandLabels());
       }
@@ -223,6 +231,10 @@ public final class RealCorePlugin extends JavaPlugin {
     return playtimeTracker;
   }
 
+  public NetworkStatService networkStatService() {
+    return networkStatService;
+  }
+
   private List<String> registerCommands(RealFictionCommand commandExecutor) {
     List<String> labels = List.of("realfiction", "rf", "realcore", "cosmetics");
     for (String label : labels) {
@@ -263,6 +275,20 @@ public final class RealCorePlugin extends JavaPlugin {
       playtime = "ready (" + playtimeTracker.activeSessionCount() + " active, "
           + playtimeTracker.pendingEventCount() + " pending)";
     }
+    String stats;
+    if (config != null && !shouldRunNetworkStats()) {
+      stats = "disabled";
+    } else if (networkStatService == null) {
+      stats = "not ready";
+    } else {
+      long ago = networkStatService.lastRefreshAgoSeconds();
+      stats = networkStatService.cachedKeyCount() + " keys, top "
+          + networkStatService.configuredTopN()
+          + ", refresh " + networkStatService.refreshIntervalSeconds() + "s, "
+          + networkStatService.refreshSuccessCount() + " ok/"
+          + networkStatService.refreshFailureCount() + " fail"
+          + (ago >= 0 ? ", last " + ago + "s ago" : ", never refreshed");
+    }
     String commands = "/" + String.join(", /", commandLabels);
     String menus = lobbyManager == null ? "not loaded" : String.join(", ", lobbyManager.menuRegistry().keys());
 
@@ -280,6 +306,7 @@ public final class RealCorePlugin extends JavaPlugin {
     getLogger().info("| LuckPerms: " + luckPerms);
     getLogger().info("| Cosmetics: " + cosmetics);
     getLogger().info("| Playtime: " + playtime);
+    getLogger().info("| Stats: " + stats);
     getLogger().info("| Commands: " + commands);
     getLogger().info("| Menus: " + (menus.isBlank() ? "none" : menus));
     getLogger().info("+--------------------------------------------------+");
@@ -368,6 +395,23 @@ public final class RealCorePlugin extends JavaPlugin {
     });
   }
 
+  private boolean shouldRunNetworkStats() {
+    if (realCoreConfig == null || !realCoreConfig.modules().stats()) {
+      return false;
+    }
+    return StatsConfig.from(getConfig().getConfigurationSection("stats")).enabled();
+  }
+
+  private void setupNetworkStats() {
+    networkStatService = new NetworkStatService(
+        this,
+        realCoreConfig,
+        StatsConfig.from(getConfig().getConfigurationSection("stats")),
+        scheduler,
+        apiClient);
+    networkStatService.start();
+  }
+
   private void setupPlaceholders() {
     if (getServer().getPluginManager().getPlugin("PlaceholderAPI") == null) {
       return;
@@ -398,6 +442,10 @@ public final class RealCorePlugin extends JavaPlugin {
 
   private void stopServices(boolean closeScheduler) {
     servicesLoaded = false;
+    if (networkStatService != null) {
+      networkStatService.stop();
+      networkStatService = null;
+    }
     if (playtimeTracker != null) {
       playtimeTracker.stop();
       playtimeTracker = null;
