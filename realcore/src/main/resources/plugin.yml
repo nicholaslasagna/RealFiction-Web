@@ -2,6 +2,10 @@ name: RealCore
 version: ${project.version}
 main: com.realfiction.realcore.RealCorePlugin
 api-version: "1.21"
+# RealCore uses the region/Folia-aware scheduler abstraction (FoliaScheduler),
+# never touches the Bukkit API off-thread, and keeps DB/HTTP work async. This
+# flag lets Folia load the plugin instead of refusing it.
+folia-supported: true
 author: RealFiction
 description: RealFiction account linking, reward delivery, and lobby.
 softdepend:
