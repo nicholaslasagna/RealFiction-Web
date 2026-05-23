@@ -13,13 +13,18 @@ import com.realfiction.realcore.lobby.LobbyItemListener;
 import com.realfiction.realcore.lobby.LobbyListener;
 import com.realfiction.realcore.lobby.LobbyManager;
 import com.realfiction.realcore.lobby.LobbyProtectionListener;
+import com.realfiction.realcore.config.PlaytimeConfig;
 import com.realfiction.realcore.luckperms.LuckPermsService;
 import com.realfiction.realcore.menu.MenuListener;
+import com.realfiction.realcore.playtime.PlaytimeListener;
+import com.realfiction.realcore.playtime.PlaytimePlaceholders;
+import com.realfiction.realcore.playtime.PlaytimeTracker;
 import com.realfiction.realcore.rewards.RewardDispatcher;
 import com.realfiction.realcore.rewards.RewardPoller;
 import com.realfiction.realcore.scheduler.RealCoreScheduler;
 import com.realfiction.realcore.scheduler.ScheduledTaskHandle;
 import com.realfiction.realcore.scheduler.SchedulerFactory;
+import org.bukkit.entity.Player;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
@@ -41,6 +46,7 @@ public final class RealCorePlugin extends JavaPlugin {
   private final String instanceId = UUID.randomUUID().toString();
   private final AtomicBoolean duplicateServerIdHandled = new AtomicBoolean(false);
   private ScheduledTaskHandle heartbeatTask;
+  private PlaytimeTracker playtimeTracker;
 
   @Override
   public void onEnable() {
@@ -62,6 +68,12 @@ public final class RealCorePlugin extends JavaPlugin {
     } else {
       getLogger().info("Lobby module disabled by modules.lobby.");
     }
+
+    // Playtime listener is always registered (no-ops when the tracker is off);
+    // it late-binds the tracker so a reload can swap it. PlaceholderAPI is
+    // optional and only touched when present.
+    getServer().getPluginManager().registerEvents(new PlaytimeListener(this), this);
+    setupPlaceholders();
 
     RealFictionCommand commandExecutor = new RealFictionCommand(this);
     List<String> commandLabels = registerCommands(commandExecutor);
@@ -146,6 +158,11 @@ public final class RealCorePlugin extends JavaPlugin {
         getLogger().info("Reward delivery poller disabled by modules.rewards.");
       }
       startHeartbeat();
+      if (realCoreConfig.modules().playtime()) {
+        setupPlaytime();
+      } else {
+        getLogger().info("Playtime module disabled by modules.playtime.");
+      }
       if (logSummary) {
         logStartupSummary("reloaded", registeredCommandLabels());
       }
@@ -202,6 +219,10 @@ public final class RealCorePlugin extends JavaPlugin {
     return cosmeticsManager;
   }
 
+  public PlaytimeTracker playtimeTracker() {
+    return playtimeTracker;
+  }
+
   private List<String> registerCommands(RealFictionCommand commandExecutor) {
     List<String> labels = List.of("realfiction", "rf", "realcore", "cosmetics");
     for (String label : labels) {
@@ -233,6 +254,15 @@ public final class RealCorePlugin extends JavaPlugin {
     String websiteAuth = config != null && config.hmacSecretConfigured() ? "ready" : "not ready";
     String luckPerms = luckPermsAvailable() ? "ready" : "not ready";
     String cosmetics = cosmeticsManager == null ? "not loaded" : "ready";
+    String playtime;
+    if (config != null && !config.modules().playtime()) {
+      playtime = "disabled (module off)";
+    } else if (playtimeTracker == null) {
+      playtime = "not ready";
+    } else {
+      playtime = "ready (" + playtimeTracker.activeSessionCount() + " active, "
+          + playtimeTracker.pendingEventCount() + " pending)";
+    }
     String commands = "/" + String.join(", /", commandLabels);
     String menus = lobbyManager == null ? "not loaded" : String.join(", ", lobbyManager.menuRegistry().keys());
 
@@ -249,6 +279,7 @@ public final class RealCorePlugin extends JavaPlugin {
     getLogger().info("| Website auth: " + websiteAuth);
     getLogger().info("| LuckPerms: " + luckPerms);
     getLogger().info("| Cosmetics: " + cosmetics);
+    getLogger().info("| Playtime: " + playtime);
     getLogger().info("| Commands: " + commands);
     getLogger().info("| Menus: " + (menus.isBlank() ? "none" : menus));
     getLogger().info("+--------------------------------------------------+");
@@ -318,6 +349,37 @@ public final class RealCorePlugin extends JavaPlugin {
     }
   }
 
+  private void setupPlaytime() {
+    playtimeTracker = new PlaytimeTracker(
+        this,
+        realCoreConfig,
+        PlaytimeConfig.from(getConfig().getConfigurationSection("playtime")),
+        scheduler,
+        apiClient);
+    playtimeTracker.start();
+
+    // Seed players already online (e.g. after /rf reload). Capture the online
+    // list on the global region thread so this stays Folia-safe.
+    PlaytimeTracker tracker = playtimeTracker;
+    scheduler.runGlobal(() -> {
+      for (Player player : getServer().getOnlinePlayers()) {
+        tracker.onJoin(player.getUniqueId(), player.getName());
+      }
+    });
+  }
+
+  private void setupPlaceholders() {
+    if (getServer().getPluginManager().getPlugin("PlaceholderAPI") == null) {
+      return;
+    }
+    try {
+      new PlaytimePlaceholders(this, getDescription().getVersion()).register();
+      getLogger().info("Registered RealCore PlaceholderAPI expansion (realcore).");
+    } catch (Throwable error) {
+      getLogger().warning("Could not register PlaceholderAPI expansion: " + error.getMessage());
+    }
+  }
+
   private void mergeBundledConfigDefaults() {
     reloadConfig();
     boolean missingLobbyDefaults = !getConfig().isConfigurationSection("menus")
@@ -336,6 +398,10 @@ public final class RealCorePlugin extends JavaPlugin {
 
   private void stopServices(boolean closeScheduler) {
     servicesLoaded = false;
+    if (playtimeTracker != null) {
+      playtimeTracker.stop();
+      playtimeTracker = null;
+    }
     if (heartbeatTask != null) {
       heartbeatTask.cancel();
       heartbeatTask = null;

@@ -6,6 +6,7 @@ author: RealFiction
 description: RealFiction account linking, reward delivery, and lobby.
 softdepend:
   - LuckPerms
+  - PlaceholderAPI
 commands:
   realfiction:
     description: RealFiction linking, rewards, and lobby commands.

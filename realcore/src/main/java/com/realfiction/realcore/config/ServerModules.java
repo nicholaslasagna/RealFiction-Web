@@ -31,10 +31,11 @@ public record ServerModules(
     boolean economy,
     boolean votes,
     boolean punishments,
-    boolean chat
+    boolean chat,
+    boolean playtime
 ) {
   public static ServerModules defaults() {
-    return new ServerModules(true, true, true, true, true, true, true, false, false);
+    return new ServerModules(true, true, true, true, true, true, true, false, false, true);
   }
 
   public static ServerModules from(ConfigurationSection section) {
@@ -53,7 +54,10 @@ public record ServerModules(
         section.getBoolean("economy", true),
         votes,
         section.getBoolean("punishments", false),
-        section.getBoolean("chat", false)
+        section.getBoolean("chat", false),
+        // Network playtime tracking; enabled everywhere by default so totals
+        // span every backend.
+        section.getBoolean("playtime", true)
     );
   }
 
@@ -68,6 +72,7 @@ public record ServerModules(
     appendFlag(builder, "votes", votes);
     appendFlag(builder, "punishments", punishments);
     appendFlag(builder, "chat", chat);
+    appendFlag(builder, "playtime", playtime);
     return builder.toString();
   }
 

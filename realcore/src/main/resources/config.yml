@@ -40,6 +40,27 @@ modules:
   votes: true
   punishments: false
   chat: false
+  # Network playtime tracking; keep on for every backend so totals span the
+  # whole network.
+  playtime: true
+
+# Network playtime tracking (feeds the "Top Players" leaderboard/holograms).
+# Each backend records its own sessions; the website sums them per player.
+playtime:
+  # How often active sessions are reported to the website.
+  flushIntervalSeconds: 60
+  # How often the leaderboard cache is refreshed (for placeholders/holograms).
+  leaderboardRefreshSeconds: 300
+  # How many entries each leaderboard placeholder set exposes.
+  leaderboardSize: 10
+  # Which boards to cache. 'all' is the network-wide total.
+  leaderboardGroups:
+    - all
+    - lobby
+    - smp
+    - factions
+    - anarchy
+    - arcade
 
 capabilities:
   - luckperms
