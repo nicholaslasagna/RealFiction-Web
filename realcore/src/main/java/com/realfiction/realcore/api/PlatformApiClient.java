@@ -14,6 +14,8 @@ import com.realfiction.realcore.api.dto.PlaytimeSyncRequest;
 import com.realfiction.realcore.api.dto.PlaytimeSyncResponse;
 import com.realfiction.realcore.api.dto.PollRewardsRequest;
 import com.realfiction.realcore.api.dto.PollRewardsResponse;
+import com.realfiction.realcore.api.dto.StatEventsRequest;
+import com.realfiction.realcore.api.dto.StatEventsResponse;
 import com.realfiction.realcore.api.dto.StatLeaderboardRequest;
 import com.realfiction.realcore.api.dto.StatLeaderboardResponse;
 import com.realfiction.realcore.config.RealCoreConfig;
@@ -67,6 +69,10 @@ public final class PlatformApiClient implements Closeable {
 
   public CompletableFuture<StatLeaderboardResponse> fetchStatLeaderboard(StatLeaderboardRequest request) {
     return post("/api/plugin/stats/leaderboard", request, StatLeaderboardResponse.class);
+  }
+
+  public CompletableFuture<StatEventsResponse> postStatEvents(StatEventsRequest request) {
+    return post("/api/plugin/stats/events", request, StatEventsResponse.class);
   }
 
   private <T> CompletableFuture<T> post(String path, Object payload, Class<T> responseType) {

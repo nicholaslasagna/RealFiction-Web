@@ -79,6 +79,35 @@ stats:
     - playtime.factions
     - playtime.anarchy
     - playtime.arcade
+  # Buffered async writer for stat producers (kills/deaths/blocks/votes/money).
+  # Producers call writer.increment/set in-memory; the writer batches and POSTs
+  # to /api/plugin/stats/events on the schedule below. Folia-safe by design:
+  # producers never touch DB/network on the call path.
+  writer:
+    # How often the writer drains its in-memory buffer and POSTs a batch.
+    # 30s is a good balance between freshness and DB pressure.
+    flushSeconds: 30
+    # Hard cap on (statKey, subject, mode) entries held in memory across the
+    # working buffer + retry deque. Excess events are dropped and counted.
+    bufferSize: 50000
+  # Producer toggles. Each producer is gated so a backend can opt out without a
+  # rebuild; turning a producer off swaps the listener to a no-op on /rf reload.
+  # economyMirror requires Vault and is OFF by default; the rest are on.
+  producers:
+    # PlayerDeathEvent -> kills.total / kills.<group>, deaths.total / deaths.<group>
+    killsDeaths: true
+    # BlockBreakEvent -> blocks_broken.total / blocks_broken.<group>
+    blocksBroken: true
+    # vote.standard reward delivery -> votes.total / votes.<group>
+    # Idempotent via the existing reward ledger - only fresh deliveries count.
+    votes: true
+    # Mirror Vault economy balance -> money.total (set mode). money.* is plugin-
+    # only on the website (never in the public leaderboard allowlist). Defaults
+    # OFF: enable on exactly one backend, ideally the one with the authoritative
+    # economy plugin loaded. Requires Vault + an Economy provider; logs once and
+    # no-ops if either is missing.
+    economyMirror: false
+    economyMirrorSeconds: 300
 
 capabilities:
   - luckperms
