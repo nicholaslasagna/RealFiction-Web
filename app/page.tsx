@@ -13,7 +13,9 @@ import {
 
 import { CopyServerButton } from "@/components/copy-server-button"
 import { LivePlayerCount } from "@/components/live-player-count"
+import { NetworkHeroStats } from "@/components/network-hero-stats"
 import { Reveal } from "@/components/reveal"
+import { TopPlayerSpotlight } from "@/components/top-player-spotlight"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { gamemodes, mapEndpoints } from "@/lib/data"
@@ -88,6 +90,13 @@ export default function HomePage() {
               </div>
             </div>
           </Reveal>
+        </div>
+      </section>
+
+      <section className="container-shell pt-14 md:pt-20" aria-label="Live network">
+        <div className="grid gap-5 lg:grid-cols-[1.2fr_1fr]">
+          <NetworkHeroStats />
+          <TopPlayerSpotlight />
         </div>
       </section>
 
