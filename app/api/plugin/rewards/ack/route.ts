@@ -43,10 +43,10 @@ export async function POST(request: Request) {
 
     for (const delivery of parsed.data.deliveries) {
       const { data, error } = await callServiceRoleRpc<Array<{
-        status?: string
-        delivered_at?: string | null
-        failed_at?: string | null
-        already_final?: boolean
+        ack_status?: string
+        ack_delivered_at?: string | null
+        ack_failed_at?: string | null
+        ack_already_final?: boolean
       }>>("ack_reward_delivery", {
         p_reward_id: delivery.rewardId,
         p_server_id: parsed.data.serverId,
@@ -77,10 +77,10 @@ export async function POST(request: Request) {
       results.push({
         rewardId: delivery.rewardId,
         accepted: true,
-        status: ack?.status ?? delivery.status,
-        deliveredAt: ack?.delivered_at ?? null,
-        failedAt: ack?.failed_at ?? null,
-        duplicate: Boolean(ack?.already_final)
+        status: ack?.ack_status ?? delivery.status,
+        deliveredAt: ack?.ack_delivered_at ?? null,
+        failedAt: ack?.ack_failed_at ?? null,
+        duplicate: Boolean(ack?.ack_already_final)
       })
     }
 
