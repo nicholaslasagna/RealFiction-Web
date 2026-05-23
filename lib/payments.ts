@@ -196,10 +196,20 @@ export async function createPayPalCheckout(order: CheckoutOrder, lines: Checkout
   }
 }
 
+// PayPal order IDs are alphanumeric tokens (e.g. "5O190127TN364715T"). Anything
+// else is rejected so a user-supplied value can never inject "/", "?", "..",
+// etc. into the request path and redirect this authenticated call to a different
+// PayPal API endpoint (SSRF / request forgery, CWE-918).
+const PAYPAL_ORDER_ID_PATTERN = /^[A-Za-z0-9]{5,64}$/
+
 export async function capturePayPalOrder(payPalOrderId: string) {
+  if (!PAYPAL_ORDER_ID_PATTERN.test(payPalOrderId)) {
+    throw new Error("Invalid PayPal order id.")
+  }
+
   const token = await getPayPalAccessToken()
   const baseUrl = getPayPalBaseUrl()
-  const response = await fetch(`${baseUrl}/v2/checkout/orders/${payPalOrderId}/capture`, {
+  const response = await fetch(`${baseUrl}/v2/checkout/orders/${encodeURIComponent(payPalOrderId)}/capture`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,

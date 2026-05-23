@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { avatarUrl, formatPlaytimeShort } from "@/lib/format-playtime"
 import { cn } from "@/lib/utils"
 
 type LeaderboardEntry = {
@@ -50,31 +51,6 @@ export const PLAYTIME_BOARDS: readonly PlaytimeBoard[] = [
 
 const TOP_LIMIT = 10
 const EMPTY_BOARD: BoardState = { status: "idle", entries: [], errorMessage: null, refreshedAt: null }
-
-function formatSeconds(seconds: number) {
-  if (!Number.isFinite(seconds) || seconds <= 0) {
-    return "0m"
-  }
-
-  const total = Math.trunc(seconds)
-  const days = Math.floor(total / 86_400)
-  const hours = Math.floor((total % 86_400) / 3600)
-  const minutes = Math.floor((total % 3600) / 60)
-
-  const parts: string[] = []
-  if (days > 0) parts.push(`${days}d`)
-  if (hours > 0) parts.push(`${hours}h`)
-  if (minutes > 0 || parts.length === 0) parts.push(`${minutes}m`)
-
-  return parts.join(" ")
-}
-
-function avatarUrl(uuid: string | null) {
-  if (!uuid) return null
-  const cleaned = uuid.replace(/-/g, "").trim().toLowerCase()
-  if (!/^[0-9a-f]{32}$/.test(cleaned)) return null
-  return `https://crafatar.com/avatars/${cleaned}?size=48&overlay`
-}
 
 export function PlaytimeLeaderboards() {
   const [activeKey, setActiveKey] = useState<string>(PLAYTIME_BOARDS[0].key)
@@ -290,7 +266,7 @@ function LeaderboardRows({ entries }: { entries: LeaderboardEntry[] }) {
 
             <span className="flex shrink-0 items-center gap-1.5 font-mono text-sm text-amber-100/90">
               <Clock3 className="h-3.5 w-3.5 text-amber-200/70" aria-hidden />
-              {formatSeconds(entry.value)}
+              {formatPlaytimeShort(entry.value)}
             </span>
           </li>
         )
