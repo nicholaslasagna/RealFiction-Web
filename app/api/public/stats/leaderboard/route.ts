@@ -4,10 +4,19 @@ import { callServiceRoleRpc } from "@/lib/supabase/service-role-rest"
 const MISSING_SCHEMA_CODES = new Set(["42883", "42P01", "42704"])
 
 // Public read of leaderboard snapshots for the website. Only non-sensitive,
-// leaderboard-style stats are exposed; everything else needs the authenticated
-// plugin route. The cache RPC throttles refreshes and the response is CDN-
-// cacheable, so this stays cheap under traffic.
-const PUBLIC_STAT_PREFIXES = ["playtime.", "votes."]
+// leaderboard-style stats are exposed; everything else (notably money.*) needs
+// the authenticated plugin route. The cache RPC throttles refreshes and the
+// response is CDN-cacheable, so this stays cheap under traffic.
+//
+// Keep this list synchronized with docs/REALCORE_PLUGIN.md and the RealCore
+// stats producers. Adding a prefix here is the public-exposure switch.
+const PUBLIC_STAT_PREFIXES = [
+  "playtime.",
+  "votes.",
+  "kills.",
+  "deaths.",
+  "blocks_broken."
+]
 
 type LeaderboardRow = {
   rank_position: number

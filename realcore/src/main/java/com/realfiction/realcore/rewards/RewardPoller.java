@@ -21,6 +21,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Consumer;
 import java.util.logging.Level;
 
 public final class RewardPoller {
@@ -42,6 +43,12 @@ public final class RewardPoller {
   private final Set<String> ackInFlight = ConcurrentHashMap.newKeySet();
   private final RewardLedger ledger;
   private ScheduledTaskHandle taskHandle;
+  // Observer for confirmed first-time deliveries. Used by VoteStatProducer to
+  // count vote.standard rewards exactly once per real vote. Writes to the stat
+  // writer's in-memory buffer only, so the poll/ack reliability path is
+  // unaffected by it. Defaults to a no-op so the poller works whether or not
+  // the stats subsystem is wired up.
+  private volatile Consumer<RewardPayload> deliveryObserver = ignored -> {};
 
   public RewardPoller(RealCorePlugin plugin, RealCoreConfig config, RealCoreScheduler scheduler, PlatformApiClient apiClient, RewardDispatcher dispatcher) {
     this.plugin = plugin;
@@ -212,10 +219,33 @@ public final class RewardPoller {
         // Persist BEFORE the ack so a subsequent ack failure cannot cause a
         // second execution on the next poll.
         ledger.markDelivered(reward.id);
+        notifyDeliveryObserver(reward);
         plugin.getLogger().info("Delivered reward " + reward.rewardKey + " -> " + who);
       }
       return result;
     });
+  }
+
+  /**
+   * Register a callback invoked exactly once per <em>fresh</em> reward delivery
+   * (after the ledger is updated, before the ack is queued). Re-acks of an
+   * already-delivered reward do <em>not</em> invoke the callback, preserving
+   * idempotent vote-counting. Setting {@code null} clears the callback.
+   *
+   * <p>The reliability contract (poll → deliver → ack) is independent of the
+   * observer: any throwable from the observer is caught and logged, never
+   * propagated.
+   */
+  public void setDeliveryObserver(Consumer<RewardPayload> observer) {
+    this.deliveryObserver = observer == null ? ignored -> {} : observer;
+  }
+
+  private void notifyDeliveryObserver(RewardPayload reward) {
+    try {
+      deliveryObserver.accept(reward);
+    } catch (Throwable error) {
+      plugin.getLogger().log(Level.WARNING, "Reward delivery observer threw; ignoring", error);
+    }
   }
 
   // ---- Acknowledgement pipeline -------------------------------------------

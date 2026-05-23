@@ -20,7 +20,15 @@ import com.realfiction.realcore.menu.MenuListener;
 import com.realfiction.realcore.playtime.PlaytimeListener;
 import com.realfiction.realcore.playtime.PlaytimePlaceholders;
 import com.realfiction.realcore.playtime.PlaytimeTracker;
+import com.realfiction.realcore.stats.BufferedNetworkStatWriter;
+import com.realfiction.realcore.stats.EconomyMirrorService;
 import com.realfiction.realcore.stats.NetworkStatService;
+import com.realfiction.realcore.stats.NetworkStatWriter;
+import com.realfiction.realcore.stats.listener.StatBlocksListener;
+import com.realfiction.realcore.stats.listener.StatKillsListener;
+import com.realfiction.realcore.stats.producer.BlockStatProducer;
+import com.realfiction.realcore.stats.producer.KillStatProducer;
+import com.realfiction.realcore.stats.producer.VoteStatProducer;
 import com.realfiction.realcore.rewards.RewardDispatcher;
 import com.realfiction.realcore.rewards.RewardPoller;
 import com.realfiction.realcore.scheduler.RealCoreScheduler;
@@ -50,6 +58,12 @@ public final class RealCorePlugin extends JavaPlugin {
   private ScheduledTaskHandle heartbeatTask;
   private PlaytimeTracker playtimeTracker;
   private NetworkStatService networkStatService;
+  private BufferedNetworkStatWriter networkStatWriter;
+  private EconomyMirrorService economyMirrorService;
+  // Listeners are registered exactly once on enable; producers are swapped on
+  // reload so the new writer/group are picked up without a restart.
+  private StatKillsListener statKillsListener;
+  private StatBlocksListener statBlocksListener;
 
   @Override
   public void onEnable() {
@@ -76,6 +90,12 @@ public final class RealCorePlugin extends JavaPlugin {
     // it late-binds the tracker so a reload can swap it. PlaceholderAPI is
     // optional and only touched when present.
     getServer().getPluginManager().registerEvents(new PlaytimeListener(this), this);
+    // Stat producer listeners are also late-bound: they register once and the
+    // inner producer reference is swapped on reload by setupNetworkStats().
+    statKillsListener = new StatKillsListener(noopKillProducer());
+    statBlocksListener = new StatBlocksListener(noopBlockProducer());
+    getServer().getPluginManager().registerEvents(statKillsListener, this);
+    getServer().getPluginManager().registerEvents(statBlocksListener, this);
     setupPlaceholders();
 
     RealFictionCommand commandExecutor = new RealFictionCommand(this);
@@ -235,6 +255,26 @@ public final class RealCorePlugin extends JavaPlugin {
     return networkStatService;
   }
 
+  /**
+   * Buffered, async stat writer. Producers (kills/deaths/blocks/votes/economy
+   * mirror) call {@link NetworkStatWriter#increment} or {@code set} from any
+   * thread; the buffered impl handles batching, retries, and Folia safety.
+   * Returns {@code null} when the stats module is off or the writer hasn't
+   * loaded yet (e.g. before {@code reloadRealCore}).
+   */
+  public NetworkStatWriter networkStatWriter() {
+    return networkStatWriter;
+  }
+
+  /** Concrete writer for /rf stats observability. */
+  public BufferedNetworkStatWriter bufferedNetworkStatWriter() {
+    return networkStatWriter;
+  }
+
+  public EconomyMirrorService economyMirrorService() {
+    return economyMirrorService;
+  }
+
   private List<String> registerCommands(RealFictionCommand commandExecutor) {
     List<String> labels = List.of("realfiction", "rf", "realcore", "cosmetics");
     for (String label : labels) {
@@ -282,12 +322,17 @@ public final class RealCorePlugin extends JavaPlugin {
       stats = "not ready";
     } else {
       long ago = networkStatService.lastRefreshAgoSeconds();
+      String writerSummary = networkStatWriter == null
+          ? ", writer not ready"
+          : ", writer " + networkStatWriter.queuedEventCount() + " queued/"
+              + networkStatWriter.flushIntervalSeconds() + "s";
       stats = networkStatService.cachedKeyCount() + " keys, top "
           + networkStatService.configuredTopN()
           + ", refresh " + networkStatService.refreshIntervalSeconds() + "s, "
           + networkStatService.refreshSuccessCount() + " ok/"
           + networkStatService.refreshFailureCount() + " fail"
-          + (ago >= 0 ? ", last " + ago + "s ago" : ", never refreshed");
+          + (ago >= 0 ? ", last " + ago + "s ago" : ", never refreshed")
+          + writerSummary;
     }
     String commands = "/" + String.join(", /", commandLabels);
     String menus = lobbyManager == null ? "not loaded" : String.join(", ", lobbyManager.menuRegistry().keys());
@@ -403,13 +448,70 @@ public final class RealCorePlugin extends JavaPlugin {
   }
 
   private void setupNetworkStats() {
+    StatsConfig statsConfig = StatsConfig.from(getConfig().getConfigurationSection("stats"));
     networkStatService = new NetworkStatService(
         this,
         realCoreConfig,
-        StatsConfig.from(getConfig().getConfigurationSection("stats")),
+        statsConfig,
         scheduler,
         apiClient);
     networkStatService.start();
+
+    networkStatWriter = new BufferedNetworkStatWriter(
+        realCoreConfig,
+        statsConfig.writer(),
+        scheduler,
+        apiClient::postStatEvents,
+        getLogger());
+    networkStatWriter.start();
+
+    bindStatProducers(statsConfig, realCoreConfig.serverGroup());
+  }
+
+  private void bindStatProducers(StatsConfig statsConfig, String group) {
+    StatsConfig.ProducerConfig producers = statsConfig.producers();
+    if (statKillsListener != null) {
+      statKillsListener.setProducer(producers.killsDeaths()
+          ? new KillStatProducer(networkStatWriter, group)
+          : noopKillProducer());
+    }
+    if (statBlocksListener != null) {
+      statBlocksListener.setProducer(producers.blocksBroken()
+          ? new BlockStatProducer(networkStatWriter, group)
+          : noopBlockProducer());
+    }
+    // Vote producer hooks the reward poller. Only enable when both stats and
+    // votes-producer flags are on AND reward polling is active. Disabling at
+    // runtime swaps the observer back to a no-op so a /rf reload cleanly stops
+    // counting without restarting the poller.
+    if (rewardPoller != null) {
+      if (producers.votes()) {
+        rewardPoller.setDeliveryObserver(new VoteStatProducer(networkStatWriter, group));
+      } else {
+        rewardPoller.setDeliveryObserver(null);
+      }
+    }
+    // Economy mirror is heavier; only start when explicitly enabled.
+    if (producers.economyMirror()) {
+      economyMirrorService = new EconomyMirrorService(this, networkStatWriter, scheduler, producers.economyMirrorInterval());
+      economyMirrorService.start();
+    }
+  }
+
+  private static KillStatProducer noopKillProducer() {
+    return new KillStatProducer(NoopStatWriter.INSTANCE, null);
+  }
+
+  private static BlockStatProducer noopBlockProducer() {
+    return new BlockStatProducer(NoopStatWriter.INSTANCE, null);
+  }
+
+  private static final class NoopStatWriter implements NetworkStatWriter {
+    private static final NoopStatWriter INSTANCE = new NoopStatWriter();
+
+    @Override public void increment(String statKey, java.util.UUID subject, String displayName, long delta) {}
+    @Override public void set(String statKey, java.util.UUID subject, String displayName, double value) {}
+    @Override public void requestFlush() {}
   }
 
   private void setupPlaceholders() {
@@ -442,6 +544,33 @@ public final class RealCorePlugin extends JavaPlugin {
 
   private void stopServices(boolean closeScheduler) {
     servicesLoaded = false;
+    if (economyMirrorService != null) {
+      economyMirrorService.stop();
+      economyMirrorService = null;
+    }
+    // Drop the producers back to no-ops so a stale writer reference (about to
+    // be cleared) is never visible to listeners during a reload window.
+    if (statKillsListener != null) {
+      statKillsListener.setProducer(noopKillProducer());
+    }
+    if (statBlocksListener != null) {
+      statBlocksListener.setProducer(noopBlockProducer());
+    }
+    if (rewardPoller != null) {
+      rewardPoller.setDeliveryObserver(null);
+    }
+    if (networkStatWriter != null) {
+      // Best-effort final flush so anything queued at shutdown gets POSTed
+      // before the API client closes. The flush is async; we simply trigger it
+      // and let the writer's stop() drop anything still in-flight afterwards.
+      try {
+        networkStatWriter.requestFlush();
+      } catch (RuntimeException ignored) {
+        // nothing useful to do during shutdown
+      }
+      networkStatWriter.stop();
+      networkStatWriter = null;
+    }
     if (networkStatService != null) {
       networkStatService.stop();
       networkStatService = null;

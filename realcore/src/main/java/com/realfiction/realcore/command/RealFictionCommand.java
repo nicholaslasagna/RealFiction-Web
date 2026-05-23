@@ -5,6 +5,9 @@ import com.realfiction.realcore.config.RealCoreConfig;
 import com.realfiction.realcore.lobby.LobbyManager;
 import com.realfiction.realcore.playtime.PlaytimeTracker;
 import com.realfiction.realcore.scheduler.RealCoreScheduler;
+import com.realfiction.realcore.config.StatsConfig;
+import com.realfiction.realcore.stats.BufferedNetworkStatWriter;
+import com.realfiction.realcore.stats.EconomyMirrorService;
 import com.realfiction.realcore.stats.NetworkStatService;
 import java.util.ArrayList;
 import java.util.List;
@@ -38,7 +41,7 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
       case "status":
         return handleStatus(sender);
       case "stats":
-        return handleStats(sender);
+        return handleStats(sender, args);
       case "rewards":
         return handleRewards(sender);
       case "link":
@@ -201,7 +204,7 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
       send(sender, ChatColor.YELLOW + "Use " + ChatColor.WHITE + "/" + label + " cosmetics" + ChatColor.YELLOW + " to open cosmetics.");
     }
     if (sender.hasPermission("realcore.admin")) {
-      send(sender, ChatColor.YELLOW + "Admin: " + ChatColor.WHITE + "/" + label + " status|stats|rewards|reload|setspawn");
+      send(sender, ChatColor.YELLOW + "Admin: " + ChatColor.WHITE + "/" + label + " status|stats|stats flush|rewards|reload|setspawn");
     }
     return true;
   }
@@ -272,26 +275,80 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
     NetworkStatService stats = plugin.networkStatService();
     if (stats == null) {
       send(sender, ChatColor.YELLOW + "Stat cache: " + ChatColor.RED + "not ready");
-      return;
+    } else {
+      long ago = stats.lastRefreshAgoSeconds();
+      send(sender, ChatColor.YELLOW + "Stat cache: " + ChatColor.GREEN + stats.cachedKeyCount() + " keys"
+          + ChatColor.GRAY + ", top " + stats.configuredTopN()
+          + ", every " + stats.refreshIntervalSeconds() + "s");
+      send(sender, ChatColor.YELLOW + "Stat refresh: " + ChatColor.WHITE + stats.refreshSuccessCount()
+          + " ok / " + stats.refreshFailureCount() + " fail"
+          + (ago >= 0 ? ChatColor.GRAY + ", last " + ago + "s ago" : ChatColor.GRAY + ", never refreshed"));
+      String failure = stats.lastFailureMessage();
+      if (failure != null && !failure.isBlank()) {
+        send(sender, ChatColor.YELLOW + "Last stat error: " + ChatColor.RED + failure);
+      }
+      send(sender, ChatColor.YELLOW + "Stat keys: " + ChatColor.WHITE + String.join(", ", stats.configuredStatKeys()));
     }
-    long ago = stats.lastRefreshAgoSeconds();
-    send(sender, ChatColor.YELLOW + "Stat cache: " + ChatColor.GREEN + stats.cachedKeyCount() + " keys"
-        + ChatColor.GRAY + ", top " + stats.configuredTopN()
-        + ", every " + stats.refreshIntervalSeconds() + "s");
-    send(sender, ChatColor.YELLOW + "Stat refresh: " + ChatColor.WHITE + stats.refreshSuccessCount()
-        + " ok / " + stats.refreshFailureCount() + " fail"
-        + (ago >= 0 ? ChatColor.GRAY + ", last " + ago + "s ago" : ChatColor.GRAY + ", never refreshed"));
-    String failure = stats.lastFailureMessage();
-    if (failure != null && !failure.isBlank()) {
-      send(sender, ChatColor.YELLOW + "Last stat error: " + ChatColor.RED + failure);
-    }
-    send(sender, ChatColor.YELLOW + "Stat keys: " + ChatColor.WHITE + String.join(", ", stats.configuredStatKeys()));
+    appendNetworkStatWriterStatus(sender);
   }
 
-  private boolean handleStats(CommandSender sender) {
+  private void appendNetworkStatWriterStatus(CommandSender sender) {
+    BufferedNetworkStatWriter writer = plugin.bufferedNetworkStatWriter();
+    if (writer == null) {
+      send(sender, ChatColor.YELLOW + "Stat writer: " + ChatColor.RED + "not ready");
+      return;
+    }
+    long ago = writer.lastFlushAgoSeconds();
+    send(sender, ChatColor.YELLOW + "Stat writer: " + ChatColor.GREEN + writer.queuedEventCount() + " queued"
+        + ChatColor.GRAY + " (working " + writer.workingEventCountSnapshot()
+        + ", retry batches " + writer.pendingBatchCount() + ")"
+        + ", every " + writer.flushIntervalSeconds() + "s, buffer " + writer.bufferSize());
+    send(sender, ChatColor.YELLOW + "Stat flush: " + ChatColor.WHITE + writer.flushSuccessCount()
+        + " ok / " + writer.flushFailureCount() + " fail"
+        + ChatColor.GRAY + ", " + writer.duplicateBatchCount() + " duplicate, dropped "
+        + writer.droppedBatchCount() + " batches / " + writer.droppedEventCount() + " events"
+        + (ago >= 0 ? ", last " + ago + "s ago" : ", never flushed"));
+    String failure = writer.lastFailureMessage();
+    if (failure != null && !failure.isBlank()) {
+      send(sender, ChatColor.YELLOW + "Last writer error: " + ChatColor.RED + failure);
+    }
+    appendStatProducerStatus(sender);
+  }
+
+  private void appendStatProducerStatus(CommandSender sender) {
+    StatsConfig statsConfig = StatsConfig.from(plugin.getConfig().getConfigurationSection("stats"));
+    StatsConfig.ProducerConfig producers = statsConfig.producers();
+    send(sender, ChatColor.YELLOW + "Producers: "
+        + ChatColor.GRAY + "kills/deaths=" + statusToggle(producers.killsDeaths())
+        + ChatColor.GRAY + ", blocks_broken=" + statusToggle(producers.blocksBroken())
+        + ChatColor.GRAY + ", votes=" + statusToggle(producers.votes())
+        + ChatColor.GRAY + ", economy_mirror=" + statusToggle(producers.economyMirror()));
+    if (producers.economyMirror()) {
+      EconomyMirrorService mirror = plugin.economyMirrorService();
+      if (mirror == null) {
+        send(sender, ChatColor.YELLOW + "Economy mirror: " + ChatColor.RED + "not ready");
+      } else {
+        long ago = mirror.lastMirrorAgoSeconds();
+        String availability = mirror.economyAvailable() ? ChatColor.GREEN + "vault bound" : ChatColor.GRAY + "vault dormant";
+        send(sender, ChatColor.YELLOW + "Economy mirror: " + availability
+            + ChatColor.GRAY + ", every " + mirror.intervalSeconds() + "s"
+            + ", " + mirror.mirroredPlayerCount() + " mirrored / " + mirror.failureCount() + " failures"
+            + (ago >= 0 ? ", last " + ago + "s ago" : ", never run"));
+      }
+    }
+  }
+
+  private String statusToggle(boolean on) {
+    return on ? ChatColor.GREEN + "on" + ChatColor.GRAY : ChatColor.RED + "off" + ChatColor.GRAY;
+  }
+
+  private boolean handleStats(CommandSender sender, String[] args) {
     if (!sender.hasPermission("realcore.admin")) {
       send(sender, ChatColor.RED + "You do not have permission to do that.");
       return true;
+    }
+    if (args.length >= 2 && "flush".equalsIgnoreCase(args[1])) {
+      return handleStatsFlush(sender);
     }
     RealCoreConfig config = plugin.realCoreConfig();
     if (config == null) {
@@ -301,6 +358,19 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
     send(sender, ChatColor.GOLD + "RealCore Network Stats");
     appendPlaytimeStatus(sender, config);
     appendNetworkStatsStatus(sender, config);
+    return true;
+  }
+
+  private boolean handleStatsFlush(CommandSender sender) {
+    BufferedNetworkStatWriter writer = plugin.bufferedNetworkStatWriter();
+    if (writer == null || !writer.running()) {
+      send(sender, ChatColor.RED + "Stat writer is not running.");
+      return true;
+    }
+    int queuedBefore = writer.queuedEventCount();
+    writer.requestFlush();
+    send(sender, ChatColor.GREEN + "Stat writer flush requested" + ChatColor.GRAY
+        + " (" + queuedBefore + " queued before; flush is async, see /rf stats for the result).");
     return true;
   }
 
@@ -341,6 +411,9 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
         options.add("setspawn");
       }
       return options;
+    }
+    if (args.length == 2 && "stats".equalsIgnoreCase(args[0]) && sender.hasPermission("realcore.admin")) {
+      return List.of("flush");
     }
     return List.of();
   }
