@@ -3,7 +3,7 @@
 import Image from "next/image"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
-import { ChevronDown, LogOut, Menu, ShieldCheck, UserRound, X } from "lucide-react"
+import { ChevronDown, LogOut, Menu, UserRound, X } from "lucide-react"
 import { useEffect, useRef, useState } from "react"
 
 import { Button } from "@/components/ui/button"
@@ -68,26 +68,19 @@ export function SiteHeader() {
 
   return (
     <header className="fixed left-0 right-0 top-0 z-50 border-b border-amber-200/10 bg-[#071525]/88 shadow-[0_12px_40px_rgba(0,0,0,0.35)] backdrop-blur-xl">
-      <div className="container-shell flex h-20 items-center justify-between gap-5">
-        <Link className="mr-3 flex shrink-0 items-center gap-3" href="/" onClick={() => setOpen(false)}>
+      <div className="container-shell flex h-20 items-center gap-4">
+        <Link className="flex shrink-0 items-center" href="/" onClick={() => setOpen(false)}>
           <Image
             alt="RealFiction"
             src="/images/logo1.png"
             width={186}
             height={58}
             priority
-            className="drop-shadow-[0_10px_24px_rgba(0,0,0,0.45)]"
+            className="h-12 w-auto drop-shadow-[0_10px_24px_rgba(0,0,0,0.45)]"
           />
-          <div className="hidden xl:block">
-            <div className="display-font text-lg font-semibold leading-none text-white">RealFiction</div>
-            <div className="mt-1 flex items-center gap-1.5 whitespace-nowrap text-xs text-amber-100/70">
-              <ShieldCheck className="h-3.5 w-3.5 text-emerald-300" />
-              Community Minecraft network
-            </div>
-          </div>
         </Link>
 
-        <nav className="hidden items-center gap-1 xl:flex">
+        <nav className="hidden flex-1 items-center justify-center gap-0.5 xl:flex">
           {navItems.map((item) => {
             const active =
               item.href === "/" ? pathname === "/" : pathname.startsWith(item.href)
@@ -97,7 +90,7 @@ export function SiteHeader() {
                 key={item.href}
                 href={item.href}
                 className={cn(
-                  "rounded-md px-3 py-2 text-sm font-bold uppercase tracking-[0.08em] text-slate-300 transition hover:bg-amber-200/10 hover:text-amber-100",
+                  "rounded-md px-2.5 py-2 text-sm font-bold uppercase tracking-[0.04em] text-slate-300 transition hover:bg-amber-200/10 hover:text-amber-100",
                   active && "bg-amber-200/12 text-amber-100"
                 )}
               >
@@ -107,7 +100,7 @@ export function SiteHeader() {
           })}
         </nav>
 
-        <div className="hidden items-center gap-2 xl:flex">
+        <div className="hidden shrink-0 items-center gap-2 xl:flex">
           {signedIn ? (
             <div className="relative" ref={accountRef}>
               <Button variant="outline" size="sm" onClick={() => setAccountOpen((value) => !value)}>
@@ -160,7 +153,7 @@ export function SiteHeader() {
 
         <Button
           aria-label={open ? "Close navigation" : "Open navigation"}
-          className="xl:hidden"
+          className="ml-auto xl:hidden"
           onClick={() => setOpen((value) => !value)}
           size="icon"
           variant="outline"
