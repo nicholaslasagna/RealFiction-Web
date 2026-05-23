@@ -15,7 +15,7 @@ const statSchema = z.object({
 })
 
 type LeaderboardRow = {
-  position: number
+  rank_position: number
   subject_id: string
   display_name: string | null
   value: number | string
@@ -55,7 +55,7 @@ export async function POST(request: Request) {
     }
 
     const entries = ((data ?? []) as LeaderboardRow[]).map((row) => ({
-      position: row.position,
+      position: row.rank_position,
       subjectId: row.subject_id,
       displayName: row.display_name,
       value: Number(row.value ?? 0)

@@ -10,7 +10,7 @@ const MISSING_SCHEMA_CODES = new Set(["42883", "42P01", "42704"])
 const PUBLIC_STAT_PREFIXES = ["playtime.", "votes."]
 
 type LeaderboardRow = {
-  position: number
+  rank_position: number
   subject_id: string
   display_name: string | null
   value: number | string
@@ -45,7 +45,7 @@ export async function GET(request: Request) {
     }
 
     const entries = ((data ?? []) as LeaderboardRow[]).map((row) => ({
-      position: row.position,
+      position: row.rank_position,
       uuid: row.subject_id,
       name: row.display_name,
       value: Number(row.value ?? 0)
