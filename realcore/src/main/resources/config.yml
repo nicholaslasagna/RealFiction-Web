@@ -40,6 +40,45 @@ modules:
   votes: true
   punishments: false
   chat: false
+  # Network playtime tracking; keep on for every backend so totals span the
+  # whole network.
+  playtime: true
+  # Generic stat leaderboard cache (placeholders + holograms).
+  stats: true
+
+# Network playtime tracking (feeds the "Top Players" leaderboard/holograms).
+# Each backend records its own sessions; the website sums them per player.
+playtime:
+  # How often active sessions are reported to the website.
+  flushIntervalSeconds: 60
+  # How often the leaderboard cache is refreshed (for placeholders/holograms).
+  leaderboardRefreshSeconds: 300
+  # How many entries each leaderboard placeholder set exposes.
+  leaderboardSize: 10
+  # Which boards to cache. 'all' is the network-wide total.
+  leaderboardGroups:
+    - all
+    - lobby
+    - smp
+    - factions
+    - anarchy
+    - arcade
+
+# Generic network stat leaderboards, cached for placeholders/holograms. Add any
+# stat key here as new systems land (votes.total, economy.balance, ...).
+# Placeholders: %realcore_stat_<key>_top_<n>_name% / _value% / _time% / _seconds% / _uuid%
+# (playtime.* keys: _time and _seconds format seconds; _value is raw)
+stats:
+  enabled: true
+  refreshSeconds: 120
+  leaderboardSize: 10
+  leaderboards:
+    - playtime.total
+    - playtime.lobby
+    - playtime.smp
+    - playtime.factions
+    - playtime.anarchy
+    - playtime.arcade
 
 capabilities:
   - luckperms

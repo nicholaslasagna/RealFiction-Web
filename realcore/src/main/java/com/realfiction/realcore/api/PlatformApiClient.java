@@ -8,8 +8,14 @@ import com.realfiction.realcore.api.dto.HeartbeatRequest;
 import com.realfiction.realcore.api.dto.HeartbeatResponse;
 import com.realfiction.realcore.api.dto.LinkConfirmRequest;
 import com.realfiction.realcore.api.dto.LinkConfirmResponse;
+import com.realfiction.realcore.api.dto.PlaytimeLeaderboardRequest;
+import com.realfiction.realcore.api.dto.PlaytimeLeaderboardResponse;
+import com.realfiction.realcore.api.dto.PlaytimeSyncRequest;
+import com.realfiction.realcore.api.dto.PlaytimeSyncResponse;
 import com.realfiction.realcore.api.dto.PollRewardsRequest;
 import com.realfiction.realcore.api.dto.PollRewardsResponse;
+import com.realfiction.realcore.api.dto.StatLeaderboardRequest;
+import com.realfiction.realcore.api.dto.StatLeaderboardResponse;
 import com.realfiction.realcore.config.RealCoreConfig;
 import java.io.Closeable;
 import java.io.IOException;
@@ -49,6 +55,18 @@ public final class PlatformApiClient implements Closeable {
 
   public CompletableFuture<HeartbeatResponse> heartbeat(HeartbeatRequest request) {
     return post("/api/plugin/server/heartbeat", request, HeartbeatResponse.class);
+  }
+
+  public CompletableFuture<PlaytimeSyncResponse> syncPlaytime(PlaytimeSyncRequest request) {
+    return post("/api/plugin/playtime/session", request, PlaytimeSyncResponse.class);
+  }
+
+  public CompletableFuture<PlaytimeLeaderboardResponse> fetchPlaytimeLeaderboard(PlaytimeLeaderboardRequest request) {
+    return post("/api/plugin/playtime/leaderboard", request, PlaytimeLeaderboardResponse.class);
+  }
+
+  public CompletableFuture<StatLeaderboardResponse> fetchStatLeaderboard(StatLeaderboardRequest request) {
+    return post("/api/plugin/stats/leaderboard", request, StatLeaderboardResponse.class);
   }
 
   private <T> CompletableFuture<T> post(String path, Object payload, Class<T> responseType) {

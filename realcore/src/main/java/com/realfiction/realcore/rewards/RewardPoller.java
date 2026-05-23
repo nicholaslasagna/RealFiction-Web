@@ -12,17 +12,20 @@ import com.realfiction.realcore.config.RealCoreConfig;
 import com.realfiction.realcore.scheduler.RealCoreScheduler;
 import com.realfiction.realcore.scheduler.ScheduledTaskHandle;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
-import java.util.Queue;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.logging.Level;
 
 public final class RewardPoller {
+  private static final int ACK_BATCH_LIMIT = 100;
+
   private final RealCorePlugin plugin;
   private final RealCoreConfig config;
   private final RealCoreScheduler scheduler;
@@ -30,8 +33,13 @@ public final class RewardPoller {
   private final RewardDispatcher dispatcher;
   private final AtomicBoolean tickRunning = new AtomicBoolean(false);
   private final AtomicBoolean running = new AtomicBoolean(false);
-  private final Set<String> deliveredThisRun = ConcurrentHashMap.newKeySet();
-  private final Queue<AckRewardsRequest.Delivery> pendingAcks = new ConcurrentLinkedQueue<>();
+  // rewardId -> pending acknowledgement. Keyed by id so a reward can never be
+  // queued (or acked) more than once, even if both the reclaim re-poll and a
+  // prior failed ack reference it.
+  private final Map<String, PendingAck> pendingAcks = new ConcurrentHashMap<>();
+  // rewardIds currently inside an in-flight ack request; prevents an overlapping
+  // operation from sending the same reward twice (no duplicate "Acknowledged").
+  private final Set<String> ackInFlight = ConcurrentHashMap.newKeySet();
   private final RewardLedger ledger;
   private ScheduledTaskHandle taskHandle;
 
@@ -64,15 +72,45 @@ public final class RewardPoller {
     return running.get() && taskHandle != null;
   }
 
+  // ---- Observability -------------------------------------------------------
+
+  public int pendingAckCount() {
+    return pendingAcks.size();
+  }
+
+  public int deliveredLedgerSize() {
+    return ledger.size();
+  }
+
+  /** Human-readable lines describing the rewards still awaiting acknowledgement. */
+  public List<String> pendingAckSummaries(int limit) {
+    long now = System.currentTimeMillis();
+    List<String> out = new ArrayList<>();
+    for (PendingAck pending : pendingAcks.values()) {
+      if (out.size() >= limit) {
+        break;
+      }
+      long nextInSeconds = Math.max(0L, (pending.nextRetryAtMillis - now) / 1000L);
+      out.add(pending.delivery.rewardId
+          + " status=" + pending.delivery.status
+          + " attempts=" + pending.attempts
+          + " nextRetry=" + nextInSeconds + "s");
+    }
+    return out;
+  }
+
+  // ---- Tick ----------------------------------------------------------------
+
   private void tickSafely() {
+    // Single in-flight tick at a time; overlapping scheduler fires are skipped.
     if (!running.get() || !tickRunning.compareAndSet(false, true)) {
       return;
     }
 
-    flushPendingAcks()
-        .thenCompose(ignored -> pollAndDeliver())
+    pollAndDeliver()
+        .thenCompose(ignored -> flushDueAcks())
         .exceptionally(error -> {
-          plugin.getLogger().log(Level.WARNING, "Reward poll failed: " + describeFailure(error), error);
+          plugin.getLogger().log(Level.WARNING, "Reward tick failed: " + describeFailure(error), error);
           return null;
         })
         .whenComplete((ignored, error) -> tickRunning.set(false));
@@ -97,23 +135,23 @@ public final class RewardPoller {
           }
           if (response == null || response.rewards == null || response.rewards.isEmpty()) {
             if (config.debug()) {
-              plugin.getLogger().info("No RealFiction rewards pending.");
+              plugin.getLogger().info("No RealFiction rewards pending (pendingAcks=" + pendingAcks.size() + ").");
             }
             return CompletableFuture.completedFuture(null);
           }
-          return deliverRewards(response).thenCompose(this::ackOrQueue);
+          return deliverRewards(response);
         });
   }
 
-  private CompletableFuture<List<AckRewardsRequest.Delivery>> deliverRewards(PollRewardsResponse response) {
-    CompletableFuture<List<AckRewardsRequest.Delivery>> chain = CompletableFuture.completedFuture(new ArrayList<>());
+  private CompletableFuture<Void> deliverRewards(PollRewardsResponse response) {
+    CompletableFuture<Void> chain = CompletableFuture.completedFuture(null);
 
+    // Deliver sequentially so the ledger is updated before the next reward runs.
     for (RewardPayload reward : response.rewards) {
-      chain = chain.thenCompose(acks -> deliverOne(reward).thenApply(result -> {
+      chain = chain.thenCompose(ignored -> deliverOne(reward).thenAccept(result -> {
         if (result != null) {
-          acks.add(result.toAckDelivery());
+          queueAck(result.toAckDelivery());
         }
-        return acks;
       }));
     }
 
@@ -132,7 +170,9 @@ public final class RewardPoller {
 
     // Idempotency: if this reward's effects already ran on this server (e.g. the
     // previous ack failed and the row was reclaimed), do NOT execute again - only
-    // re-acknowledge it as delivered. This prevents duplicate money/perks.
+    // re-acknowledge it as delivered. This prevents duplicate money/perks and
+    // also serves as the in-run duplicate guard (the ledger is updated before the
+    // next reward in the batch is processed).
     if (ledger.wasDelivered(reward.id)) {
       plugin.getLogger().info("Reward already delivered locally; re-acking only: "
           + reward.rewardKey + " -> " + who + " (id=" + reward.id + ")");
@@ -160,11 +200,6 @@ public final class RewardPoller {
           RewardDeliveryResult.failed(reward.id, "Skipped configured test username: " + username));
     }
 
-    if (!deliveredThisRun.add(reward.id)) {
-      plugin.getLogger().warning("Skipping duplicate reward in same plugin run: rewardId=" + reward.id);
-      return CompletableFuture.completedFuture(null);
-    }
-
     if (reward.attempts > 1) {
       plugin.getLogger().info("Retrying reward " + reward.rewardKey + " -> " + who
           + " (attempt " + reward.attempts + ", id=" + reward.id + ")");
@@ -183,6 +218,106 @@ public final class RewardPoller {
     });
   }
 
+  // ---- Acknowledgement pipeline -------------------------------------------
+
+  private void queueAck(AckRewardsRequest.Delivery delivery) {
+    if (delivery == null || delivery.rewardId == null) {
+      return;
+    }
+    // Dedup by rewardId. If it is already pending we keep the existing retry
+    // state (so backoff is not reset by a reclaim re-ack).
+    pendingAcks.putIfAbsent(delivery.rewardId, new PendingAck(delivery));
+  }
+
+  private CompletableFuture<Void> flushDueAcks() {
+    if (!running.get() || pendingAcks.isEmpty()) {
+      return CompletableFuture.completedFuture(null);
+    }
+
+    long now = System.currentTimeMillis();
+    List<AckRewardsRequest.Delivery> batch = new ArrayList<>();
+    for (PendingAck pending : pendingAcks.values()) {
+      if (batch.size() >= ACK_BATCH_LIMIT) {
+        break;
+      }
+      String id = pending.delivery.rewardId;
+      // Respect backoff and never include a reward already in an in-flight ack.
+      if (pending.nextRetryAtMillis <= now && ackInFlight.add(id)) {
+        pending.attempts++;
+        pending.lastAttemptAtMillis = now;
+        batch.add(pending.delivery);
+      }
+    }
+
+    if (batch.isEmpty()) {
+      return CompletableFuture.completedFuture(null);
+    }
+
+    return apiClient.ackRewards(new AckRewardsRequest(config.serverId(), batch))
+        .handle((response, error) -> {
+          handleAckResult(batch, response, error);
+          return null;
+        });
+  }
+
+  private void handleAckResult(List<AckRewardsRequest.Delivery> batch, AckRewardsResponse response, Throwable error) {
+    try {
+      if (error != null) {
+        // Whole request failed (network/HTTP); keep every id and back off.
+        for (AckRewardsRequest.Delivery delivery : batch) {
+          scheduleRetry(delivery.rewardId);
+        }
+        plugin.getLogger().log(Level.WARNING,
+            "Reward ack request failed; backing off: " + describeFailure(error), error);
+        return;
+      }
+
+      Map<String, AckRewardsResponse.Result> byId = new HashMap<>();
+      if (response != null && response.results != null) {
+        for (AckRewardsResponse.Result result : response.results) {
+          if (result != null && result.rewardId != null) {
+            byId.put(result.rewardId, result);
+          }
+        }
+      }
+
+      for (AckRewardsRequest.Delivery delivery : batch) {
+        AckRewardsResponse.Result result = byId.get(delivery.rewardId);
+        if (result != null && result.accepted) {
+          // Settled: drop it so we never ack or log it again.
+          pendingAcks.remove(delivery.rewardId);
+          plugin.getLogger().info("Acknowledged rewardId=" + delivery.rewardId
+              + " status=" + result.status + " duplicate=" + result.duplicate);
+        } else {
+          scheduleRetry(delivery.rewardId);
+          String detail = result != null && result.error != null ? result.error : "no result returned";
+          plugin.getLogger().warning("Ack not accepted for rewardId=" + delivery.rewardId
+              + " (" + detail + "); backing off (attempt " + attemptsOf(delivery.rewardId) + ").");
+        }
+      }
+    } finally {
+      // Always release the in-flight guard for everything we attempted.
+      for (AckRewardsRequest.Delivery delivery : batch) {
+        ackInFlight.remove(delivery.rewardId);
+      }
+    }
+  }
+
+  private void scheduleRetry(String rewardId) {
+    PendingAck pending = pendingAcks.get(rewardId);
+    if (pending == null) {
+      return;
+    }
+    long backoff = RewardAckRetryPolicy.backoffMillis(
+        pending.attempts, config.pollInterval().toMillis(), ThreadLocalRandom.current());
+    pending.nextRetryAtMillis = System.currentTimeMillis() + backoff;
+  }
+
+  private int attemptsOf(String rewardId) {
+    PendingAck pending = pendingAcks.get(rewardId);
+    return pending == null ? 0 : pending.attempts;
+  }
+
   private String playerLabel(RewardPayload reward) {
     String name = reward.minecraftUsername();
     if (name != null && !name.isBlank()) {
@@ -190,56 +325,6 @@ public final class RewardPoller {
     }
     String uuid = reward.minecraftUuid();
     return uuid == null || uuid.isBlank() ? "unknown" : uuid;
-  }
-
-  private CompletableFuture<Void> flushPendingAcks() {
-    List<AckRewardsRequest.Delivery> batch = new ArrayList<>();
-    AckRewardsRequest.Delivery delivery;
-    while ((delivery = pendingAcks.poll()) != null && batch.size() < 100) {
-      batch.add(delivery);
-    }
-    if (!batch.isEmpty()) {
-      return ackOrQueue(batch);
-    }
-    return CompletableFuture.completedFuture(null);
-  }
-
-  private CompletableFuture<Void> ackOrQueue(List<AckRewardsRequest.Delivery> deliveries) {
-    if (deliveries == null || deliveries.isEmpty()) {
-      return CompletableFuture.completedFuture(null);
-    }
-    if (!running.get()) {
-      pendingAcks.addAll(deliveries);
-      return CompletableFuture.completedFuture(null);
-    }
-
-    return apiClient.ackRewards(new AckRewardsRequest(config.serverId(), deliveries))
-        .handle((response, error) -> {
-      if (RewardAckRetryPolicy.shouldRetry(response, error)) {
-        if (error != null) {
-          plugin.getLogger().log(Level.WARNING,
-              "Could not acknowledge rewards; will retry later: " + describeFailure(error), error);
-        } else {
-          plugin.getLogger().warning("Reward acknowledgement was not fully accepted; will retry later.");
-        }
-        pendingAcks.addAll(deliveries);
-      }
-
-      if (error != null) {
-        return null;
-      }
-
-      if (response != null && response.results != null) {
-        response.results.forEach(result -> {
-          if (result.accepted) {
-            plugin.getLogger().info("Acknowledged rewardId=" + result.rewardId + " status=" + result.status + " duplicate=" + result.duplicate);
-          } else {
-            plugin.getLogger().warning("Ack failed for rewardId=" + result.rewardId + ": " + result.error);
-          }
-        });
-      }
-      return null;
-    });
   }
 
   private String cleanMessage(Throwable error) {
@@ -262,5 +347,19 @@ public final class RewardPoller {
       return "HTTP " + api.statusCode() + " " + cleanMessage(error);
     }
     return cleanMessage(error);
+  }
+
+  private static final class PendingAck {
+    private final AckRewardsRequest.Delivery delivery;
+    private int attempts;
+    private long nextRetryAtMillis;
+    private long lastAttemptAtMillis;
+
+    private PendingAck(AckRewardsRequest.Delivery delivery) {
+      this.delivery = delivery;
+      this.attempts = 0;
+      this.nextRetryAtMillis = 0L;
+      this.lastAttemptAtMillis = 0L;
+    }
   }
 }
