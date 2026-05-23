@@ -19,18 +19,18 @@ export async function GET(request: Request) {
     const referencesLocalOrder = captured.purchase_units?.some((unit) => unit.reference_id === localOrderId)
 
     if (!referencesLocalOrder) {
-      return NextResponse.redirect(`${siteUrl}/store?checkout=paypal-error&order_id=${localOrderId}`)
+      return NextResponse.redirect(`${siteUrl}/store?checkout=paypal-error&order_id=${encodeURIComponent(localOrderId)}`)
     }
 
     if (captured.status !== "COMPLETED" && capture?.status !== "COMPLETED") {
-      return NextResponse.redirect(`${siteUrl}/store?checkout=paypal-pending&order_id=${localOrderId}`)
+      return NextResponse.redirect(`${siteUrl}/store?checkout=paypal-pending&order_id=${encodeURIComponent(localOrderId)}`)
     }
 
     await markOrderPaidAndFulfill(localOrderId, capture?.id ?? captured.id ?? payPalOrderId)
 
-    return NextResponse.redirect(`${siteUrl}/account?checkout=success&order_id=${localOrderId}`)
+    return NextResponse.redirect(`${siteUrl}/account?checkout=success&order_id=${encodeURIComponent(localOrderId)}`)
   } catch (error) {
     console.error("paypal_capture_error", error)
-    return NextResponse.redirect(`${siteUrl}/store?checkout=paypal-error&order_id=${localOrderId}`)
+    return NextResponse.redirect(`${siteUrl}/store?checkout=paypal-error&order_id=${encodeURIComponent(localOrderId)}`)
   }
 }

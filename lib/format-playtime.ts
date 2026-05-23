@@ -60,7 +60,7 @@ export function formatPlaytimeLong(seconds: number) {
 // neutral placeholder instead of a broken image.
 export function avatarUrl(uuid: string | null | undefined, size = 48) {
   if (!uuid) return null
-  const cleaned = uuid.replace(/-/g, "").trim()
-  if (cleaned.length !== 32) return null
+  const cleaned = uuid.replace(/-/g, "").trim().toLowerCase()
+  if (!/^[0-9a-f]{32}$/.test(cleaned)) return null
   return `https://crafatar.com/avatars/${cleaned}?size=${size}&overlay`
 }
