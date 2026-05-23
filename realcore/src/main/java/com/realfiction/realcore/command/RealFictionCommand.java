@@ -35,6 +35,8 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
         return handleReload(sender);
       case "status":
         return handleStatus(sender);
+      case "rewards":
+        return handleRewards(sender);
       case "link":
         return handleLink(sender, args);
       case "menu":
@@ -71,6 +73,26 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
       return true;
     }
     sendStatus(sender);
+    return true;
+  }
+
+  private boolean handleRewards(CommandSender sender) {
+    if (!sender.hasPermission("realcore.admin")) {
+      send(sender, ChatColor.RED + "You do not have permission to do that.");
+      return true;
+    }
+    send(sender, ChatColor.GOLD + "RealCore Reward Reliability");
+    send(sender, ChatColor.YELLOW + "Reward polling: " + statusText(plugin.rewardPollingActive()));
+    send(sender, ChatColor.YELLOW + "Locally delivered (ledger): " + ChatColor.WHITE + plugin.deliveredLedgerSize());
+    send(sender, ChatColor.YELLOW + "Pending acknowledgements: " + ChatColor.WHITE + plugin.pendingAckCount());
+    List<String> pending = plugin.pendingAckSummaries(10);
+    if (pending.isEmpty()) {
+      send(sender, ChatColor.GRAY + "No rewards awaiting acknowledgement.");
+    } else {
+      for (String line : pending) {
+        send(sender, ChatColor.GRAY + " - " + line);
+      }
+    }
     return true;
   }
 
@@ -175,7 +197,7 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
       send(sender, ChatColor.YELLOW + "Use " + ChatColor.WHITE + "/" + label + " cosmetics" + ChatColor.YELLOW + " to open cosmetics.");
     }
     if (sender.hasPermission("realcore.admin")) {
-      send(sender, ChatColor.YELLOW + "Admin: " + ChatColor.WHITE + "/" + label + " status|reload|setspawn");
+      send(sender, ChatColor.YELLOW + "Admin: " + ChatColor.WHITE + "/" + label + " status|rewards|reload|setspawn");
     }
     return true;
   }
@@ -205,6 +227,8 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
     send(sender, ChatColor.YELLOW + "Poll interval: " + ChatColor.WHITE + config.pollInterval().toSeconds() + "s");
     send(sender, ChatColor.YELLOW + "Scheduler: " + ChatColor.WHITE + (scheduler == null ? "not loaded" : scheduler.name()));
     send(sender, ChatColor.YELLOW + "Reward polling: " + statusText(plugin.rewardPollingActive()));
+    send(sender, ChatColor.YELLOW + "Pending acks: " + ChatColor.WHITE + plugin.pendingAckCount()
+        + ChatColor.GRAY + " (delivered ledger: " + plugin.deliveredLedgerSize() + ")");
     send(sender, ChatColor.YELLOW + "LuckPerms: " + statusText(plugin.luckPermsAvailable()));
     send(sender, ChatColor.YELLOW + "Website auth: " + statusText(config.hmacSecretConfigured()));
     if (lobby != null) {
@@ -250,6 +274,7 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
       }
       if (sender.hasPermission("realcore.admin")) {
         options.add("status");
+        options.add("rewards");
         options.add("reload");
         options.add("setspawn");
       }

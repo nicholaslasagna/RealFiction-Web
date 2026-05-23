@@ -178,6 +178,18 @@ public final class RealCorePlugin extends JavaPlugin {
     return rewardPoller != null && rewardPoller.running();
   }
 
+  public int pendingAckCount() {
+    return rewardPoller == null ? 0 : rewardPoller.pendingAckCount();
+  }
+
+  public int deliveredLedgerSize() {
+    return rewardPoller == null ? 0 : rewardPoller.deliveredLedgerSize();
+  }
+
+  public List<String> pendingAckSummaries(int limit) {
+    return rewardPoller == null ? List.of() : rewardPoller.pendingAckSummaries(limit);
+  }
+
   public RealCoreScheduler scheduler() {
     return scheduler;
   }
@@ -231,6 +243,9 @@ public final class RealCorePlugin extends JavaPlugin {
     getLogger().info("| Instance: " + instanceId);
     getLogger().info("| Modules: " + moduleSummary);
     getLogger().info("| Reward polling: " + polling);
+    if (config != null && config.modules().rewards()) {
+      getLogger().info("| Reward ledger: " + deliveredLedgerSize() + " delivered, " + pendingAckCount() + " pending ack");
+    }
     getLogger().info("| Website auth: " + websiteAuth);
     getLogger().info("| LuckPerms: " + luckPerms);
     getLogger().info("| Cosmetics: " + cosmetics);
