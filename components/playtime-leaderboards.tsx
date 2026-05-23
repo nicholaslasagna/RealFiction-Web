@@ -222,11 +222,32 @@ export function PlaytimeLeaderboards() {
   )
 }
 
+function PlayerAvatar({ uuid }: { uuid: string }) {
+  const [failed, setFailed] = useState(false)
+  const url = failed ? null : avatarUrl(uuid)
+
+  if (!url) {
+    return <div className="h-8 w-8 rounded-md border border-white/10 bg-white/5" aria-hidden />
+  }
+
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      alt=""
+      src={url}
+      width={32}
+      height={32}
+      className="h-8 w-8 rounded-md border border-white/10 bg-white/5"
+      loading="lazy"
+      onError={() => setFailed(true)}
+    />
+  )
+}
+
 function LeaderboardRows({ entries }: { entries: LeaderboardEntry[] }) {
   return (
     <ol className="divide-y divide-white/5 overflow-hidden rounded-md border border-white/8 bg-black/24">
       {entries.map((entry) => {
-        const avatar = avatarUrl(entry.uuid)
         const isPodium = entry.position <= 3
         const podiumColor =
           entry.position === 1 ? "text-amber-200" : entry.position === 2 ? "text-slate-200" : "text-orange-300"
@@ -246,19 +267,7 @@ function LeaderboardRows({ entries }: { entries: LeaderboardEntry[] }) {
             </span>
 
             <div className="flex min-w-0 flex-1 items-center gap-3">
-              {avatar ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  alt=""
-                  src={avatar}
-                  width={32}
-                  height={32}
-                  className="h-8 w-8 rounded-md border border-white/10"
-                  loading="lazy"
-                />
-              ) : (
-                <div className="h-8 w-8 rounded-md border border-white/10 bg-white/5" aria-hidden />
-              )}
+              <PlayerAvatar uuid={entry.uuid} />
               <span className="truncate font-semibold text-slate-100">
                 {entry.name ?? "Unknown player"}
               </span>

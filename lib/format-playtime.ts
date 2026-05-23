@@ -62,5 +62,7 @@ export function avatarUrl(uuid: string | null | undefined, size = 48) {
   if (!uuid) return null
   const cleaned = uuid.replace(/-/g, "").trim().toLowerCase()
   if (!/^[0-9a-f]{32}$/.test(cleaned)) return null
-  return `https://crafatar.com/avatars/${cleaned}?size=${size}&overlay`
+  // mc-heads.net is a reliable head-render service and falls back to a default
+  // (Steve/Alex) for unknown/offline UUIDs instead of failing.
+  return `https://mc-heads.net/avatar/${cleaned}/${size}`
 }
