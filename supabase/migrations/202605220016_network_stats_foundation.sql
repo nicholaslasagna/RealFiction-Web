@@ -28,15 +28,19 @@ create index if not exists network_stat_totals_leaderboard_idx
 
 -- Denormalized top-N snapshot per (stat_key, subject_type). Read path for
 -- placeholders/holograms/website so the totals table is only scanned on refresh.
+-- NOTE: column is rank_position rather than 'position'. SQL-standard reserves
+-- POSITION (used as position(substr in str)); Postgres accepts it as a column
+-- name in plain CREATE TABLE but rejects it inside RETURNS TABLE(...) below.
+-- API/Java DTOs still expose this as JSON 'position' (mapped at the route layer).
 create table if not exists public.network_leaderboard_cache (
   stat_key text not null,
   subject_type text not null default 'player',
-  position integer not null,
+  rank_position integer not null,
   subject_id text not null,
   display_name text,
   value numeric not null default 0,
   refreshed_at timestamptz not null default now(),
-  primary key (stat_key, subject_type, position)
+  primary key (stat_key, subject_type, rank_position)
 );
 
 alter table public.network_stat_totals enable row level security;
@@ -115,7 +119,7 @@ begin
   delete from public.network_leaderboard_cache c
   where c.stat_key = p_stat_key and c.subject_type = v_type;
 
-  insert into public.network_leaderboard_cache (stat_key, subject_type, position, subject_id, display_name, value, refreshed_at)
+  insert into public.network_leaderboard_cache (stat_key, subject_type, rank_position, subject_id, display_name, value, refreshed_at)
   select
     p_stat_key,
     v_type,
@@ -142,7 +146,7 @@ create or replace function public.get_stat_leaderboard(
   p_max_age_seconds integer default 60
 )
 returns table(
-  position integer,
+  rank_position integer,
   subject_id text,
   display_name text,
   value numeric,
@@ -165,10 +169,10 @@ begin
   end if;
 
   return query
-  select c.position, c.subject_id, c.display_name, c.value, c.refreshed_at
+  select c.rank_position, c.subject_id, c.display_name, c.value, c.refreshed_at
   from public.network_leaderboard_cache c
   where c.stat_key = p_stat_key and c.subject_type = v_type
-  order by c.position asc
+  order by c.rank_position asc
   limit least(greatest(coalesce(p_limit, 10), 1), 100);
 end;
 $$;
