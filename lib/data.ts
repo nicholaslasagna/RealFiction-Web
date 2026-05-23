@@ -71,6 +71,7 @@ export const navItems = [
   { href: "/", label: "Home" },
   { href: "/store", label: "Store" },
   { href: "/vote", label: "Vote" },
+  { href: "/leaderboards", label: "Leaderboards" },
   { href: "/map", label: "Map" },
   { href: "/rules", label: "Rules" },
   { href: "/updates", label: "Updates" },

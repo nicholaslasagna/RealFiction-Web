@@ -120,6 +120,32 @@ Acknowledged rewardId=<uuid> status=delivered duplicate=false
 
 If delivery fails, RealCore acknowledges it as failed with a reason. If the website is down, RealCore retries on the next poll.
 
+## Leaderboard Placeholders
+
+RealCore caches network stat leaderboards (playtime today; votes/economy/etc. as new producers land) and exposes them through PlaceholderAPI.
+
+Generic stat placeholders:
+
+```text
+%realcore_stat_playtime.total_top_1_name%
+%realcore_stat_playtime.total_top_1_time%      # 1d 3h 12m
+%realcore_stat_playtime.total_top_1_value%     # raw seconds
+%realcore_stat_playtime.smp_top_1_time%
+%realcore_stat_votes.total_top_1_name%
+```
+
+Legacy playtime placeholders (still supported):
+
+```text
+%realcore_playtime_total_top_1_name%
+%realcore_playtime_total_top_1_time%
+%realcore_playtime_player_total%
+```
+
+The cache refresh interval and which keys to cache are set in `config.yml` under `stats.refreshSeconds` and `stats.leaderboards`. Disable the whole subsystem with `modules.stats: false`. See `docs/REALCORE_PLUGIN.md` for the full placeholder reference and API contract.
+
+`/rf stats` (admin) shows current cache size, configured keys, refresh counts, and the last fetch error.
+
 ## Staff Commands
 
 ```text

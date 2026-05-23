@@ -207,6 +207,105 @@ Ack behavior:
 - Repeated ack on already final rows is idempotent and returns `duplicate: true`.
 - Failed rows keep `failure_reason` and `last_error` for support/admin review.
 
+## Network Stat Leaderboards
+
+RealCore caches top-N stat leaderboards from the website and exposes them through PlaceholderAPI for holograms, scoreboards, and chat. The plugin pulls the cache; it never queries Postgres directly on the placeholder hot path.
+
+### Plugin route
+
+```text
+POST /api/plugin/stats/leaderboard
+```
+
+HMAC-signed (same model as the rewards routes). Payload:
+
+```json
+{
+  "serverId": "lobby-1",
+  "statKey": "playtime.total",
+  "subjectType": "player",
+  "limit": 10,
+  "maxAgeSeconds": 60
+}
+```
+
+Response:
+
+```json
+{
+  "statKey": "playtime.total",
+  "subjectType": "player",
+  "entries": [
+    { "position": 1, "subjectId": "<uuid>", "displayName": "Alex", "value": 12345 }
+  ]
+}
+```
+
+`value` is the raw stored number (seconds for `playtime.*`, votes count for `votes.total`, etc.).
+
+### Public route
+
+```text
+GET /api/public/stats/leaderboard?key=playtime.total&limit=10
+```
+
+Unauthenticated, CDN-cached, allowlisted. Only stat keys starting with `playtime.` or `votes.` are accepted; everything else needs the HMAC plugin route. Used by the `/leaderboards` page.
+
+### PlaceholderAPI
+
+Generic stat placeholders (preferred for new screens):
+
+```text
+%realcore_stat_<key>_top_<n>_name%
+%realcore_stat_<key>_top_<n>_value%
+%realcore_stat_<key>_top_<n>_uuid%
+%realcore_stat_<key>_top_<n>_time%      # playtime.* keys: human-formatted (1d 3h 12m)
+%realcore_stat_<key>_top_<n>_seconds%   # playtime.* keys: raw seconds string
+```
+
+Examples:
+
+```text
+%realcore_stat_playtime.total_top_1_name%
+%realcore_stat_playtime.total_top_1_time%
+%realcore_stat_playtime.total_top_1_value%
+%realcore_stat_playtime.smp_top_1_time%
+%realcore_stat_votes.total_top_1_name%
+```
+
+Legacy playtime placeholders still work and are backed by the playtime leaderboard cache (separate from the generic stat cache):
+
+```text
+%realcore_playtime_total_top_1_name%
+%realcore_playtime_total_top_1_time%
+%realcore_playtime_total_top_1_seconds%
+%realcore_playtime_<group>_top_<n>_name%   # lobby / smp / factions / anarchy / arcade
+%realcore_playtime_player_total%
+```
+
+The legacy and generic caches both mirror the same authoritative `playtime_totals` and converge after each refresh. A successful playtime flush also triggers `NetworkStatService.refreshPlaytimeKeys()` so the generic cache stays close to the playtime cache without waiting for the full refresh interval.
+
+### Config defaults
+
+```yaml
+modules:
+  stats: true              # gate for NetworkStatService
+
+stats:
+  enabled: true
+  refreshSeconds: 120      # how often the cache is rebuilt from the website
+  leaderboardSize: 10      # top-N exposed by placeholders
+  leaderboards:
+    - playtime.total
+    - playtime.lobby
+    - playtime.smp
+    - playtime.factions
+    - playtime.anarchy
+    - playtime.arcade
+```
+
+Add new keys to `stats.leaderboards` as new producers land (`votes.total`, `economy.balance`, etc.). The `/rf stats` admin command shows cache size, refresh count, last-refresh age, and last error.
+
 ## Reward Delivery Model
 
 Supported delivery families:
