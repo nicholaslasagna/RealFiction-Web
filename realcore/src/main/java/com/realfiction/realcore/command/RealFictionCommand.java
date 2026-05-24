@@ -6,6 +6,8 @@ import com.realfiction.realcore.lobby.LobbyManager;
 import com.realfiction.realcore.playtime.PlaytimeTracker;
 import com.realfiction.realcore.scheduler.RealCoreScheduler;
 import com.realfiction.realcore.config.StatsConfig;
+import com.realfiction.realcore.economy.BufferedEconomyTransactionWriter;
+import com.realfiction.realcore.economy.EconomyService;
 import com.realfiction.realcore.stats.BufferedNetworkStatWriter;
 import com.realfiction.realcore.stats.EconomyMirrorService;
 import com.realfiction.realcore.stats.NetworkStatService;
@@ -42,6 +44,8 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
         return handleStatus(sender);
       case "stats":
         return handleStats(sender, args);
+      case "economy":
+        return handleEconomy(sender, args);
       case "rewards":
         return handleRewards(sender);
       case "link":
@@ -204,7 +208,7 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
       send(sender, ChatColor.YELLOW + "Use " + ChatColor.WHITE + "/" + label + " cosmetics" + ChatColor.YELLOW + " to open cosmetics.");
     }
     if (sender.hasPermission("realcore.admin")) {
-      send(sender, ChatColor.YELLOW + "Admin: " + ChatColor.WHITE + "/" + label + " status|stats|stats flush|rewards|reload|setspawn");
+      send(sender, ChatColor.YELLOW + "Admin: " + ChatColor.WHITE + "/" + label + " status|stats|stats flush|economy|economy flush|rewards|reload|setspawn");
     }
     return true;
   }
@@ -250,6 +254,7 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
     send(sender, ChatColor.YELLOW + "Cosmetics: " + statusText(plugin.cosmeticsManager() != null));
     appendPlaytimeStatus(sender, config);
     appendNetworkStatsStatus(sender, config);
+    appendEconomyStatus(sender);
   }
 
   private void appendPlaytimeStatus(CommandSender sender, RealCoreConfig config) {
@@ -361,6 +366,78 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
     return true;
   }
 
+  private boolean handleEconomy(CommandSender sender, String[] args) {
+    if (!sender.hasPermission("realcore.admin")) {
+      send(sender, ChatColor.RED + "You do not have permission to do that.");
+      return true;
+    }
+    if (args.length >= 2 && "flush".equalsIgnoreCase(args[1])) {
+      EconomyService economy = plugin.economyService();
+      if (economy == null || !economy.writerRunning()) {
+        send(sender, ChatColor.RED + "Global economy writer is not running.");
+        return true;
+      }
+      int queuedBefore = economy.writer().queuedTransactionCount();
+      economy.requestFlush();
+      send(sender, ChatColor.GREEN + "Global economy flush requested" + ChatColor.GRAY
+          + " (" + queuedBefore + " queued before; flush is async, see /rf economy for the result).");
+      return true;
+    }
+
+    send(sender, ChatColor.GOLD + "RealCore Global Economy");
+    appendEconomyStatus(sender);
+    send(sender, ChatColor.GRAY + "Phase 3 is client foundation only: no Vault provider, no EssentialsX balance changes.");
+    return true;
+  }
+
+  private void appendEconomyStatus(CommandSender sender) {
+    EconomyService economy = plugin.economyService();
+    RealCoreConfig config = plugin.realCoreConfig();
+    if (config == null) {
+      send(sender, ChatColor.YELLOW + "Global economy: " + ChatColor.RED + "config not loaded");
+      return;
+    }
+    if (economy == null) {
+      send(sender, ChatColor.YELLOW + "Global economy: " + ChatColor.RED + "not loaded");
+      return;
+    }
+    if (!economy.configuredEnabled()) {
+      send(sender, ChatColor.YELLOW + "Global economy: " + ChatColor.GRAY + "disabled (economy.enabled=false)");
+      send(sender, ChatColor.YELLOW + "Economy currency: " + ChatColor.WHITE + economy.currencyKey());
+      return;
+    }
+    String state = economy.writerRunning() ? ChatColor.GREEN + "ready" : ChatColor.RED + "not ready";
+    if (!economy.mutationsAllowed()) {
+      state = ChatColor.GRAY + "read-only";
+    }
+    send(sender, ChatColor.YELLOW + "Global economy: " + state
+        + ChatColor.GRAY + (economy.disabledReason().isBlank() ? "" : " (" + economy.disabledReason() + ")"));
+    send(sender, ChatColor.YELLOW + "Economy currency: " + ChatColor.WHITE + economy.currencyKey()
+        + ChatColor.GRAY + " ($1.00 = 100)");
+    send(sender, ChatColor.YELLOW + "Economy flush: " + ChatColor.WHITE + economy.flushIntervalSeconds()
+        + "s" + ChatColor.GRAY + ", max batch " + economy.maxBatchSize()
+        + ", buffer " + economy.bufferSize());
+    sendEconomyWriterStatus(sender, economy.writer());
+  }
+
+  private void sendEconomyWriterStatus(CommandSender sender, BufferedEconomyTransactionWriter writer) {
+    long ago = writer.lastFlushAgoSeconds();
+    send(sender, ChatColor.YELLOW + "Economy writer: " + ChatColor.WHITE + writer.queuedTransactionCount()
+        + " queued" + ChatColor.GRAY + " (working " + writer.workingTransactionCount()
+        + ", pending " + writer.pendingTransactionCount()
+        + ", retry batches " + writer.pendingBatchCount() + ")");
+    send(sender, ChatColor.YELLOW + "Economy batches: " + ChatColor.WHITE + writer.sentBatchCount()
+        + " sent / " + writer.failedBatchCount() + " failed"
+        + ChatColor.GRAY + ", " + writer.duplicateBatchCount() + " duplicate batches, "
+        + writer.duplicateTransactionCount() + " duplicate tx, dropped "
+        + writer.droppedBatchCount() + " batches / " + writer.droppedTransactionCount() + " tx"
+        + (ago >= 0 ? ", last " + ago + "s ago" : ", never flushed"));
+    String failure = writer.lastFailureMessage();
+    if (failure != null && !failure.isBlank()) {
+      send(sender, ChatColor.YELLOW + "Last economy error: " + ChatColor.RED + failure);
+    }
+  }
+
   private boolean handleStatsFlush(CommandSender sender) {
     BufferedNetworkStatWriter writer = plugin.bufferedNetworkStatWriter();
     if (writer == null || !writer.running()) {
@@ -406,6 +483,7 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
       if (sender.hasPermission("realcore.admin")) {
         options.add("status");
         options.add("stats");
+        options.add("economy");
         options.add("rewards");
         options.add("reload");
         options.add("setspawn");
@@ -413,6 +491,9 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
       return options;
     }
     if (args.length == 2 && "stats".equalsIgnoreCase(args[0]) && sender.hasPermission("realcore.admin")) {
+      return List.of("flush");
+    }
+    if (args.length == 2 && "economy".equalsIgnoreCase(args[0]) && sender.hasPermission("realcore.admin")) {
       return List.of("flush");
     }
     return List.of();

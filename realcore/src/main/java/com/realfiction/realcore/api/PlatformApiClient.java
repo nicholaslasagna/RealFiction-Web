@@ -4,6 +4,10 @@ import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.realfiction.realcore.api.dto.AckRewardsRequest;
 import com.realfiction.realcore.api.dto.AckRewardsResponse;
+import com.realfiction.realcore.api.dto.EconomyBalanceRequest;
+import com.realfiction.realcore.api.dto.EconomyBalanceResponse;
+import com.realfiction.realcore.api.dto.EconomyTransactionsRequest;
+import com.realfiction.realcore.api.dto.EconomyTransactionsResponse;
 import com.realfiction.realcore.api.dto.HeartbeatRequest;
 import com.realfiction.realcore.api.dto.HeartbeatResponse;
 import com.realfiction.realcore.api.dto.LinkConfirmRequest;
@@ -73,6 +77,14 @@ public final class PlatformApiClient implements Closeable {
 
   public CompletableFuture<StatEventsResponse> postStatEvents(StatEventsRequest request) {
     return post("/api/plugin/stats/events", request, StatEventsResponse.class);
+  }
+
+  public CompletableFuture<EconomyTransactionsResponse> postEconomyTransactions(EconomyTransactionsRequest request) {
+    return post("/api/plugin/economy/transactions", request, EconomyTransactionsResponse.class);
+  }
+
+  public CompletableFuture<EconomyBalanceResponse> fetchEconomyBalance(EconomyBalanceRequest request) {
+    return post("/api/plugin/economy/balance", request, EconomyBalanceResponse.class);
   }
 
   private <T> CompletableFuture<T> post(String path, Object payload, Class<T> responseType) {

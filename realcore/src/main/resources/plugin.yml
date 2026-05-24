@@ -14,13 +14,13 @@ softdepend:
 commands:
   realfiction:
     description: RealFiction linking, rewards, and lobby commands.
-    usage: /realfiction <link|menu|lobbies|cosmetics|spawn|status|reload|setspawn>
+    usage: /realfiction <link|menu|lobbies|cosmetics|spawn|status|stats|economy|rewards|reload|setspawn>
   rf:
     description: RealFiction linking, rewards, and lobby commands.
-    usage: /rf <link|menu|lobbies|cosmetics|spawn|status|reload|setspawn>
+    usage: /rf <link|menu|lobbies|cosmetics|spawn|status|stats|economy|rewards|reload|setspawn>
   realcore:
     description: RealFiction linking, rewards, and lobby commands.
-    usage: /realcore <link|menu|lobbies|cosmetics|spawn|status|reload|setspawn>
+    usage: /realcore <link|menu|lobbies|cosmetics|spawn|status|stats|economy|rewards|reload|setspawn>
   cosmetics:
     description: Open your RealFiction cosmetics.
     usage: /cosmetics

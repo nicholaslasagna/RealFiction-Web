@@ -62,6 +62,7 @@ final class RealCoreConfigTest {
     assertEquals(1, config.playerMessagesByRewardKey().get("vote.standard").size());
     assertTrue(config.rewardBroadcastsEnabled());
     assertEquals(1, config.broadcastMessagesByRewardKey().get("vote.standard").size());
+    assertFalse(config.economy().enabled());
   }
 
   @Test

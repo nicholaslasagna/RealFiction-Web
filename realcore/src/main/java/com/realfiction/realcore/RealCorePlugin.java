@@ -8,6 +8,7 @@ import com.realfiction.realcore.config.RealCoreConfig;
 import com.realfiction.realcore.cosmetics.CosmeticsConfig;
 import com.realfiction.realcore.cosmetics.CosmeticsListener;
 import com.realfiction.realcore.cosmetics.CosmeticsManager;
+import com.realfiction.realcore.economy.EconomyService;
 import com.realfiction.realcore.linking.AccountLinkService;
 import com.realfiction.realcore.lobby.LobbyItemListener;
 import com.realfiction.realcore.lobby.LobbyListener;
@@ -60,6 +61,7 @@ public final class RealCorePlugin extends JavaPlugin {
   private NetworkStatService networkStatService;
   private BufferedNetworkStatWriter networkStatWriter;
   private EconomyMirrorService economyMirrorService;
+  private EconomyService economyService;
   // Listeners are registered exactly once on enable; producers are swapped on
   // reload so the new writer/group are picked up without a restart.
   private StatKillsListener statKillsListener;
@@ -158,6 +160,7 @@ public final class RealCorePlugin extends JavaPlugin {
       RewardDispatcher dispatcher = new RewardDispatcher(this, realCoreConfig, scheduler, luckPermsService);
       accountLinkService = new AccountLinkService(this, realCoreConfig, scheduler, apiClient);
       rewardPoller = new RewardPoller(this, realCoreConfig, scheduler, apiClient, dispatcher);
+      economyService = new EconomyService(realCoreConfig, scheduler, apiClient, getLogger());
       servicesLoaded = true;
 
       if (lobbyManager != null) {
@@ -190,6 +193,12 @@ public final class RealCorePlugin extends JavaPlugin {
         setupNetworkStats();
       } else {
         getLogger().info("Network stat cache disabled (modules.stats or stats.enabled).");
+      }
+      economyService.start();
+      if (!economyService.configuredEnabled()) {
+        getLogger().info("Global economy client disabled by economy.enabled.");
+      } else if (!economyService.writerRunning()) {
+        getLogger().info("Global economy writer not running: " + economyService.disabledReason());
       }
       if (logSummary) {
         logStartupSummary("reloaded", registeredCommandLabels());
@@ -275,6 +284,10 @@ public final class RealCorePlugin extends JavaPlugin {
     return economyMirrorService;
   }
 
+  public EconomyService economyService() {
+    return economyService;
+  }
+
   private List<String> registerCommands(RealFictionCommand commandExecutor) {
     List<String> labels = List.of("realfiction", "rf", "realcore", "cosmetics");
     for (String label : labels) {
@@ -334,6 +347,18 @@ public final class RealCorePlugin extends JavaPlugin {
           + (ago >= 0 ? ", last " + ago + "s ago" : ", never refreshed")
           + writerSummary;
     }
+    String economy;
+    if (economyService == null) {
+      economy = "not loaded";
+    } else if (!economyService.configuredEnabled()) {
+      economy = "disabled";
+    } else if (!economyService.mutationsAllowed()) {
+      economy = "read-only (" + economyService.disabledReason() + ")";
+    } else {
+      economy = economyService.writerRunning()
+          ? "ready (" + economyService.writer().queuedTransactionCount() + " queued)"
+          : "not ready (" + economyService.disabledReason() + ")";
+    }
     String commands = "/" + String.join(", /", commandLabels);
     String menus = lobbyManager == null ? "not loaded" : String.join(", ", lobbyManager.menuRegistry().keys());
 
@@ -352,6 +377,7 @@ public final class RealCorePlugin extends JavaPlugin {
     getLogger().info("| Cosmetics: " + cosmetics);
     getLogger().info("| Playtime: " + playtime);
     getLogger().info("| Stats: " + stats);
+    getLogger().info("| Global economy: " + economy);
     getLogger().info("| Commands: " + commands);
     getLogger().info("| Menus: " + (menus.isBlank() ? "none" : menus));
     getLogger().info("+--------------------------------------------------+");
@@ -533,7 +559,8 @@ public final class RealCorePlugin extends JavaPlugin {
         || !getConfig().isConfigurationSection("walkSpeed")
         || !getConfig().isConfigurationSection("proxy.serverAliases")
         || !getConfig().isConfigurationSection("cosmetics")
-        || !getConfig().isConfigurationSection("rewards.messages");
+        || !getConfig().isConfigurationSection("rewards.messages")
+        || !getConfig().isConfigurationSection("economy");
     if (!missingLobbyDefaults) {
       return;
     }
@@ -544,6 +571,10 @@ public final class RealCorePlugin extends JavaPlugin {
 
   private void stopServices(boolean closeScheduler) {
     servicesLoaded = false;
+    if (economyService != null) {
+      economyService.stop();
+      economyService = null;
+    }
     if (economyMirrorService != null) {
       economyMirrorService.stop();
       economyMirrorService = null;

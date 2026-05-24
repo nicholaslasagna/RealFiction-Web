@@ -3,6 +3,7 @@ package com.realfiction.realcore.rewards;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import com.realfiction.realcore.api.dto.RewardPayload;
+import com.realfiction.realcore.config.EconomyConfig;
 import com.realfiction.realcore.config.RealCoreConfig;
 import com.realfiction.realcore.config.ServerModules;
 import java.net.URI;
@@ -36,7 +37,8 @@ final class RewardCommandFormatterTest {
         "Lobby 1",
         false,
         ServerModules.defaults(),
-        Set.of()
+        Set.of(),
+        EconomyConfig.disabledDefaults()
     );
 
     RewardPayload reward = new RewardPayload();

@@ -17,8 +17,9 @@ import org.bukkit.configuration.ConfigurationSection;
  * The remaining flags ({@code menus}, {@code scoreboards}, {@code economy},
  * {@code votes}, {@code punishments}, {@code chat}) are parsed and reported for
  * forward compatibility; menus/scoreboards are sub-features of the lobby module,
- * economy/votes are realized through reward delivery + configured commands, and
- * punishments/chat are reserved for future integrations.
+ * economy is a disabled-by-default client foundation controlled by
+ * {@code economy.enabled}, votes are realized through reward delivery +
+ * configured commands, and punishments/chat are reserved for future integrations.
  *
  * <p>Defaults keep a single-server install (the current Lobby1) running with
  * everything enabled, so an existing config without a {@code modules} section is
@@ -38,7 +39,7 @@ public record ServerModules(
     boolean stats
 ) {
   public static ServerModules defaults() {
-    return new ServerModules(true, true, true, true, true, true, true, false, false, true, true);
+    return new ServerModules(true, true, true, true, true, false, true, false, false, true, true);
   }
 
   public static ServerModules from(ConfigurationSection section) {
@@ -54,7 +55,7 @@ public record ServerModules(
         section.getBoolean("lobby", true),
         section.getBoolean("menus", true),
         section.getBoolean("scoreboards", true),
-        section.getBoolean("economy", true),
+        section.getBoolean("economy", false),
         votes,
         section.getBoolean("punishments", false),
         section.getBoolean("chat", false),
