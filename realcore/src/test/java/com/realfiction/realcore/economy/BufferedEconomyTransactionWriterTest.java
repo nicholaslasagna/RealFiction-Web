@@ -205,6 +205,7 @@ final class BufferedEconomyTransactionWriterTest {
   private static final class NoopScheduler implements RealCoreScheduler {
     @Override public String name() { return "noop"; }
     @Override public boolean folia() { return false; }
+    @Override public void runAsync(Runnable task) { task.run(); }
     @Override public ScheduledTaskHandle runAsyncRepeating(Runnable task, long initialDelaySeconds, long periodSeconds) {
       return () -> {};
     }

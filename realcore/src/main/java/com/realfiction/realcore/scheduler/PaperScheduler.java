@@ -27,6 +27,11 @@ final class PaperScheduler implements RealCoreScheduler {
   }
 
   @Override
+  public void runAsync(Runnable task) {
+    Bukkit.getScheduler().runTaskAsynchronously(plugin, task);
+  }
+
+  @Override
   public ScheduledTaskHandle runAsyncRepeating(Runnable task, long initialDelaySeconds, long periodSeconds) {
     BukkitTask bukkitTask = Bukkit.getScheduler().runTaskTimerAsynchronously(
         plugin,

@@ -10,6 +10,7 @@ import com.realfiction.realcore.economy.BufferedEconomyTransactionWriter;
 import com.realfiction.realcore.economy.EconomyService;
 import com.realfiction.realcore.economy.EconomyStagingTestTransaction;
 import com.realfiction.realcore.economy.EconomyTransaction;
+import com.realfiction.realcore.economy.VaultBalanceAuditService;
 import com.realfiction.realcore.stats.BufferedNetworkStatWriter;
 import com.realfiction.realcore.stats.EconomyMirrorService;
 import com.realfiction.realcore.stats.NetworkStatService;
@@ -212,7 +213,7 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
     }
     if (sender.hasPermission("realcore.admin")) {
       send(sender, ChatColor.YELLOW + "Admin: " + ChatColor.WHITE + "/" + label
-          + " status|stats|stats flush|economy|economy flush|economy test|rewards|reload|setspawn");
+          + " status|stats|stats flush|economy|economy audit|economy flush|economy test|rewards|reload|setspawn");
     }
     return true;
   }
@@ -390,11 +391,84 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
     if (args.length >= 2 && "test".equalsIgnoreCase(args[1])) {
       return handleEconomyTest(sender, args);
     }
+    if (args.length >= 2 && "audit".equalsIgnoreCase(args[1])) {
+      return handleEconomyAudit(sender, args);
+    }
 
     send(sender, ChatColor.GOLD + "RealCore Global Economy");
     appendEconomyStatus(sender);
     send(sender, ChatColor.GRAY + "No Vault provider, no EssentialsX balance changes.");
     return true;
+  }
+
+  private boolean handleEconomyAudit(CommandSender sender, String[] args) {
+    VaultBalanceAuditService.Mode mode;
+    int limit = VaultBalanceAuditService.DEFAULT_ALL_LIMIT;
+    try {
+      mode = args.length >= 3 ? VaultBalanceAuditService.Mode.parse(args[2]) : VaultBalanceAuditService.Mode.ONLINE;
+      if (args.length >= 4) {
+        limit = Integer.parseInt(args[3]);
+      }
+    } catch (IllegalArgumentException error) {
+      send(sender, ChatColor.YELLOW + "Usage: /rf economy audit [online|all] [limit]");
+      send(sender, ChatColor.GRAY + "This is read-only and exports local Vault balances for staff review.");
+      return true;
+    }
+
+    VaultBalanceAuditService service = new VaultBalanceAuditService(plugin, plugin.realCoreConfig());
+    send(sender, ChatColor.YELLOW + "Starting local Vault balance audit..."
+        + ChatColor.GRAY + " This is read-only and exports a CSV.");
+    RealCoreScheduler scheduler = plugin.scheduler();
+    VaultBalanceAuditService.Mode auditMode = mode;
+    int auditLimit = limit;
+    Runnable auditTask = () -> sendEconomyAuditReport(sender, service.audit(auditMode, auditLimit));
+    if (scheduler != null) {
+      scheduler.runAsync(auditTask);
+    } else {
+      auditTask.run();
+    }
+    return true;
+  }
+
+  private void sendEconomyAuditReport(CommandSender sender, VaultBalanceAuditService.AuditReport report) {
+    if (!report.providerAvailable()) {
+      send(sender, ChatColor.RED + report.error());
+      send(sender, ChatColor.GRAY + "No balances were read or exported.");
+      return;
+    }
+
+    send(sender, ChatColor.GOLD + "Local Vault Balance Audit");
+    send(sender, ChatColor.YELLOW + "Mode: " + ChatColor.WHITE + report.mode().name().toLowerCase(java.util.Locale.ROOT)
+        + ChatColor.GRAY + " (read-only)");
+    RealCoreConfig config = plugin.realCoreConfig();
+    if (config != null) {
+      send(sender, ChatColor.YELLOW + "Server: " + ChatColor.WHITE + config.serverId()
+          + ChatColor.GRAY + " (" + config.serverGroup() + ")");
+    }
+    send(sender, ChatColor.YELLOW + "Provider: " + ChatColor.WHITE + report.providerName());
+    send(sender, ChatColor.YELLOW + "Rows: " + ChatColor.WHITE + report.entries().size()
+        + ChatColor.GRAY + " exported, " + report.scanned() + " scanned, " + report.failureCount() + " failed");
+    if (report.exportPath() != null) {
+      send(sender, ChatColor.YELLOW + "CSV: " + ChatColor.WHITE + report.exportPath());
+    }
+    if (report.error() != null && !report.error().isBlank()) {
+      send(sender, ChatColor.YELLOW + "Export warning: " + ChatColor.RED + report.error());
+    }
+    if (report.entries().isEmpty()) {
+      send(sender, ChatColor.GRAY + "No local balances found for this audit mode.");
+      return;
+    }
+    int shown = Math.min(8, report.entries().size());
+    for (int i = 0; i < shown; i++) {
+      VaultBalanceAuditService.AuditEntry entry = report.entries().get(i);
+      send(sender, ChatColor.GRAY + " - " + entry.username() + " "
+          + ChatColor.DARK_GRAY + "(" + entry.minecraftUuid() + ") "
+          + ChatColor.WHITE + "$" + entry.localVaultBalance());
+    }
+    if (report.entries().size() > shown) {
+      send(sender, ChatColor.GRAY + "And " + (report.entries().size() - shown) + " more in the CSV.");
+    }
+    send(sender, ChatColor.GRAY + "Audit only: no Vault, EssentialsX, website, or global economy writes were made.");
   }
 
   private boolean handleEconomyTest(CommandSender sender, String[] args) {
@@ -560,7 +634,12 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
       return List.of("flush");
     }
     if (args.length == 2 && "economy".equalsIgnoreCase(args[0]) && sender.hasPermission("realcore.admin")) {
-      return List.of("flush", "test");
+      return List.of("audit", "flush", "test");
+    }
+    if (args.length == 3 && "economy".equalsIgnoreCase(args[0])
+        && "audit".equalsIgnoreCase(args[1])
+        && sender.hasPermission("realcore.admin")) {
+      return List.of("online", "all");
     }
     return List.of();
   }
