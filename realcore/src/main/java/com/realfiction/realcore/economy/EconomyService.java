@@ -52,6 +52,10 @@ public final class EconomyService {
       disabledReason = "economy.enabled is false";
       return;
     }
+    if (!config.modules().economy()) {
+      disabledReason = "modules.economy is false";
+      return;
+    }
     if (!config.hmacSecretConfigured()) {
       disabledReason = "website auth is not configured";
       return;
@@ -139,6 +143,10 @@ public final class EconomyService {
 
   public int cachedBalanceCount() {
     return balanceCache.size();
+  }
+
+  public long stagingTestMaxCreditMinor() {
+    return economyConfig.stagingTestMaxCreditMinor();
   }
 
   public BufferedEconomyTransactionWriter writer() {

@@ -57,6 +57,9 @@ economy:
   bufferSize: 5000
   maxBatchSize: 100
   balanceCacheSeconds: 30
+  # Maximum amount for the admin-only /rf economy test command. Minor units:
+  # $1.00 = 100, so the default is a tiny $1.00 staging credit.
+  stagingTestMaxCreditMinor: 100
 
 # Network playtime tracking (feeds the "Top Players" leaderboard/holograms).
 # Each backend records its own sessions; the website sums them per player.

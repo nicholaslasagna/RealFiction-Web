@@ -63,6 +63,7 @@ final class RealCoreConfigTest {
     assertTrue(config.rewardBroadcastsEnabled());
     assertEquals(1, config.broadcastMessagesByRewardKey().get("vote.standard").size());
     assertFalse(config.economy().enabled());
+    assertFalse(config.modules().economy());
   }
 
   @Test
