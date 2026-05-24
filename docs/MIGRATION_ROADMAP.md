@@ -107,3 +107,16 @@ Next plugin work:
 - Tournament hub.
 - Discord account sync.
 - Redis-ready queue/cache layer when scaling requires it.
+
+## Phase 10: Global Economy Foundation
+
+Foundation-only scope:
+
+- Add an append-only global economy ledger after migration 017.
+- Store currency as integer minor units (`$1.00 = 100`).
+- Keep `money.total` as a private diagnostic stat mirror, not the canonical balance.
+- Keep existing vote reward delivery unchanged until a later approved phase.
+- Enforce server economy policy inside DB/RPCs, including Anarchy mutation blocks.
+- Keep RealCore economy disabled by default until explicitly configured.
+
+See `docs/GLOBAL_ECONOMY.md`.

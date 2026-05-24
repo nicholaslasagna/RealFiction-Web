@@ -39,6 +39,7 @@ Cloudflare Worker output is configured through `wrangler.toml`. The build step i
 - [Architecture](docs/ARCHITECTURE.md)
 - [RealCore Plugin](docs/REALCORE_PLUGIN.md)
 - [RealVoteBridge](realvotebridge/README.md)
+- [Global Economy Foundation](docs/GLOBAL_ECONOMY.md)
 - [Migration Roadmap](docs/MIGRATION_ROADMAP.md)
 - [Cloudflare Deploy & Env Vars](docs/CLOUDFLARE_DEPLOY.md)
 - [Cloudflare Rate Limiting](docs/CLOUDFLARE_RATELIMIT.md)
