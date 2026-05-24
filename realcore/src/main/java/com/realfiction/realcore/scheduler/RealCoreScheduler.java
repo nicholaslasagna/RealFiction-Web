@@ -9,6 +9,9 @@ public interface RealCoreScheduler extends AutoCloseable {
 
   boolean folia();
 
+  /** Runs non-world/non-entity work asynchronously. */
+  void runAsync(Runnable task);
+
   ScheduledTaskHandle runAsyncRepeating(Runnable task, long initialDelaySeconds, long periodSeconds);
 
   /**

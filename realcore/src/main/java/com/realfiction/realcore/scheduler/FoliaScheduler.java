@@ -28,6 +28,11 @@ final class FoliaScheduler implements RealCoreScheduler {
   }
 
   @Override
+  public void runAsync(Runnable task) {
+    Bukkit.getAsyncScheduler().runNow(plugin, ignored -> task.run());
+  }
+
+  @Override
   public ScheduledTaskHandle runAsyncRepeating(Runnable task, long initialDelaySeconds, long periodSeconds) {
     ScheduledTask scheduledTask = Bukkit.getAsyncScheduler().runAtFixedRate(
         plugin,

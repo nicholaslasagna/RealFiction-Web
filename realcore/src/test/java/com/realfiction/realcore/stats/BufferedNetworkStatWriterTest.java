@@ -289,6 +289,11 @@ final class BufferedNetworkStatWriterTest {
     }
 
     @Override
+    public void runAsync(Runnable task) {
+      task.run();
+    }
+
+    @Override
     public ScheduledTaskHandle runAsyncRepeating(Runnable task, long initialDelaySeconds, long periodSeconds) {
       return () -> {};
     }
