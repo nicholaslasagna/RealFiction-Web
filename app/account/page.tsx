@@ -18,6 +18,7 @@ import {
 } from "lucide-react"
 
 import { AccountAuthCard } from "@/components/account-auth-card"
+import { AccountEconomyCard } from "@/components/account-economy-card"
 import { AccountLinkCard } from "@/components/account-link-card"
 import { AccountSignOutButton } from "@/components/account-sign-out-button"
 import { Badge } from "@/components/ui/badge"
@@ -496,6 +497,8 @@ async function SignedInAccount() {
           </section>
 
           <aside className="space-y-6">
+            <AccountEconomyCard />
+
             <Card className="minecraft-card">
               <CardHeader>
                 <CardTitle className="display-font text-3xl">Your Streak</CardTitle>
