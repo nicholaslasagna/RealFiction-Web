@@ -11,6 +11,7 @@ import com.realfiction.realcore.economy.EconomyService;
 import com.realfiction.realcore.economy.EconomyStagingTestTransaction;
 import com.realfiction.realcore.economy.EconomyTransaction;
 import com.realfiction.realcore.economy.VaultBalanceAuditService;
+import com.realfiction.realcore.economy.VaultBalanceSyncService;
 import com.realfiction.realcore.stats.BufferedNetworkStatWriter;
 import com.realfiction.realcore.stats.EconomyMirrorService;
 import com.realfiction.realcore.stats.NetworkStatService;
@@ -213,7 +214,7 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
     }
     if (sender.hasPermission("realcore.admin")) {
       send(sender, ChatColor.YELLOW + "Admin: " + ChatColor.WHITE + "/" + label
-          + " status|stats|stats flush|economy|economy audit|economy flush|economy test|rewards|reload|setspawn");
+          + " status|stats|stats flush|economy|economy audit|economy sync-vault|economy flush|economy test|rewards|reload|setspawn");
     }
     return true;
   }
@@ -394,10 +395,13 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
     if (args.length >= 2 && "audit".equalsIgnoreCase(args[1])) {
       return handleEconomyAudit(sender, args);
     }
+    if (args.length >= 2 && "sync-vault".equalsIgnoreCase(args[1])) {
+      return handleEconomyVaultSync(sender, args);
+    }
 
     send(sender, ChatColor.GOLD + "RealCore Global Economy");
     appendEconomyStatus(sender);
-    send(sender, ChatColor.GRAY + "No Vault provider, no EssentialsX balance changes.");
+    send(sender, ChatColor.GRAY + "No Vault provider is registered by RealCore.");
     return true;
   }
 
@@ -469,6 +473,65 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
       send(sender, ChatColor.GRAY + "And " + (report.entries().size() - shown) + " more in the CSV.");
     }
     send(sender, ChatColor.GRAY + "Audit only: no Vault, EssentialsX, website, or global economy writes were made.");
+  }
+
+  private boolean handleEconomyVaultSync(CommandSender sender, String[] args) {
+    if (args.length != 4) {
+      send(sender, ChatColor.YELLOW + "Usage: /rf economy sync-vault <uuid> <username>");
+      send(sender, ChatColor.GRAY + "Reads the DB balance and applies it to local Vault for one staging player only.");
+      return true;
+    }
+
+    EconomyService economy = plugin.economyService();
+    RealCoreConfig config = plugin.realCoreConfig();
+    if (economy == null || config == null) {
+      send(sender, ChatColor.RED + "Global economy is not loaded.");
+      return true;
+    }
+    if (!economy.configuredEnabled()) {
+      send(sender, ChatColor.RED + "Global economy is disabled by economy.enabled=false.");
+      return true;
+    }
+    if (!config.modules().economy()) {
+      send(sender, ChatColor.RED + "Global economy is disabled by modules.economy=false.");
+      return true;
+    }
+    if (!economy.syncVaultAfterDb()) {
+      send(sender, ChatColor.RED + "Vault sync is disabled by economy.syncVaultAfterDb=false.");
+      return true;
+    }
+    if ("anarchy".equalsIgnoreCase(config.serverGroup())) {
+      send(sender, ChatColor.RED + "Anarchy may not sync the global economy into Vault.");
+      return true;
+    }
+
+    UUID uuid;
+    try {
+      uuid = UUID.fromString(args[2]);
+    } catch (IllegalArgumentException error) {
+      send(sender, ChatColor.RED + "Use a valid player UUID.");
+      return true;
+    }
+
+    String username = args[3];
+    String actor = sender.getName();
+    send(sender, ChatColor.YELLOW + "Starting one-player DB-to-Vault sync for " + username + "..."
+        + ChatColor.GRAY + " This is async and bounded by config.");
+    VaultBalanceSyncService service = new VaultBalanceSyncService(plugin, config, economy);
+    service.syncOne(uuid, username, actor).whenComplete((result, error) -> {
+      if (error != null) {
+        send(sender, ChatColor.RED + "Vault sync failed: " + rootMessage(error));
+        return;
+      }
+      send(sender, ChatColor.GREEN + "Vault sync complete for " + result.username() + ".");
+      send(sender, ChatColor.YELLOW + "DB target: " + ChatColor.WHITE + result.targetDollars()
+          + ChatColor.GRAY + " (" + result.targetMinor() + " minor)");
+      send(sender, ChatColor.YELLOW + "Vault before: " + ChatColor.WHITE + result.beforeDollars()
+          + ChatColor.GRAY + ", after: " + result.afterDollars()
+          + ", deltaMinor=" + result.deltaMinor());
+      send(sender, ChatColor.GRAY + "Audit log written locally under plugins/RealCore/audits.");
+    });
+    return true;
   }
 
   private boolean handleEconomyTest(CommandSender sender, String[] args) {
@@ -556,6 +619,9 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
         + ", buffer " + economy.bufferSize());
     send(sender, ChatColor.YELLOW + "Staging test max: " + ChatColor.WHITE
         + economy.stagingTestMaxCreditMinor() + ChatColor.GRAY + " minor units");
+    send(sender, ChatColor.YELLOW + "Vault sync after DB: "
+        + (economy.syncVaultAfterDb() ? ChatColor.GREEN + "enabled" : ChatColor.GRAY + "disabled")
+        + ChatColor.GRAY + ", max delta " + economy.syncVaultMaxDeltaMinor() + " minor units");
     sendEconomyWriterStatus(sender, economy.writer());
   }
 
@@ -593,6 +659,15 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
 
   private String statusText(boolean ok) {
     return (ok ? ChatColor.GREEN + "ready" : ChatColor.RED + "not ready");
+  }
+
+  private String rootMessage(Throwable error) {
+    Throwable current = error;
+    while (current.getCause() != null) {
+      current = current.getCause();
+    }
+    String message = current.getMessage();
+    return message == null || message.isBlank() ? current.getClass().getSimpleName() : message;
   }
 
   private void send(CommandSender sender, String message) {
@@ -634,7 +709,7 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
       return List.of("flush");
     }
     if (args.length == 2 && "economy".equalsIgnoreCase(args[0]) && sender.hasPermission("realcore.admin")) {
-      return List.of("audit", "flush", "test");
+      return List.of("audit", "flush", "sync-vault", "test");
     }
     if (args.length == 3 && "economy".equalsIgnoreCase(args[0])
         && "audit".equalsIgnoreCase(args[1])

@@ -149,6 +149,14 @@ public final class EconomyService {
     return economyConfig.stagingTestMaxCreditMinor();
   }
 
+  public boolean syncVaultAfterDb() {
+    return economyConfig.syncVaultAfterDb();
+  }
+
+  public long syncVaultMaxDeltaMinor() {
+    return economyConfig.syncVaultMaxDeltaMinor();
+  }
+
   public BufferedEconomyTransactionWriter writer() {
     return writer;
   }

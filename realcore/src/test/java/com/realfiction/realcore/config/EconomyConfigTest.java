@@ -20,6 +20,8 @@ final class EconomyConfigTest {
     assertEquals(5000, config.bufferSize());
     assertEquals(100, config.maxBatchSize());
     assertEquals(100, config.stagingTestMaxCreditMinor());
+    assertFalse(config.syncVaultAfterDb());
+    assertEquals(100, config.syncVaultMaxDeltaMinor());
   }
 
   @Test
@@ -34,6 +36,8 @@ final class EconomyConfigTest {
           maxBatchSize: 900
           balanceCacheSeconds: 2
           stagingTestMaxCreditMinor: 250000
+          syncVaultAfterDb: true
+          syncVaultMaxDeltaMinor: 999999999
         """);
 
     EconomyConfig config = EconomyConfig.from(yaml.getConfigurationSection("economy"));
@@ -45,6 +49,8 @@ final class EconomyConfigTest {
     assertEquals(500, config.maxBatchSize());
     assertEquals(5, config.balanceCacheTtl().toSeconds());
     assertEquals(10000, config.stagingTestMaxCreditMinor());
+    assertTrue(config.syncVaultAfterDb());
+    assertEquals(1000000, config.syncVaultMaxDeltaMinor());
   }
 
   @Test

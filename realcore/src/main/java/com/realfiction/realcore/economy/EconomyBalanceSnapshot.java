@@ -13,8 +13,6 @@ public record EconomyBalanceSnapshot(
     Instant cachedAt
 ) {
   public String formattedDollars() {
-    long dollars = balanceMinor / Math.max(1, scale);
-    long cents = Math.abs(balanceMinor % Math.max(1, scale));
-    return "$" + dollars + "." + String.format("%02d", cents);
+    return EconomyBalanceFormat.formatMinor(balanceMinor, scale);
   }
 }
