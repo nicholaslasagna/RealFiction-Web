@@ -93,6 +93,14 @@ overdraft support.
 Future phases can add RealCore buffered economy writing, import tooling, and
 controlled producer migration after this foundation is validated.
 
+## Phase 4C balance audit comparison
+
+Before any migration import, staff should compare the read-only Vault balance
+exports from Lobby1, SMP, Factions, and Arcade and choose one canonical source
+in writing. Use [Economy Balance Audit Comparison](./ECONOMY_BALANCE_AUDIT.md)
+for the report template, duplicate/missing player rules, anomaly checks, and
+rollback/import readiness checklist.
+
 ## Migration imports
 
 Migration imports are admin/service-only. They are not accepted by plugin
