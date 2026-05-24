@@ -92,3 +92,51 @@ overdraft support.
 
 Future phases can add RealCore buffered economy writing, import tooling, and
 controlled producer migration after this foundation is validated.
+
+## Migration imports
+
+Migration imports are admin/service-only. They are not accepted by plugin
+economy routes and do not change RealCore, Vault, EssentialsX, rewards, or
+gameplay producers.
+
+The approved import path is:
+
+```text
+POST /api/admin/economy/import
+```
+
+Accepted operations:
+
+- `import`: import reviewed canonical target balances as `migration_import`
+  ledger entries.
+- `rollback`: create compensating `migration_import` entries for a previous
+  import batch.
+
+Both operations default to `dryRun: true`. A non-dry-run request should only be
+sent after the CSV comparison report is reviewed and the import batch id,
+reason, and rollback plan are recorded.
+
+Import behavior:
+
+- Uses integer minor units only.
+- Computes a delta from current DB balance to the reviewed target balance.
+- Writes append-only `economy_ledger` rows with category `migration_import`.
+- Updates `economy_balances` through the service-role RPC only.
+- Records actor, reason, import batch id, and metadata in ledger/audit rows.
+- Uses a stable per-player idempotency key:
+
+  ```text
+  migration-import:<batch-id>:<minecraft-uuid>:<currency-key>
+  ```
+
+Rollback behavior:
+
+- Never deletes ledger rows.
+- Finds import rows from the original import batch.
+- Writes equal-and-opposite compensating entries with stable rollback
+  idempotency keys.
+- Rejects rollback if compensation would create a negative balance.
+
+The optional service-token path uses `ECONOMY_IMPORT_SERVICE_SECRET`. Browser
+users must still be authenticated as staff/admin/owner; service scripts must
+provide the import secret. Both paths execute service-role-only RPCs.
