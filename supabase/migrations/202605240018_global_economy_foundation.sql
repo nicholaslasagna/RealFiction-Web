@@ -134,25 +134,46 @@ alter table public.economy_transaction_batches enable row level security;
 alter table public.economy_server_policies enable row level security;
 alter table public.economy_admin_audit enable row level security;
 
+-- Economy tables are RPC-owned. Authenticated/admin users may read for staff
+-- dashboards, but direct inserts/updates/deletes are intentionally not exposed.
+-- Mutations must go through service-role RPCs so every balance change is
+-- idempotent, policy-checked, and audited.
+revoke all on table public.economy_ledger from public, anon, authenticated;
+revoke all on table public.economy_balances from public, anon, authenticated;
+revoke all on table public.economy_transaction_batches from public, anon, authenticated;
+revoke all on table public.economy_server_policies from public, anon, authenticated;
+revoke all on table public.economy_admin_audit from public, anon, authenticated;
+
+grant select on table public.economy_ledger to authenticated;
+grant select on table public.economy_balances to authenticated;
+grant select on table public.economy_transaction_batches to authenticated;
+grant select on table public.economy_server_policies to authenticated;
+grant select on table public.economy_admin_audit to authenticated;
+
 drop policy if exists "economy_ledger_admin" on public.economy_ledger;
-create policy "economy_ledger_admin" on public.economy_ledger for all
-  using (public.is_admin()) with check (public.is_admin());
+drop policy if exists "economy_ledger_admin_select" on public.economy_ledger;
+create policy "economy_ledger_admin_select" on public.economy_ledger for select
+  using (public.is_admin());
 
 drop policy if exists "economy_balances_admin" on public.economy_balances;
-create policy "economy_balances_admin" on public.economy_balances for all
-  using (public.is_admin()) with check (public.is_admin());
+drop policy if exists "economy_balances_admin_select" on public.economy_balances;
+create policy "economy_balances_admin_select" on public.economy_balances for select
+  using (public.is_admin());
 
 drop policy if exists "economy_transaction_batches_admin" on public.economy_transaction_batches;
-create policy "economy_transaction_batches_admin" on public.economy_transaction_batches for all
-  using (public.is_admin()) with check (public.is_admin());
+drop policy if exists "economy_transaction_batches_admin_select" on public.economy_transaction_batches;
+create policy "economy_transaction_batches_admin_select" on public.economy_transaction_batches for select
+  using (public.is_admin());
 
 drop policy if exists "economy_server_policies_admin" on public.economy_server_policies;
-create policy "economy_server_policies_admin" on public.economy_server_policies for all
-  using (public.is_admin()) with check (public.is_admin());
+drop policy if exists "economy_server_policies_admin_select" on public.economy_server_policies;
+create policy "economy_server_policies_admin_select" on public.economy_server_policies for select
+  using (public.is_admin());
 
 drop policy if exists "economy_admin_audit_admin" on public.economy_admin_audit;
-create policy "economy_admin_audit_admin" on public.economy_admin_audit for all
-  using (public.is_admin()) with check (public.is_admin());
+drop policy if exists "economy_admin_audit_admin_select" on public.economy_admin_audit;
+create policy "economy_admin_audit_admin_select" on public.economy_admin_audit for select
+  using (public.is_admin());
 
 -- Conservative disabled defaults. Operators must explicitly enable a backend
 -- before any plugin economy write can land. Anarchy is present and disabled so
