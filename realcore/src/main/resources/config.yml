@@ -36,7 +36,7 @@ modules:
   lobby: true
   menus: true
   scoreboards: true
-  economy: true
+  economy: false
   votes: true
   punishments: false
   chat: false
@@ -45,6 +45,18 @@ modules:
   playtime: true
   # Generic stat leaderboard cache (placeholders + holograms).
   stats: true
+
+# Disabled-by-default global economy client foundation. Phase 3 only prepares
+# RealCore to talk to the DB-owned economy routes later; it does not register a
+# Vault provider, replace EssentialsX, mutate local balances, or create gameplay
+# earns/spends.
+economy:
+  enabled: false
+  currencyKey: "realfiction_main"
+  flushSeconds: 30
+  bufferSize: 5000
+  maxBatchSize: 100
+  balanceCacheSeconds: 30
 
 # Network playtime tracking (feeds the "Top Players" leaderboard/holograms).
 # Each backend records its own sessions; the website sums them per player.

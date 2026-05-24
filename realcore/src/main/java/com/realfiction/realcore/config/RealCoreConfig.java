@@ -33,7 +33,8 @@ public record RealCoreConfig(
     String displayName,
     boolean refuseOnDuplicateServerId,
     ServerModules modules,
-    Set<String> skipUsernames
+    Set<String> skipUsernames,
+    EconomyConfig economy
 ) {
   public static RealCoreConfig from(FileConfiguration config) {
     URI baseUrl = URI.create(trimTrailingSlash(config.getString("baseUrl", "https://realfiction.live")));
@@ -97,7 +98,8 @@ public record RealCoreConfig(
         displayName,
         refuseOnDuplicateServerId,
         modules,
-        Set.copyOf(skipUsernames)
+        Set.copyOf(skipUsernames),
+        EconomyConfig.from(config.getConfigurationSection("economy"))
     );
   }
 
