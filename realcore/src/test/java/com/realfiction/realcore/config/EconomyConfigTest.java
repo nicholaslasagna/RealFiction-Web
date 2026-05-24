@@ -19,6 +19,7 @@ final class EconomyConfigTest {
     assertEquals(30, config.flushInterval().toSeconds());
     assertEquals(5000, config.bufferSize());
     assertEquals(100, config.maxBatchSize());
+    assertEquals(100, config.stagingTestMaxCreditMinor());
   }
 
   @Test
@@ -32,6 +33,7 @@ final class EconomyConfigTest {
           bufferSize: 0
           maxBatchSize: 900
           balanceCacheSeconds: 2
+          stagingTestMaxCreditMinor: 250000
         """);
 
     EconomyConfig config = EconomyConfig.from(yaml.getConfigurationSection("economy"));
@@ -42,6 +44,7 @@ final class EconomyConfigTest {
     assertEquals(1, config.bufferSize());
     assertEquals(500, config.maxBatchSize());
     assertEquals(5, config.balanceCacheTtl().toSeconds());
+    assertEquals(10000, config.stagingTestMaxCreditMinor());
   }
 
   @Test

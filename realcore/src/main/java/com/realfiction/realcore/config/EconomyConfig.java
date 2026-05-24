@@ -16,7 +16,8 @@ public record EconomyConfig(
     Duration flushInterval,
     int bufferSize,
     int maxBatchSize,
-    Duration balanceCacheTtl
+    Duration balanceCacheTtl,
+    long stagingTestMaxCreditMinor
 ) {
   public static EconomyConfig disabledDefaults() {
     return new EconomyConfig(
@@ -25,7 +26,8 @@ public record EconomyConfig(
         Duration.ofSeconds(30),
         5000,
         100,
-        Duration.ofSeconds(30)
+        Duration.ofSeconds(30),
+        100
     );
   }
 
@@ -46,7 +48,8 @@ public record EconomyConfig(
         Duration.ofSeconds(Math.max(5, section.getLong("flushSeconds", defaults.flushInterval().toSeconds()))),
         Math.max(1, section.getInt("bufferSize", defaults.bufferSize())),
         Math.max(1, Math.min(500, section.getInt("maxBatchSize", defaults.maxBatchSize()))),
-        Duration.ofSeconds(Math.max(5, section.getLong("balanceCacheSeconds", defaults.balanceCacheTtl().toSeconds())))
+        Duration.ofSeconds(Math.max(5, section.getLong("balanceCacheSeconds", defaults.balanceCacheTtl().toSeconds()))),
+        Math.max(1, Math.min(10_000, section.getLong("stagingTestMaxCreditMinor", defaults.stagingTestMaxCreditMinor())))
     );
   }
 }

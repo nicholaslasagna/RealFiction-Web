@@ -8,11 +8,14 @@ import com.realfiction.realcore.scheduler.RealCoreScheduler;
 import com.realfiction.realcore.config.StatsConfig;
 import com.realfiction.realcore.economy.BufferedEconomyTransactionWriter;
 import com.realfiction.realcore.economy.EconomyService;
+import com.realfiction.realcore.economy.EconomyStagingTestTransaction;
+import com.realfiction.realcore.economy.EconomyTransaction;
 import com.realfiction.realcore.stats.BufferedNetworkStatWriter;
 import com.realfiction.realcore.stats.EconomyMirrorService;
 import com.realfiction.realcore.stats.NetworkStatService;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 import org.bukkit.ChatColor;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
@@ -208,7 +211,8 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
       send(sender, ChatColor.YELLOW + "Use " + ChatColor.WHITE + "/" + label + " cosmetics" + ChatColor.YELLOW + " to open cosmetics.");
     }
     if (sender.hasPermission("realcore.admin")) {
-      send(sender, ChatColor.YELLOW + "Admin: " + ChatColor.WHITE + "/" + label + " status|stats|stats flush|economy|economy flush|rewards|reload|setspawn");
+      send(sender, ChatColor.YELLOW + "Admin: " + ChatColor.WHITE + "/" + label
+          + " status|stats|stats flush|economy|economy flush|economy test|rewards|reload|setspawn");
     }
     return true;
   }
@@ -383,10 +387,69 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
           + " (" + queuedBefore + " queued before; flush is async, see /rf economy for the result).");
       return true;
     }
+    if (args.length >= 2 && "test".equalsIgnoreCase(args[1])) {
+      return handleEconomyTest(sender, args);
+    }
 
     send(sender, ChatColor.GOLD + "RealCore Global Economy");
     appendEconomyStatus(sender);
-    send(sender, ChatColor.GRAY + "Phase 3 is client foundation only: no Vault provider, no EssentialsX balance changes.");
+    send(sender, ChatColor.GRAY + "No Vault provider, no EssentialsX balance changes.");
+    return true;
+  }
+
+  private boolean handleEconomyTest(CommandSender sender, String[] args) {
+    if (args.length != 6) {
+      send(sender, ChatColor.YELLOW + "Usage: /rf economy test <uuid> <username> <amountMinor> <testId>");
+      send(sender, ChatColor.GRAY + "Example: /rf economy test 00000000-0000-0000-0000-000000000123 Alex 100 smoke-test-1");
+      return true;
+    }
+
+    EconomyService economy = plugin.economyService();
+    RealCoreConfig config = plugin.realCoreConfig();
+    if (economy == null || config == null) {
+      send(sender, ChatColor.RED + "Global economy is not loaded.");
+      return true;
+    }
+    if (!economy.configuredEnabled()) {
+      send(sender, ChatColor.RED + "Global economy is disabled by economy.enabled=false.");
+      return true;
+    }
+    if (!config.modules().economy()) {
+      send(sender, ChatColor.RED + "Global economy is disabled by modules.economy=false.");
+      return true;
+    }
+    if (!economy.mutationsAllowed()) {
+      send(sender, ChatColor.RED + "This server is read-only for the global economy.");
+      return true;
+    }
+    if (!economy.writerRunning()) {
+      send(sender, ChatColor.RED + "Global economy writer is not running: " + economy.disabledReason());
+      return true;
+    }
+
+    UUID uuid;
+    long amountMinor;
+    try {
+      uuid = UUID.fromString(args[2]);
+      amountMinor = Long.parseLong(args[4]);
+    } catch (IllegalArgumentException error) {
+      send(sender, ChatColor.RED + "Use a valid player UUID and whole-number minor amount.");
+      return true;
+    }
+
+    try {
+      EconomyTransaction transaction = EconomyStagingTestTransaction.create(config, uuid, args[3], amountMinor, args[5]);
+      if (!economy.enqueue(transaction)) {
+        send(sender, ChatColor.RED + "Could not queue the staging economy test. Check /rf economy.");
+        return true;
+      }
+      send(sender, ChatColor.GREEN + "Queued staging economy test for " + args[3] + "."
+          + ChatColor.GRAY + " amountMinor=" + amountMinor
+          + ", idempotency=" + transaction.idempotencyKey().substring(0, Math.min(24, transaction.idempotencyKey().length())) + "...");
+      send(sender, ChatColor.GRAY + "It will send on the next writer flush, or use /rf economy flush.");
+    } catch (IllegalArgumentException | IllegalStateException error) {
+      send(sender, ChatColor.RED + error.getMessage());
+    }
     return true;
   }
 
@@ -417,6 +480,8 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
     send(sender, ChatColor.YELLOW + "Economy flush: " + ChatColor.WHITE + economy.flushIntervalSeconds()
         + "s" + ChatColor.GRAY + ", max batch " + economy.maxBatchSize()
         + ", buffer " + economy.bufferSize());
+    send(sender, ChatColor.YELLOW + "Staging test max: " + ChatColor.WHITE
+        + economy.stagingTestMaxCreditMinor() + ChatColor.GRAY + " minor units");
     sendEconomyWriterStatus(sender, economy.writer());
   }
 
@@ -428,7 +493,8 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
         + ", retry batches " + writer.pendingBatchCount() + ")");
     send(sender, ChatColor.YELLOW + "Economy batches: " + ChatColor.WHITE + writer.sentBatchCount()
         + " sent / " + writer.failedBatchCount() + " failed"
-        + ChatColor.GRAY + ", " + writer.duplicateBatchCount() + " duplicate batches, "
+        + ChatColor.GRAY + ", " + writer.appliedTransactionCount() + " applied tx, "
+        + writer.duplicateBatchCount() + " duplicate batches, "
         + writer.duplicateTransactionCount() + " duplicate tx, dropped "
         + writer.droppedBatchCount() + " batches / " + writer.droppedTransactionCount() + " tx"
         + (ago >= 0 ? ", last " + ago + "s ago" : ", never flushed"));
@@ -494,7 +560,7 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
       return List.of("flush");
     }
     if (args.length == 2 && "economy".equalsIgnoreCase(args[0]) && sender.hasPermission("realcore.admin")) {
-      return List.of("flush");
+      return List.of("flush", "test");
     }
     return List.of();
   }
