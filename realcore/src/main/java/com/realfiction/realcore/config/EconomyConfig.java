@@ -17,7 +17,9 @@ public record EconomyConfig(
     int bufferSize,
     int maxBatchSize,
     Duration balanceCacheTtl,
-    long stagingTestMaxCreditMinor
+    long stagingTestMaxCreditMinor,
+    boolean syncVaultAfterDb,
+    long syncVaultMaxDeltaMinor
 ) {
   public static EconomyConfig disabledDefaults() {
     return new EconomyConfig(
@@ -27,6 +29,8 @@ public record EconomyConfig(
         5000,
         100,
         Duration.ofSeconds(30),
+        100,
+        false,
         100
     );
   }
@@ -49,7 +53,9 @@ public record EconomyConfig(
         Math.max(1, section.getInt("bufferSize", defaults.bufferSize())),
         Math.max(1, Math.min(500, section.getInt("maxBatchSize", defaults.maxBatchSize()))),
         Duration.ofSeconds(Math.max(5, section.getLong("balanceCacheSeconds", defaults.balanceCacheTtl().toSeconds()))),
-        Math.max(1, Math.min(10_000, section.getLong("stagingTestMaxCreditMinor", defaults.stagingTestMaxCreditMinor())))
+        Math.max(1, Math.min(10_000, section.getLong("stagingTestMaxCreditMinor", defaults.stagingTestMaxCreditMinor()))),
+        section.getBoolean("syncVaultAfterDb", defaults.syncVaultAfterDb()),
+        Math.max(1, Math.min(1_000_000, section.getLong("syncVaultMaxDeltaMinor", defaults.syncVaultMaxDeltaMinor())))
     );
   }
 }

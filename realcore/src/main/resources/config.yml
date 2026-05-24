@@ -60,6 +60,12 @@ economy:
   # Maximum amount for the admin-only /rf economy test command. Minor units:
   # $1.00 = 100, so the default is a tiny $1.00 staging credit.
   stagingTestMaxCreditMinor: 100
+  # Phase 4E staging-only DB-to-Vault sync experiment. This remains OFF by
+  # default and never runs automatically. When enabled on one staging backend,
+  # admins may run /rf economy sync-vault <uuid> <username> to read the DB
+  # balance and apply at most syncVaultMaxDeltaMinor to local Vault.
+  syncVaultAfterDb: false
+  syncVaultMaxDeltaMinor: 100
 
 # Network playtime tracking (feeds the "Top Players" leaderboard/holograms).
 # Each backend records its own sessions; the website sums them per player.
