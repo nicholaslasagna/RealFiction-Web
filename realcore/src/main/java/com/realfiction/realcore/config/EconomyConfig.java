@@ -1,6 +1,7 @@
 package com.realfiction.realcore.config;
 
 import java.time.Duration;
+import java.util.List;
 import org.bukkit.configuration.ConfigurationSection;
 
 /**
@@ -23,7 +24,13 @@ public record EconomyConfig(
     boolean voteRewardsToLedger,
     boolean voteRewardsLedgerDryRun,
     boolean voteRewardsLedgerWritesEnabled,
-    boolean voteRewardsLedgerFallbackCommands
+    boolean voteRewardsLedgerFallbackCommands,
+    boolean vaultDeltaShadowEnabled,
+    Duration vaultDeltaShadowInterval,
+    int vaultDeltaShadowMaxPlayersPerRun,
+    long vaultDeltaShadowMinDeltaMinor,
+    long vaultDeltaShadowMaxLoggedDeltaMinor,
+    List<String> vaultDeltaShadowBackendAllowlist
 ) {
   public static EconomyConfig disabledDefaults() {
     return new EconomyConfig(
@@ -39,7 +46,13 @@ public record EconomyConfig(
         false,
         true,
         false,
-        true
+        true,
+        false,
+        Duration.ofSeconds(300),
+        100,
+        1,
+        250_000,
+        List.of("smp-1")
     );
   }
 
@@ -67,7 +80,30 @@ public record EconomyConfig(
         section.getBoolean("voteRewardsToLedger", defaults.voteRewardsToLedger()),
         section.getBoolean("voteRewardsLedgerDryRun", defaults.voteRewardsLedgerDryRun()),
         section.getBoolean("voteRewardsLedgerWritesEnabled", defaults.voteRewardsLedgerWritesEnabled()),
-        section.getBoolean("voteRewardsLedgerFallbackCommands", defaults.voteRewardsLedgerFallbackCommands())
+        section.getBoolean("voteRewardsLedgerFallbackCommands", defaults.voteRewardsLedgerFallbackCommands()),
+        section.getBoolean("vaultDeltaShadowEnabled", defaults.vaultDeltaShadowEnabled()),
+        Duration.ofSeconds(Math.max(60, section.getLong(
+            "vaultDeltaShadowIntervalSeconds",
+            defaults.vaultDeltaShadowInterval().toSeconds()))),
+        Math.max(1, Math.min(500, section.getInt(
+            "vaultDeltaShadowMaxPlayersPerRun",
+            defaults.vaultDeltaShadowMaxPlayersPerRun()))),
+        Math.max(0, section.getLong(
+            "vaultDeltaShadowMinDeltaMinor",
+            defaults.vaultDeltaShadowMinDeltaMinor())),
+        Math.max(1, section.getLong(
+            "vaultDeltaShadowMaxLoggedDeltaMinor",
+            defaults.vaultDeltaShadowMaxLoggedDeltaMinor())),
+        normalizeAllowlist(section.getStringList("vaultDeltaShadowBackendAllowlist"), defaults.vaultDeltaShadowBackendAllowlist())
     );
+  }
+
+  private static List<String> normalizeAllowlist(List<String> configured, List<String> fallback) {
+    List<String> values = configured == null || configured.isEmpty() ? fallback : configured;
+    return values.stream()
+        .map(value -> value == null ? "" : value.trim().toLowerCase(java.util.Locale.ROOT))
+        .filter(value -> !value.isBlank())
+        .distinct()
+        .toList();
   }
 }

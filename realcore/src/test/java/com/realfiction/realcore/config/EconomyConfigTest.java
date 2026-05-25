@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.List;
 import org.bukkit.configuration.InvalidConfigurationException;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.junit.jupiter.api.Test;
@@ -26,6 +27,12 @@ final class EconomyConfigTest {
     assertTrue(config.voteRewardsLedgerDryRun());
     assertFalse(config.voteRewardsLedgerWritesEnabled());
     assertTrue(config.voteRewardsLedgerFallbackCommands());
+    assertFalse(config.vaultDeltaShadowEnabled());
+    assertEquals(300, config.vaultDeltaShadowInterval().toSeconds());
+    assertEquals(100, config.vaultDeltaShadowMaxPlayersPerRun());
+    assertEquals(1, config.vaultDeltaShadowMinDeltaMinor());
+    assertEquals(250000, config.vaultDeltaShadowMaxLoggedDeltaMinor());
+    assertEquals(List.of("smp-1"), config.vaultDeltaShadowBackendAllowlist());
   }
 
   @Test
@@ -46,6 +53,16 @@ final class EconomyConfigTest {
           voteRewardsLedgerDryRun: false
           voteRewardsLedgerWritesEnabled: true
           voteRewardsLedgerFallbackCommands: false
+          vaultDeltaShadowEnabled: true
+          vaultDeltaShadowIntervalSeconds: 10
+          vaultDeltaShadowMaxPlayersPerRun: 9999
+          vaultDeltaShadowMinDeltaMinor: -5
+          vaultDeltaShadowMaxLoggedDeltaMinor: 0
+          vaultDeltaShadowBackendAllowlist:
+            - SMP-1
+            - smp-1
+            - ""
+            - factions-1
         """);
 
     EconomyConfig config = EconomyConfig.from(yaml.getConfigurationSection("economy"));
@@ -63,6 +80,12 @@ final class EconomyConfigTest {
     assertFalse(config.voteRewardsLedgerDryRun());
     assertTrue(config.voteRewardsLedgerWritesEnabled());
     assertFalse(config.voteRewardsLedgerFallbackCommands());
+    assertTrue(config.vaultDeltaShadowEnabled());
+    assertEquals(60, config.vaultDeltaShadowInterval().toSeconds());
+    assertEquals(500, config.vaultDeltaShadowMaxPlayersPerRun());
+    assertEquals(0, config.vaultDeltaShadowMinDeltaMinor());
+    assertEquals(1, config.vaultDeltaShadowMaxLoggedDeltaMinor());
+    assertEquals(List.of("smp-1", "factions-1"), config.vaultDeltaShadowBackendAllowlist());
   }
 
   @Test

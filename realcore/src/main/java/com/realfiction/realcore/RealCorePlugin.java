@@ -9,6 +9,7 @@ import com.realfiction.realcore.cosmetics.CosmeticsConfig;
 import com.realfiction.realcore.cosmetics.CosmeticsListener;
 import com.realfiction.realcore.cosmetics.CosmeticsManager;
 import com.realfiction.realcore.economy.EconomyService;
+import com.realfiction.realcore.economy.VaultDeltaShadowService;
 import com.realfiction.realcore.linking.AccountLinkService;
 import com.realfiction.realcore.lobby.LobbyItemListener;
 import com.realfiction.realcore.lobby.LobbyListener;
@@ -64,6 +65,7 @@ public final class RealCorePlugin extends JavaPlugin {
   private BufferedNetworkStatWriter networkStatWriter;
   private EconomyMirrorService economyMirrorService;
   private EconomyService economyService;
+  private VaultDeltaShadowService vaultDeltaShadowService;
   private VoteRewardLedgerShadowService voteRewardLedgerShadowService;
   private VoteRewardLedgerWriteService voteRewardLedgerWriteService;
   // Listeners are registered exactly once on enable; producers are swapped on
@@ -203,6 +205,8 @@ public final class RealCorePlugin extends JavaPlugin {
         getLogger().info("Network stat cache disabled (modules.stats or stats.enabled).");
       }
       economyService.start();
+      vaultDeltaShadowService = new VaultDeltaShadowService(this, realCoreConfig, economyService, scheduler, getLogger());
+      vaultDeltaShadowService.start();
       if (!economyService.configuredEnabled()) {
         getLogger().info("Global economy client disabled by economy.enabled.");
       } else if (!economyService.writerRunning()) {
@@ -294,6 +298,10 @@ public final class RealCorePlugin extends JavaPlugin {
 
   public EconomyService economyService() {
     return economyService;
+  }
+
+  public VaultDeltaShadowService vaultDeltaShadowService() {
+    return vaultDeltaShadowService;
   }
 
   public VoteRewardLedgerShadowService voteRewardLedgerShadowService() {
@@ -408,6 +416,17 @@ public final class RealCorePlugin extends JavaPlugin {
           + ", duplicate=" + voteRewardLedgerWriteService.duplicateSuccessCount()
           + ", failures=" + voteRewardLedgerWriteService.failureCount()
           + ", fallbacks=" + voteRewardLedgerWriteService.fallbackCount() + ")");
+    }
+    if (vaultDeltaShadowService != null) {
+      long ago = vaultDeltaShadowService.lastRunAgoSeconds();
+      getLogger().info("| Vault delta shadow: "
+          + (vaultDeltaShadowService.running() ? "running" : "disabled")
+          + " (sampled=" + vaultDeltaShadowService.sampledCount()
+          + ", matched=" + vaultDeltaShadowService.matchedCount()
+          + ", deltas=" + vaultDeltaShadowService.deltaCount()
+          + ", skipped=" + vaultDeltaShadowService.skippedCount()
+          + ", failures=" + vaultDeltaShadowService.failureCount()
+          + (ago >= 0 ? ", last " + ago + "s ago" : ", never run") + ")");
     }
     getLogger().info("| Commands: " + commands);
     getLogger().info("| Menus: " + (menus.isBlank() ? "none" : menus));
@@ -596,7 +615,13 @@ public final class RealCorePlugin extends JavaPlugin {
         || !getConfig().contains("economy.voteRewardsToLedger")
         || !getConfig().contains("economy.voteRewardsLedgerDryRun")
         || !getConfig().contains("economy.voteRewardsLedgerWritesEnabled")
-        || !getConfig().contains("economy.voteRewardsLedgerFallbackCommands");
+        || !getConfig().contains("economy.voteRewardsLedgerFallbackCommands")
+        || !getConfig().contains("economy.vaultDeltaShadowEnabled")
+        || !getConfig().contains("economy.vaultDeltaShadowIntervalSeconds")
+        || !getConfig().contains("economy.vaultDeltaShadowMaxPlayersPerRun")
+        || !getConfig().contains("economy.vaultDeltaShadowMinDeltaMinor")
+        || !getConfig().contains("economy.vaultDeltaShadowMaxLoggedDeltaMinor")
+        || !getConfig().contains("economy.vaultDeltaShadowBackendAllowlist");
     if (!missingLobbyDefaults) {
       return;
     }
@@ -607,6 +632,10 @@ public final class RealCorePlugin extends JavaPlugin {
 
   private void stopServices(boolean closeScheduler) {
     servicesLoaded = false;
+    if (vaultDeltaShadowService != null) {
+      vaultDeltaShadowService.stop();
+      vaultDeltaShadowService = null;
+    }
     if (economyService != null) {
       economyService.stop();
       economyService = null;

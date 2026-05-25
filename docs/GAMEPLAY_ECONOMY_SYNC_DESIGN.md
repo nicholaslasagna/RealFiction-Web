@@ -1,7 +1,8 @@
 # Gameplay Economy Sync Design
 
 This document defines the safe path for moving non-vote gameplay economy
-changes toward the DB-backed RealFiction global economy. It is design-only.
+changes toward the DB-backed RealFiction global economy. Phase 1 is
+shadow-only telemetry; real gameplay economy writes require a later review.
 
 ## Current State
 
@@ -125,9 +126,9 @@ Rationale:
 - Arcade should stay small and capped later.
 - Anarchy must never mutate the main economy.
 
-## Future Shadow Implementation Requirements
+## Phase 1 Shadow Implementation Requirements
 
-The future shadow observer should:
+The shadow observer should:
 
 - default off,
 - run on one backend only, preferably SMP,
@@ -139,6 +140,19 @@ The future shadow observer should:
 - never change reward acknowledgement behavior,
 - never touch vote reward delivery,
 - never expose public balance or ledger data.
+
+Initial config shape:
+
+```yaml
+economy:
+  vaultDeltaShadowEnabled: false
+  vaultDeltaShadowIntervalSeconds: 300
+  vaultDeltaShadowMaxPlayersPerRun: 100
+  vaultDeltaShadowMinDeltaMinor: 1
+  vaultDeltaShadowMaxLoggedDeltaMinor: 250000
+  vaultDeltaShadowBackendAllowlist:
+    - smp-1
+```
 
 Suggested logged fields:
 
@@ -155,6 +169,10 @@ Suggested logged fields:
 
 The observer should cap, filter, or flag huge deltas rather than treating them
 as normal. Large unexplained deltas should stop rollout until reviewed.
+
+For future 1000-player scale, real economy sync should be transaction/event
+based, not a periodic full-player sync. Polling Vault balances is only shadow
+telemetry for rollout discovery.
 
 ## Future Real Implementation Requirements
 
@@ -250,11 +268,10 @@ Stop rollout immediately if any of these happen:
 - any direct balance overwrite,
 - any public exposure of sensitive ledger or audit data.
 
-## Explicit Non-Goals For This PR
+## Explicit Non-Goals For The Phase 1 PR
 
-- No code changes.
+- No DB ledger writes.
 - No migrations.
-- No RealCore behavior changes.
 - No Vault provider registration.
 - No Vault or EssentialsX mutations.
 - No reward behavior changes.
