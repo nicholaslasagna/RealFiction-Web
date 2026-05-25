@@ -21,7 +21,9 @@ public record EconomyConfig(
     boolean syncVaultAfterDb,
     long syncVaultMaxDeltaMinor,
     boolean voteRewardsToLedger,
-    boolean voteRewardsLedgerDryRun
+    boolean voteRewardsLedgerDryRun,
+    boolean voteRewardsLedgerWritesEnabled,
+    boolean voteRewardsLedgerFallbackCommands
 ) {
   public static EconomyConfig disabledDefaults() {
     return new EconomyConfig(
@@ -34,6 +36,8 @@ public record EconomyConfig(
         100,
         false,
         100,
+        false,
+        true,
         false,
         true
     );
@@ -61,7 +65,9 @@ public record EconomyConfig(
         section.getBoolean("syncVaultAfterDb", defaults.syncVaultAfterDb()),
         Math.max(1, Math.min(1_000_000, section.getLong("syncVaultMaxDeltaMinor", defaults.syncVaultMaxDeltaMinor()))),
         section.getBoolean("voteRewardsToLedger", defaults.voteRewardsToLedger()),
-        section.getBoolean("voteRewardsLedgerDryRun", defaults.voteRewardsLedgerDryRun())
+        section.getBoolean("voteRewardsLedgerDryRun", defaults.voteRewardsLedgerDryRun()),
+        section.getBoolean("voteRewardsLedgerWritesEnabled", defaults.voteRewardsLedgerWritesEnabled()),
+        section.getBoolean("voteRewardsLedgerFallbackCommands", defaults.voteRewardsLedgerFallbackCommands())
     );
   }
 }

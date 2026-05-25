@@ -24,6 +24,8 @@ final class EconomyConfigTest {
     assertEquals(100, config.syncVaultMaxDeltaMinor());
     assertFalse(config.voteRewardsToLedger());
     assertTrue(config.voteRewardsLedgerDryRun());
+    assertFalse(config.voteRewardsLedgerWritesEnabled());
+    assertTrue(config.voteRewardsLedgerFallbackCommands());
   }
 
   @Test
@@ -42,6 +44,8 @@ final class EconomyConfigTest {
           syncVaultMaxDeltaMinor: 999999999
           voteRewardsToLedger: true
           voteRewardsLedgerDryRun: false
+          voteRewardsLedgerWritesEnabled: true
+          voteRewardsLedgerFallbackCommands: false
         """);
 
     EconomyConfig config = EconomyConfig.from(yaml.getConfigurationSection("economy"));
@@ -57,6 +61,8 @@ final class EconomyConfigTest {
     assertEquals(1000000, config.syncVaultMaxDeltaMinor());
     assertTrue(config.voteRewardsToLedger());
     assertFalse(config.voteRewardsLedgerDryRun());
+    assertTrue(config.voteRewardsLedgerWritesEnabled());
+    assertFalse(config.voteRewardsLedgerFallbackCommands());
   }
 
   @Test

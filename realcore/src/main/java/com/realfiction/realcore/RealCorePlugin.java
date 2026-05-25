@@ -31,6 +31,7 @@ import com.realfiction.realcore.stats.producer.BlockStatProducer;
 import com.realfiction.realcore.stats.producer.KillStatProducer;
 import com.realfiction.realcore.stats.producer.VoteStatProducer;
 import com.realfiction.realcore.economy.VoteRewardLedgerShadowService;
+import com.realfiction.realcore.economy.VoteRewardLedgerWriteService;
 import com.realfiction.realcore.rewards.RewardDispatcher;
 import com.realfiction.realcore.rewards.RewardPoller;
 import com.realfiction.realcore.scheduler.RealCoreScheduler;
@@ -64,6 +65,7 @@ public final class RealCorePlugin extends JavaPlugin {
   private EconomyMirrorService economyMirrorService;
   private EconomyService economyService;
   private VoteRewardLedgerShadowService voteRewardLedgerShadowService;
+  private VoteRewardLedgerWriteService voteRewardLedgerWriteService;
   // Listeners are registered exactly once on enable; producers are swapped on
   // reload so the new writer/group are picked up without a restart.
   private StatKillsListener statKillsListener;
@@ -160,8 +162,10 @@ public final class RealCorePlugin extends JavaPlugin {
       apiClient = new PlatformApiClient(realCoreConfig, getLogger());
       luckPermsService = LuckPermsService.create(this);
       voteRewardLedgerShadowService = new VoteRewardLedgerShadowService(realCoreConfig, getLogger());
+      voteRewardLedgerWriteService = new VoteRewardLedgerWriteService(
+          realCoreConfig, apiClient::postEconomyTransactions, getLogger());
       RewardDispatcher dispatcher = new RewardDispatcher(
-          this, realCoreConfig, scheduler, luckPermsService, voteRewardLedgerShadowService);
+          this, realCoreConfig, scheduler, luckPermsService, voteRewardLedgerShadowService, voteRewardLedgerWriteService);
       accountLinkService = new AccountLinkService(this, realCoreConfig, scheduler, apiClient);
       rewardPoller = new RewardPoller(this, realCoreConfig, scheduler, apiClient, dispatcher);
       economyService = new EconomyService(realCoreConfig, scheduler, apiClient, getLogger());
@@ -296,6 +300,10 @@ public final class RealCorePlugin extends JavaPlugin {
     return voteRewardLedgerShadowService;
   }
 
+  public VoteRewardLedgerWriteService voteRewardLedgerWriteService() {
+    return voteRewardLedgerWriteService;
+  }
+
   private List<String> registerCommands(RealFictionCommand commandExecutor) {
     List<String> labels = List.of("realfiction", "rf", "realcore", "cosmetics");
     for (String label : labels) {
@@ -391,6 +399,15 @@ public final class RealCorePlugin extends JavaPlugin {
           + (voteRewardLedgerShadowService.enabled() ? "enabled" : "disabled")
           + " (dryRun=" + voteRewardLedgerShadowService.configuredDryRun()
           + ", observed=" + voteRewardLedgerShadowService.observedCount() + ")");
+    }
+    if (voteRewardLedgerWriteService != null) {
+      getLogger().info("| Vote reward ledger writes: "
+          + (voteRewardLedgerWriteService.writesEnabled() ? "enabled" : "disabled")
+          + " (fallbackCommands=" + voteRewardLedgerWriteService.fallbackCommandsEnabled()
+          + ", success=" + voteRewardLedgerWriteService.successCount()
+          + ", duplicate=" + voteRewardLedgerWriteService.duplicateSuccessCount()
+          + ", failures=" + voteRewardLedgerWriteService.failureCount()
+          + ", fallbacks=" + voteRewardLedgerWriteService.fallbackCount() + ")");
     }
     getLogger().info("| Commands: " + commands);
     getLogger().info("| Menus: " + (menus.isBlank() ? "none" : menus));
@@ -577,7 +594,9 @@ public final class RealCorePlugin extends JavaPlugin {
         || !getConfig().isConfigurationSection("rewards.economy")
         || !getConfig().isConfigurationSection("economy")
         || !getConfig().contains("economy.voteRewardsToLedger")
-        || !getConfig().contains("economy.voteRewardsLedgerDryRun");
+        || !getConfig().contains("economy.voteRewardsLedgerDryRun")
+        || !getConfig().contains("economy.voteRewardsLedgerWritesEnabled")
+        || !getConfig().contains("economy.voteRewardsLedgerFallbackCommands");
     if (!missingLobbyDefaults) {
       return;
     }
@@ -593,6 +612,7 @@ public final class RealCorePlugin extends JavaPlugin {
       economyService = null;
     }
     voteRewardLedgerShadowService = null;
+    voteRewardLedgerWriteService = null;
     if (economyMirrorService != null) {
       economyMirrorService.stop();
       economyMirrorService = null;
