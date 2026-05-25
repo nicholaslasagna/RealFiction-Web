@@ -12,6 +12,7 @@ import com.realfiction.realcore.economy.EconomyStagingTestTransaction;
 import com.realfiction.realcore.economy.EconomyTransaction;
 import com.realfiction.realcore.economy.VaultBalanceAuditService;
 import com.realfiction.realcore.economy.VaultBalanceSyncService;
+import com.realfiction.realcore.economy.VoteRewardLedgerShadowService;
 import com.realfiction.realcore.stats.BufferedNetworkStatWriter;
 import com.realfiction.realcore.stats.EconomyMirrorService;
 import com.realfiction.realcore.stats.NetworkStatService;
@@ -604,6 +605,7 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
     if (!economy.configuredEnabled()) {
       send(sender, ChatColor.YELLOW + "Global economy: " + ChatColor.GRAY + "disabled (economy.enabled=false)");
       send(sender, ChatColor.YELLOW + "Economy currency: " + ChatColor.WHITE + economy.currencyKey());
+      appendVoteRewardLedgerShadowStatus(sender);
       return;
     }
     String state = economy.writerRunning() ? ChatColor.GREEN + "ready" : ChatColor.RED + "not ready";
@@ -622,7 +624,24 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
     send(sender, ChatColor.YELLOW + "Vault sync after DB: "
         + (economy.syncVaultAfterDb() ? ChatColor.GREEN + "enabled" : ChatColor.GRAY + "disabled")
         + ChatColor.GRAY + ", max delta " + economy.syncVaultMaxDeltaMinor() + " minor units");
+    appendVoteRewardLedgerShadowStatus(sender);
     sendEconomyWriterStatus(sender, economy.writer());
+  }
+
+  private void appendVoteRewardLedgerShadowStatus(CommandSender sender) {
+    VoteRewardLedgerShadowService shadow = plugin.voteRewardLedgerShadowService();
+    if (shadow == null) {
+      send(sender, ChatColor.YELLOW + "Vote reward ledger shadow: " + ChatColor.RED + "not loaded");
+      return;
+    }
+    send(sender, ChatColor.YELLOW + "Vote reward ledger shadow: "
+        + (shadow.enabled() ? ChatColor.GREEN + "enabled" : ChatColor.GRAY + "disabled")
+        + ChatColor.GRAY + ", dry-run " + statusToggle(shadow.configuredDryRun())
+        + ", mappings " + shadow.mappingCount()
+        + ", observed " + shadow.observedCount());
+    if (shadow.configuredLedgerWrites()) {
+      send(sender, ChatColor.GRAY + "Ledger writes are still disabled in this shadow-only build.");
+    }
   }
 
   private void sendEconomyWriterStatus(CommandSender sender, BufferedEconomyTransactionWriter writer) {

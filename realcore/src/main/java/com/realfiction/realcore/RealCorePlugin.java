@@ -30,6 +30,7 @@ import com.realfiction.realcore.stats.listener.StatKillsListener;
 import com.realfiction.realcore.stats.producer.BlockStatProducer;
 import com.realfiction.realcore.stats.producer.KillStatProducer;
 import com.realfiction.realcore.stats.producer.VoteStatProducer;
+import com.realfiction.realcore.economy.VoteRewardLedgerShadowService;
 import com.realfiction.realcore.rewards.RewardDispatcher;
 import com.realfiction.realcore.rewards.RewardPoller;
 import com.realfiction.realcore.scheduler.RealCoreScheduler;
@@ -62,6 +63,7 @@ public final class RealCorePlugin extends JavaPlugin {
   private BufferedNetworkStatWriter networkStatWriter;
   private EconomyMirrorService economyMirrorService;
   private EconomyService economyService;
+  private VoteRewardLedgerShadowService voteRewardLedgerShadowService;
   // Listeners are registered exactly once on enable; producers are swapped on
   // reload so the new writer/group are picked up without a restart.
   private StatKillsListener statKillsListener;
@@ -157,7 +159,9 @@ public final class RealCorePlugin extends JavaPlugin {
       }
       apiClient = new PlatformApiClient(realCoreConfig, getLogger());
       luckPermsService = LuckPermsService.create(this);
-      RewardDispatcher dispatcher = new RewardDispatcher(this, realCoreConfig, scheduler, luckPermsService);
+      voteRewardLedgerShadowService = new VoteRewardLedgerShadowService(realCoreConfig, getLogger());
+      RewardDispatcher dispatcher = new RewardDispatcher(
+          this, realCoreConfig, scheduler, luckPermsService, voteRewardLedgerShadowService);
       accountLinkService = new AccountLinkService(this, realCoreConfig, scheduler, apiClient);
       rewardPoller = new RewardPoller(this, realCoreConfig, scheduler, apiClient, dispatcher);
       economyService = new EconomyService(realCoreConfig, scheduler, apiClient, getLogger());
@@ -288,6 +292,10 @@ public final class RealCorePlugin extends JavaPlugin {
     return economyService;
   }
 
+  public VoteRewardLedgerShadowService voteRewardLedgerShadowService() {
+    return voteRewardLedgerShadowService;
+  }
+
   private List<String> registerCommands(RealFictionCommand commandExecutor) {
     List<String> labels = List.of("realfiction", "rf", "realcore", "cosmetics");
     for (String label : labels) {
@@ -378,6 +386,12 @@ public final class RealCorePlugin extends JavaPlugin {
     getLogger().info("| Playtime: " + playtime);
     getLogger().info("| Stats: " + stats);
     getLogger().info("| Global economy: " + economy);
+    if (voteRewardLedgerShadowService != null) {
+      getLogger().info("| Vote reward ledger shadow: "
+          + (voteRewardLedgerShadowService.enabled() ? "enabled" : "disabled")
+          + " (dryRun=" + voteRewardLedgerShadowService.configuredDryRun()
+          + ", observed=" + voteRewardLedgerShadowService.observedCount() + ")");
+    }
     getLogger().info("| Commands: " + commands);
     getLogger().info("| Menus: " + (menus.isBlank() ? "none" : menus));
     getLogger().info("+--------------------------------------------------+");
@@ -560,7 +574,10 @@ public final class RealCorePlugin extends JavaPlugin {
         || !getConfig().isConfigurationSection("proxy.serverAliases")
         || !getConfig().isConfigurationSection("cosmetics")
         || !getConfig().isConfigurationSection("rewards.messages")
-        || !getConfig().isConfigurationSection("economy");
+        || !getConfig().isConfigurationSection("rewards.economy")
+        || !getConfig().isConfigurationSection("economy")
+        || !getConfig().contains("economy.voteRewardsToLedger")
+        || !getConfig().contains("economy.voteRewardsLedgerDryRun");
     if (!missingLobbyDefaults) {
       return;
     }
@@ -575,6 +592,7 @@ public final class RealCorePlugin extends JavaPlugin {
       economyService.stop();
       economyService = null;
     }
+    voteRewardLedgerShadowService = null;
     if (economyMirrorService != null) {
       economyMirrorService.stop();
       economyMirrorService = null;

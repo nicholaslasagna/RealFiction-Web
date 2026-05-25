@@ -66,6 +66,11 @@ economy:
   # balance and apply at most syncVaultMaxDeltaMinor to local Vault.
   syncVaultAfterDb: false
   syncVaultMaxDeltaMinor: 100
+  # Phase 6C vote reward ledger shadow mode. RealCore computes and logs the
+  # ledger transaction it would submit later, but this build never writes those
+  # vote reward transactions to the economy API.
+  voteRewardsToLedger: false
+  voteRewardsLedgerDryRun: true
 
 # Network playtime tracking (feeds the "Top Players" leaderboard/holograms).
 # Each backend records its own sessions; the website sums them per player.
@@ -163,6 +168,31 @@ rewards:
     username-colors: "realfiction.username.colors"
     lobby-flight: "realfiction.lobby.flight"
     cosmetic-atelier: "realfiction.cosmetics.atelier"
+
+  # Phase 6C ledger shadow mappings. These do not replace the command rewards
+  # below yet; they only log the intended economy transaction for review.
+  economy:
+    byRewardKey:
+      vote.standard:
+        amountMinor: 25000
+        currencyKey: realfiction_main
+        category: vote_reward
+      vote.milestone.5:
+        amountMinor: 50000
+        currencyKey: realfiction_main
+        category: vote_reward
+      vote.milestone.15:
+        amountMinor: 100000
+        currencyKey: realfiction_main
+        category: vote_reward
+      vote.milestone.30:
+        amountMinor: 150000
+        currencyKey: realfiction_main
+        category: vote_reward
+      vote.milestone.75:
+        amountMinor: 250000
+        currencyKey: realfiction_main
+        category: vote_reward
 
   # Console command rewards. These run from console after a reward is polled.
   # Placeholders: {player}, {uuid}, {rewardKey}, {rewardId}, {quantity},

@@ -34,6 +34,12 @@ final class RealCoreConfigTest {
             byRewardKey:
               vote.standard:
                 - "eco give {player} 250"
+          economy:
+            byRewardKey:
+              vote.standard:
+                amountMinor: 25000
+                currencyKey: RealFiction_Main
+                category: vote_reward
           messages:
             player:
               byRewardKey:
@@ -59,6 +65,8 @@ final class RealCoreConfigTest {
     assertEquals("java", config.linkPlatform());
     assertEquals("realfiction.lobby.flight", config.productPermissions().get("lobby-flight"));
     assertEquals(1, config.commandsByRewardKey().get("vote.standard").size());
+    assertEquals(25000, config.rewardEconomy().byRewardKey().get("vote.standard").amountMinor());
+    assertEquals("realfiction_main", config.rewardEconomy().byRewardKey().get("vote.standard").currencyKey());
     assertEquals(1, config.playerMessagesByRewardKey().get("vote.standard").size());
     assertTrue(config.rewardBroadcastsEnabled());
     assertEquals(1, config.broadcastMessagesByRewardKey().get("vote.standard").size());

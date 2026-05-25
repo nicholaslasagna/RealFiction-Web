@@ -3,6 +3,7 @@ package com.realfiction.realcore.rewards;
 import com.realfiction.realcore.RealCorePlugin;
 import com.realfiction.realcore.api.dto.RewardPayload;
 import com.realfiction.realcore.config.RealCoreConfig;
+import com.realfiction.realcore.economy.VoteRewardLedgerShadowService;
 import com.realfiction.realcore.luckperms.LuckPermsService;
 import com.realfiction.realcore.scheduler.RealCoreScheduler;
 import java.time.Duration;
@@ -17,12 +18,16 @@ public final class RewardDispatcher {
   private final RealCoreConfig config;
   private final RealCoreScheduler scheduler;
   private final LuckPermsService luckPermsService;
+  private final VoteRewardLedgerShadowService voteRewardLedgerShadowService;
 
-  public RewardDispatcher(RealCorePlugin plugin, RealCoreConfig config, RealCoreScheduler scheduler, LuckPermsService luckPermsService) {
+  public RewardDispatcher(RealCorePlugin plugin, RealCoreConfig config, RealCoreScheduler scheduler,
+                          LuckPermsService luckPermsService,
+                          VoteRewardLedgerShadowService voteRewardLedgerShadowService) {
     this.plugin = plugin;
     this.config = config;
     this.scheduler = scheduler;
     this.luckPermsService = luckPermsService;
+    this.voteRewardLedgerShadowService = voteRewardLedgerShadowService;
   }
 
   public CompletableFuture<RewardDeliveryResult> dispatch(RewardPayload reward) {
@@ -88,7 +93,10 @@ public final class RewardDispatcher {
     }
 
     return CompletableFuture.allOf(tasks.toArray(CompletableFuture[]::new))
-        .thenApply(ignored -> RewardDeliveryResult.delivered(reward.id))
+        .thenApply(ignored -> {
+          observeVoteRewardLedgerShadow(reward);
+          return RewardDeliveryResult.delivered(reward.id);
+        })
         .exceptionally(error -> RewardDeliveryResult.failed(reward.id, cleanFailure(error)));
   }
 
@@ -105,6 +113,17 @@ public final class RewardDispatcher {
         && reward.delivery.giftCard != null
         && reward.delivery.giftCard.valueCents != null
         && reward.delivery.giftCard.valueCents > 0;
+  }
+
+  private void observeVoteRewardLedgerShadow(RewardPayload reward) {
+    if (voteRewardLedgerShadowService == null) {
+      return;
+    }
+    try {
+      voteRewardLedgerShadowService.observe(reward);
+    } catch (RuntimeException error) {
+      plugin.getLogger().warning("Vote reward ledger shadow failed without changing reward delivery: " + cleanMessage(error));
+    }
   }
 
   private boolean allowedRewardKey(String rewardKey) {
@@ -192,6 +211,15 @@ public final class RewardDispatcher {
     }
     plugin.getLogger().log(java.util.logging.Level.WARNING, "Reward delivery failed: " + message, error);
     return message.length() > 450 ? message.substring(0, 450) : message;
+  }
+
+  private String cleanMessage(Throwable error) {
+    Throwable cursor = error;
+    while (cursor.getCause() != null) {
+      cursor = cursor.getCause();
+    }
+    String message = cursor.getMessage();
+    return message == null || message.isBlank() ? cursor.getClass().getSimpleName() : message;
   }
 
   private boolean notBlank(String value) {
