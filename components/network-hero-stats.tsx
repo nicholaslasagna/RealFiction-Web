@@ -65,8 +65,8 @@ export async function NetworkHeroStats() {
           The whole network, in numbers.
         </h3>
         <p className="mt-3 text-sm leading-7 text-muted-foreground">
-          Totals roll up SMP, Factions, Anarchy, Arcade, and lobby playtime — counted from the
-          live RealCore session ingest, not estimated from logins.
+          Totals roll up SMP, Factions, Anarchy, Arcade, and lobby playtime from across the
+          RealFiction network.
         </p>
 
         <div className="mt-6 grid gap-4 sm:grid-cols-2">
@@ -96,7 +96,7 @@ export async function NetworkHeroStats() {
 
 function StatTile({ label, value }: { label: ReactNode; value: string | null }) {
   return (
-    <div className="rounded-md border border-white/10 bg-black/24 p-4">
+    <div className="rounded-md border border-amber-200/10 bg-black/18 p-4 shadow-none">
       <p className="minecraft-font text-[11px] uppercase tracking-[0.18em] text-amber-200/85">{label}</p>
       <p
         className="mt-2 font-mono text-2xl font-semibold text-white md:text-3xl"

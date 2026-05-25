@@ -47,21 +47,21 @@ export async function EconomyLeaderboard() {
   const scale = leaderboard?.scale ?? 100
 
   return (
-    <Card className="minecraft-card overflow-hidden">
+    <Card className="minecraft-card overflow-hidden shadow-none">
       <CardHeader>
         <div className="flex items-start justify-between gap-4">
           <div className="space-y-1.5">
             <CardTitle className="display-font text-3xl">Economy Leaderboard</CardTitle>
             <CardDescription>Top balances from RealFiction economy data.</CardDescription>
           </div>
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md border border-amber-200/18 bg-black/24 text-amber-200">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md border border-amber-200/14 bg-black/20 text-amber-200">
             <Coins className="h-5 w-5" aria-hidden />
           </div>
         </div>
       </CardHeader>
       <CardContent className="pt-0">
         {entries.length > 0 ? (
-          <ol className="divide-y divide-white/5 overflow-hidden rounded-md border border-white/8 bg-black/24">
+          <ol className="divide-y divide-white/5 overflow-hidden rounded-md border border-amber-200/10 bg-black/18">
             {entries.map((entry) => (
               <li
                 key={`${entry.position}-${entry.name}`}
@@ -91,7 +91,7 @@ export async function EconomyLeaderboard() {
             ))}
           </ol>
         ) : (
-          <div className="rounded-md border border-dashed border-white/10 bg-black/24 px-6 py-10 text-center">
+          <div className="rounded-md border border-dashed border-amber-200/12 bg-black/18 px-6 py-10 text-center">
             <p className="font-semibold text-slate-100">No balances to show yet.</p>
             <p className="mt-1 text-sm text-muted-foreground">
               The leaderboard will appear once players earn RealFiction money.

@@ -92,7 +92,7 @@ export async function TopPlayerSpotlight() {
             <p className="display-font mt-1.5 truncate text-3xl font-semibold leading-tight">
               {top?.name ?? "Awaiting first session"}
             </p>
-            <p className="mt-2 inline-flex items-center gap-1.5 rounded-md border border-amber-200/30 bg-amber-200/12 px-2.5 py-1 font-mono text-sm text-amber-100">
+            <p className="mt-2 inline-flex items-center gap-1.5 rounded-sm border border-amber-200/20 bg-black/20 px-2.5 py-1 font-mono text-sm text-amber-100">
               <Crown className="h-3.5 w-3.5" aria-hidden />
               {top ? formatPlaytimeShort(top.value) : "—"}
             </p>
@@ -102,7 +102,7 @@ export async function TopPlayerSpotlight() {
         <p className="text-sm leading-7 text-muted-foreground">
           {top ? (
             <>
-              Crowned by total network playtime, summed live across every backend. The full
+              Ranked by total network playtime across every backend. The full
               top 10 lives on the{" "}
               <Link
                 href="/leaderboards"
