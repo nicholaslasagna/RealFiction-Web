@@ -77,6 +77,16 @@ economy:
   # existing eco give path remains available if the ledger write fails.
   voteRewardsLedgerWritesEnabled: false
   voteRewardsLedgerFallbackCommands: true
+  # Phase 1 gameplay economy sync telemetry. Shadow-only: reads local Vault and
+  # DB balances for online players and logs deltas. It never writes the ledger,
+  # never mutates Vault/EssentialsX, and should first run on SMP only.
+  vaultDeltaShadowEnabled: false
+  vaultDeltaShadowIntervalSeconds: 300
+  vaultDeltaShadowMaxPlayersPerRun: 100
+  vaultDeltaShadowMinDeltaMinor: 1
+  vaultDeltaShadowMaxLoggedDeltaMinor: 250000
+  vaultDeltaShadowBackendAllowlist:
+    - smp-1
 
 # Network playtime tracking (feeds the "Top Players" leaderboard/holograms).
 # Each backend records its own sessions; the website sums them per player.

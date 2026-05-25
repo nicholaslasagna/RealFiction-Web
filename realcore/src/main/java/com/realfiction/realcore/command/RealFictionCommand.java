@@ -12,6 +12,7 @@ import com.realfiction.realcore.economy.EconomyStagingTestTransaction;
 import com.realfiction.realcore.economy.EconomyTransaction;
 import com.realfiction.realcore.economy.VaultBalanceAuditService;
 import com.realfiction.realcore.economy.VaultBalanceSyncService;
+import com.realfiction.realcore.economy.VaultDeltaShadowService;
 import com.realfiction.realcore.economy.VoteRewardLedgerShadowService;
 import com.realfiction.realcore.economy.VoteRewardLedgerWriteService;
 import com.realfiction.realcore.stats.BufferedNetworkStatWriter;
@@ -608,6 +609,7 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
       send(sender, ChatColor.YELLOW + "Economy currency: " + ChatColor.WHITE + economy.currencyKey());
       appendVoteRewardLedgerShadowStatus(sender);
       appendVoteRewardLedgerWriteStatus(sender);
+      appendVaultDeltaShadowStatus(sender);
       return;
     }
     String state = economy.writerRunning() ? ChatColor.GREEN + "ready" : ChatColor.RED + "not ready";
@@ -628,7 +630,35 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
         + ChatColor.GRAY + ", max delta " + economy.syncVaultMaxDeltaMinor() + " minor units");
     appendVoteRewardLedgerShadowStatus(sender);
     appendVoteRewardLedgerWriteStatus(sender);
+    appendVaultDeltaShadowStatus(sender);
     sendEconomyWriterStatus(sender, economy.writer());
+  }
+
+  private void appendVaultDeltaShadowStatus(CommandSender sender) {
+    VaultDeltaShadowService shadow = plugin.vaultDeltaShadowService();
+    RealCoreConfig config = plugin.realCoreConfig();
+    if (config == null) {
+      send(sender, ChatColor.YELLOW + "Vault delta shadow: " + ChatColor.RED + "config not loaded");
+      return;
+    }
+    String guard = VaultDeltaShadowService.guardReason(config);
+    if (shadow == null) {
+      send(sender, ChatColor.YELLOW + "Vault delta shadow: " + ChatColor.GRAY + "disabled"
+          + ChatColor.GRAY + (guard.isBlank() ? "" : " (" + guard + ")"));
+      return;
+    }
+    long ago = shadow.lastRunAgoSeconds();
+    send(sender, ChatColor.YELLOW + "Vault delta shadow: "
+        + (shadow.running() ? ChatColor.GREEN + "running" : ChatColor.GRAY + "disabled")
+        + ChatColor.GRAY + ", sampled " + shadow.sampledCount()
+        + ", matched " + shadow.matchedCount()
+        + ", deltas " + shadow.deltaCount()
+        + ", skipped " + shadow.skippedCount()
+        + ", failures " + shadow.failureCount()
+        + (ago >= 0 ? ", last " + ago + "s ago" : ", never run"));
+    if (shadow.lastFailure() != null && !shadow.lastFailure().isBlank()) {
+      send(sender, ChatColor.YELLOW + "Last shadow error: " + ChatColor.RED + shadow.lastFailure());
+    }
   }
 
   private void appendVoteRewardLedgerShadowStatus(CommandSender sender) {
