@@ -1,0 +1,263 @@
+# Gameplay Economy Sync Design
+
+This document defines the safe path for moving non-vote gameplay economy
+changes toward the DB-backed RealFiction global economy. It is design-only.
+
+## Current State
+
+- Vote rewards are DB-ledger-backed and live through Lobby1.
+- Held-review balances have been imported.
+- The website economy leaderboard reads DB balances.
+- Gameplay servers currently do not mutate the DB economy ledger.
+- EssentialsX/Vault balances may differ from DB balances on SMP, Factions,
+  Arcade, or Lobby1.
+- `EconomyMirrorService` only reads Vault balances and mirrors them into the
+  private `money.total` stat. It does not write the economy ledger.
+- `stats.producers.economyMirror` is a read-only periodic Vault snapshot into
+  the stats writer. It is off by default.
+- `syncVaultAfterDb` is DB-to-Vault only, admin-command-only, one player at a
+  time, and disabled by default.
+- RealCore does not currently register a Vault economy provider.
+- RealCore cannot currently observe exact Vault transactions. It can only poll
+  or snapshot balances unless RealCore becomes the Vault provider or hooks
+  specific gameplay producers later.
+- Current plugin economy API categories are limited to `vote_reward`,
+  `gameplay_earn`, and `spend`.
+
+## Problem
+
+Shops, sells, buys, and other gameplay economy changes on SMP or Factions still
+occur in the local Vault/EssentialsX economy unless those systems are routed
+through RealCore.
+
+Polling Vault balances cannot reliably identify the exact cause of a balance
+change. A delta could come from a shop sell, shop buy, command reward, staff
+adjustment, plugin refund, or manual correction. Blindly mirroring those deltas
+into the DB ledger risks:
+
+- double-crediting players,
+- overwriting legitimate DB state,
+- hiding the real source of an economy change,
+- importing historical balances more than once,
+- creating ledger entries with the wrong category,
+- confusing vote reward delivery with gameplay money flow.
+
+The DB ledger must remain the source of truth. Any live sync must be append-only
+and idempotent, not a direct balance overwrite.
+
+## Architecture Options
+
+### A. DB-Backed Vault Provider
+
+RealCore becomes the Vault economy provider. Every Vault deposit or withdrawal
+is translated into an append-only DB ledger transaction.
+
+Benefits:
+
+- Strongest long-term source-of-truth model.
+- Other plugins can continue using Vault normally.
+- DB balance, website balance, and in-game balance converge around one system.
+- Transaction cause is known at the provider boundary.
+
+Costs and risks:
+
+- Requires careful migration away from EssentialsX economy authority.
+- Requires plugin compatibility testing with shops, rewards, and other Vault
+  consumers.
+- Requires clear behavior for offline players, failures, retries, and local
+  cache state.
+- Should not be introduced until shadow testing and rollback tooling are proven.
+
+### B. Plugin-Specific Integrations
+
+RealCore hooks specific systems, such as shop or reward plugins, and writes DB
+ledger transactions for known actions.
+
+Benefits:
+
+- Better transaction categories, such as `shop_sell` and `shop_buy`.
+- Safer audit trail because the source action is explicit.
+- Can be rolled out per plugin and per server.
+
+Costs and risks:
+
+- Requires per-plugin work and maintenance.
+- Does not catch every Vault balance mutation.
+- Still needs fallback behavior when a plugin action succeeds but the DB write
+  fails.
+
+### C. Vault Balance Delta Mirror
+
+RealCore periodically compares local Vault balances against DB balances and
+records the observed difference.
+
+Benefits:
+
+- Easy to run in shadow mode.
+- Helps discover real-world drift between EssentialsX/Vault and DB balances.
+- Can use existing read-only Vault access patterns.
+
+Costs and risks:
+
+- The cause of a delta is ambiguous.
+- Real ledger writes from blind deltas can be incorrect.
+- A repeated or stale baseline can create duplicate adjustments if not handled
+  carefully.
+- This should be treated as observation first, not production sync.
+
+## Recommended Path
+
+Do not implement immediate real Vault delta sync.
+
+The first implementation should be a shadow-only Vault delta observer on SMP.
+It should compare DB balance and local Vault balance, then log the delta only.
+It must not write DB ledger entries, mutate Vault, ack rewards, or change vote
+reward delivery.
+
+Recommended first gameplay backend: SMP.
+
+Rationale:
+
+- SMP is the safer first gameplay economy backend than Factions.
+- Factions is more competitive and higher risk for economy exploits.
+- Lobby1 already owns vote reward ledger writes and should not become the first
+  gameplay economy mutation backend.
+- Arcade should stay small and capped later.
+- Anarchy must never mutate the main economy.
+
+## Future Shadow Implementation Requirements
+
+The future shadow observer should:
+
+- default off,
+- run on one backend only, preferably SMP,
+- require `economy.enabled=true`,
+- require an explicit config flag such as
+  `economy.vaultDeltaShadowEnabled=true`,
+- never write the DB ledger,
+- never mutate Vault or EssentialsX,
+- never change reward acknowledgement behavior,
+- never touch vote reward delivery,
+- never expose public balance or ledger data.
+
+Suggested logged fields:
+
+- `serverId`
+- `serverGroup`
+- `minecraftUuid`
+- `minecraftUsername`
+- `vaultBalanceMinor`
+- `dbBalanceMinor`
+- `deltaMinor`
+- `observedAt`
+- `providerName`
+- `shadowOnly=true`
+
+The observer should cap, filter, or flag huge deltas rather than treating them
+as normal. Large unexplained deltas should stop rollout until reviewed.
+
+## Future Real Implementation Requirements
+
+Real writes must follow the existing global economy principles:
+
+- DB ledger remains the source of truth.
+- Balance changes are append-only ledger entries only.
+- No direct balance edits.
+- Idempotency is required for every transaction.
+- Rollback uses compensating ledger entries only.
+- No Anarchy mutations.
+- No double-credit from vote rewards.
+- No repeated historical import.
+- No blind overwrite of imported balances.
+
+The category model should be expanded safely before real gameplay sync:
+
+- `gameplay_earn`
+- `gameplay_spend`
+- `shop_sell`
+- `shop_buy`
+- `vault_mirror_adjustment`
+
+`vault_mirror_adjustment` should be used only if a temporary delta-bridge is
+approved. It should not become the preferred long-term category for known
+gameplay actions.
+
+Server policy must be enabled explicitly for the selected backend:
+
+```sql
+enabled = true
+can_read = true
+can_earn = true
+can_spend = true
+max_credit_minor = <safe cap>
+max_debit_minor = <safe cap>
+max_batch_count = <safe cap>
+```
+
+Anarchy must stay disabled at the DB/RPC, API, RealCore, and config layers.
+
+## Rollout Plan
+
+### Phase 0: Design Only
+
+Document current behavior, risks, and rollout criteria. Do not change code,
+migrations, RealCore behavior, HMAC, reward delivery, or deployment settings.
+
+### Phase 1: SMP Shadow Observer
+
+Add a disabled-by-default SMP shadow observer that reads local Vault balances
+and DB balances, compares them, and logs deltas. No writes.
+
+### Phase 2: Manual Reconciliation
+
+Review shadow output and reconcile unexplained differences. Confirm whether
+SMP local economy is expected to move toward DB authority, whether specific
+plugins need direct integrations, and whether any balances need compensating
+ledger entries.
+
+### Phase 3: Choose The Real Sync Strategy
+
+Choose between:
+
+- DB-backed Vault provider,
+- plugin-specific integrations,
+- a temporary, capped `vault_mirror_adjustment` delta bridge.
+
+The DB-backed Vault provider remains the clean long-term target, but it should
+not be the first live change.
+
+### Phase 4: One-Server Real Write Trial
+
+Enable one backend only with strict DB policy caps. Start with tiny amounts,
+small batches, and explicit monitoring. Keep Anarchy disabled.
+
+### Phase 5: Expand Later
+
+Only expand to Factions, Arcade, or other producers after SMP shadow and trial
+data are understood.
+
+## Stop Conditions
+
+Stop rollout immediately if any of these happen:
+
+- any Anarchy mutation attempt,
+- any vote reward behavior change,
+- any unexplained Vault-to-DB delta,
+- any fallback or double-credit risk,
+- any DB/Vault divergence that staff cannot explain,
+- any HMAC/auth regression,
+- any ledger write with the wrong category,
+- any direct balance overwrite,
+- any public exposure of sensitive ledger or audit data.
+
+## Explicit Non-Goals For This PR
+
+- No code changes.
+- No migrations.
+- No RealCore behavior changes.
+- No Vault provider registration.
+- No Vault or EssentialsX mutations.
+- No reward behavior changes.
+- No HMAC changes.
+- No public money or ledger exposure.
+- No deploy.
