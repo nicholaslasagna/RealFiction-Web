@@ -4,6 +4,7 @@ import com.realfiction.realcore.RealCorePlugin;
 import com.realfiction.realcore.api.dto.RewardPayload;
 import com.realfiction.realcore.config.RealCoreConfig;
 import com.realfiction.realcore.economy.VoteRewardLedgerShadowService;
+import com.realfiction.realcore.economy.VoteRewardLedgerWriteService;
 import com.realfiction.realcore.luckperms.LuckPermsService;
 import com.realfiction.realcore.scheduler.RealCoreScheduler;
 import java.time.Duration;
@@ -12,22 +13,35 @@ import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 public final class RewardDispatcher {
-  private final RealCorePlugin plugin;
+  private final Logger logger;
   private final RealCoreConfig config;
   private final RealCoreScheduler scheduler;
   private final LuckPermsService luckPermsService;
   private final VoteRewardLedgerShadowService voteRewardLedgerShadowService;
+  private final VoteRewardLedgerWriteService voteRewardLedgerWriteService;
 
   public RewardDispatcher(RealCorePlugin plugin, RealCoreConfig config, RealCoreScheduler scheduler,
                           LuckPermsService luckPermsService,
-                          VoteRewardLedgerShadowService voteRewardLedgerShadowService) {
-    this.plugin = plugin;
+                          VoteRewardLedgerShadowService voteRewardLedgerShadowService,
+                          VoteRewardLedgerWriteService voteRewardLedgerWriteService) {
+    this(plugin.getLogger(), config, scheduler, luckPermsService,
+        voteRewardLedgerShadowService, voteRewardLedgerWriteService);
+  }
+
+  RewardDispatcher(Logger logger, RealCoreConfig config, RealCoreScheduler scheduler,
+                   LuckPermsService luckPermsService,
+                   VoteRewardLedgerShadowService voteRewardLedgerShadowService,
+                   VoteRewardLedgerWriteService voteRewardLedgerWriteService) {
+    this.logger = logger;
     this.config = config;
     this.scheduler = scheduler;
     this.luckPermsService = luckPermsService;
     this.voteRewardLedgerShadowService = voteRewardLedgerShadowService;
+    this.voteRewardLedgerWriteService = voteRewardLedgerWriteService;
   }
 
   public CompletableFuture<RewardDeliveryResult> dispatch(RewardPayload reward) {
@@ -48,6 +62,7 @@ public final class RewardDispatcher {
     }
 
     List<CompletableFuture<Void>> tasks = new ArrayList<>();
+    List<String> notificationCommands = new ArrayList<>();
     String productSlug = reward.delivery.productSlug;
 
     if (hasLuckPermsPayload(reward)) {
@@ -67,25 +82,34 @@ public final class RewardDispatcher {
       }
     }
 
-    for (String command : RewardCommandFormatter.commandsFor(config, reward)) {
-      tasks.add(scheduler.dispatchConsoleCommand(RewardCommandFormatter.applyPlaceholders(command, reward, config.serverId())));
-    }
+    List<String> rewardCommands = RewardCommandFormatter.commandsFor(config, reward);
 
     for (String message : playerMessagesFor(reward)) {
       String player = reward.minecraftUsername();
       if (notBlank(player)) {
-        tasks.add(scheduler.dispatchConsoleCommand("tellraw " + player + " " + jsonText(message)));
+        notificationCommands.add("tellraw " + player + " " + jsonText(message));
       }
     }
 
     if (config.rewardBroadcastsEnabled()) {
       for (String message : broadcastMessagesFor(reward)) {
-        tasks.add(scheduler.dispatchConsoleCommand("broadcast " + message));
+        notificationCommands.add("broadcast " + message);
       }
     }
 
     if (isGiftCard(reward)) {
       return CompletableFuture.completedFuture(RewardDeliveryResult.failed(reward.id, "Gift card rewards must be delivered by the website."));
+    }
+
+    if (shouldAttemptVoteRewardLedgerWrite(reward)) {
+      return dispatchWithVoteRewardLedgerWrite(reward, tasks, rewardCommands, notificationCommands);
+    }
+
+    for (String command : rewardCommands) {
+      tasks.add(dispatchRewardCommand(command, reward));
+    }
+    for (String command : notificationCommands) {
+      tasks.add(scheduler.dispatchConsoleCommand(command));
     }
 
     if (tasks.isEmpty()) {
@@ -122,8 +146,84 @@ public final class RewardDispatcher {
     try {
       voteRewardLedgerShadowService.observe(reward);
     } catch (RuntimeException error) {
-      plugin.getLogger().warning("Vote reward ledger shadow failed without changing reward delivery: " + cleanMessage(error));
+      logger.warning("Vote reward ledger shadow failed without changing reward delivery: " + cleanMessage(error));
     }
+  }
+
+  private boolean shouldAttemptVoteRewardLedgerWrite(RewardPayload reward) {
+    return voteRewardLedgerWriteService != null && voteRewardLedgerWriteService.canAttempt(reward);
+  }
+
+  private CompletableFuture<RewardDeliveryResult> dispatchWithVoteRewardLedgerWrite(
+      RewardPayload reward,
+      List<CompletableFuture<Void>> preLedgerTasks,
+      List<String> fallbackCommands,
+      List<String> notificationCommands
+  ) {
+    CompletableFuture<Void> prerequisite = preLedgerTasks.isEmpty()
+        ? CompletableFuture.completedFuture(null)
+        : CompletableFuture.allOf(preLedgerTasks.toArray(CompletableFuture[]::new));
+
+    return prerequisite
+        .thenCompose(ignored -> voteRewardLedgerWriteService.write(reward))
+        .thenCompose(result -> {
+          if (result.delivered()) {
+            return finishDeliveredReward(reward, notificationCommands);
+          }
+          if (!voteRewardLedgerWriteService.fallbackCommandsEnabled()) {
+            return CompletableFuture.completedFuture(RewardDeliveryResult.failed(reward.id, result.failureReason()));
+          }
+          return runFallbackCommands(reward, fallbackCommands, notificationCommands, result.failureReason());
+        })
+        .exceptionally(error -> RewardDeliveryResult.failed(reward.id, cleanFailure(error)));
+  }
+
+  private CompletableFuture<RewardDeliveryResult> runFallbackCommands(
+      RewardPayload reward,
+      List<String> fallbackCommands,
+      List<String> notificationCommands,
+      String reason
+  ) {
+    if (fallbackCommands.isEmpty()) {
+      return CompletableFuture.completedFuture(RewardDeliveryResult.failed(
+          reward.id,
+          "Vote reward ledger write failed and no fallback commands are configured: " + reason
+      ));
+    }
+    voteRewardLedgerWriteService.recordFallbackUsed();
+    logger.warning("Vote reward ledger fallback commands running: rewardKey=" + reward.rewardKey
+        + " rewardId=" + reward.id + " reason=" + reason);
+    List<CompletableFuture<Void>> tasks = new ArrayList<>();
+    for (String command : fallbackCommands) {
+      tasks.add(dispatchRewardCommand(command, reward));
+    }
+    return CompletableFuture.allOf(tasks.toArray(CompletableFuture[]::new))
+        .thenCompose(ignored -> finishDeliveredReward(reward, notificationCommands))
+        .exceptionally(error -> RewardDeliveryResult.failed(reward.id, cleanFailure(error)));
+  }
+
+  private CompletableFuture<RewardDeliveryResult> finishDeliveredReward(
+      RewardPayload reward,
+      List<String> notificationCommands
+  ) {
+    List<CompletableFuture<Void>> notificationTasks = new ArrayList<>();
+    for (String command : notificationCommands) {
+      notificationTasks.add(scheduler.dispatchConsoleCommand(command));
+    }
+    CompletableFuture<Void> notifications = notificationTasks.isEmpty()
+        ? CompletableFuture.completedFuture(null)
+        : CompletableFuture.allOf(notificationTasks.toArray(CompletableFuture[]::new));
+    return notifications.handle((ignored, error) -> {
+      if (error != null) {
+        logger.warning("Vote reward ledger notification command failed after delivery: " + cleanMessage(error));
+      }
+      observeVoteRewardLedgerShadow(reward);
+      return RewardDeliveryResult.delivered(reward.id);
+    });
+  }
+
+  private CompletableFuture<Void> dispatchRewardCommand(String command, RewardPayload reward) {
+    return scheduler.dispatchConsoleCommand(RewardCommandFormatter.applyPlaceholders(command, reward, config.serverId()));
   }
 
   private boolean allowedRewardKey(String rewardKey) {
@@ -209,7 +309,7 @@ public final class RewardDispatcher {
     if (message == null || message.isBlank()) {
       message = cursor.getClass().getSimpleName();
     }
-    plugin.getLogger().log(java.util.logging.Level.WARNING, "Reward delivery failed: " + message, error);
+    logger.log(Level.WARNING, "Reward delivery failed: " + message, error);
     return message.length() > 450 ? message.substring(0, 450) : message;
   }
 

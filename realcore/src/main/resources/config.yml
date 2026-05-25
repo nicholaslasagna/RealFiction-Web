@@ -71,6 +71,12 @@ economy:
   # vote reward transactions to the economy API.
   voteRewardsToLedger: false
   voteRewardsLedgerDryRun: true
+  # Phase 6E real vote reward ledger writes. Disabled by default; when enabled,
+  # RealCore writes mapped vote rewards to the append-only economy ledger before
+  # marking the reward delivered. Keep fallback commands on until cutover so the
+  # existing eco give path remains available if the ledger write fails.
+  voteRewardsLedgerWritesEnabled: false
+  voteRewardsLedgerFallbackCommands: true
 
 # Network playtime tracking (feeds the "Top Players" leaderboard/holograms).
 # Each backend records its own sessions; the website sums them per player.
