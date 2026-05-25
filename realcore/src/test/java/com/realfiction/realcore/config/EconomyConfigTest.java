@@ -20,6 +20,10 @@ final class EconomyConfigTest {
     assertEquals(30, config.flushInterval().toSeconds());
     assertEquals(5000, config.bufferSize());
     assertEquals(100, config.maxBatchSize());
+    assertFalse(config.dbBalanceReadEnabled());
+    assertEquals(List.of("smp-1"), config.dbBalanceReadBackendAllowlist());
+    assertEquals(30, config.dbBalanceReadCacheTtl().toSeconds());
+    assertEquals(100, config.dbBalanceReadMaxPlayersPerBatch());
     assertEquals(100, config.stagingTestMaxCreditMinor());
     assertFalse(config.syncVaultAfterDb());
     assertEquals(100, config.syncVaultMaxDeltaMinor());
@@ -51,6 +55,14 @@ final class EconomyConfigTest {
           bufferSize: 0
           maxBatchSize: 900
           balanceCacheSeconds: 2
+          dbBalanceReadEnabled: true
+          dbBalanceReadBackendAllowlist:
+            - SMP-1
+            - smp-1
+            - ""
+            - arcade-1
+          dbBalanceReadCacheSeconds: 1
+          dbBalanceReadMaxPlayersPerBatch: 900
           stagingTestMaxCreditMinor: 250000
           syncVaultAfterDb: true
           syncVaultMaxDeltaMinor: 999999999
@@ -84,6 +96,10 @@ final class EconomyConfigTest {
     assertEquals(1, config.bufferSize());
     assertEquals(500, config.maxBatchSize());
     assertEquals(5, config.balanceCacheTtl().toSeconds());
+    assertTrue(config.dbBalanceReadEnabled());
+    assertEquals(List.of("smp-1", "arcade-1"), config.dbBalanceReadBackendAllowlist());
+    assertEquals(5, config.dbBalanceReadCacheTtl().toSeconds());
+    assertEquals(500, config.dbBalanceReadMaxPlayersPerBatch());
     assertEquals(10000, config.stagingTestMaxCreditMinor());
     assertTrue(config.syncVaultAfterDb());
     assertEquals(1000000, config.syncVaultMaxDeltaMinor());
