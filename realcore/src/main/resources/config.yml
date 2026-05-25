@@ -57,6 +57,15 @@ economy:
   bufferSize: 5000
   maxBatchSize: 100
   balanceCacheSeconds: 30
+  # Phase 3 gameplay-server DB balance read path. Read-only: signed backend
+  # requests can fetch canonical DB balances for online player checks without
+  # starting the economy writer. Requires the DB policy row to have enabled=true
+  # and can_read=true for this server. Keep off until staging verification.
+  dbBalanceReadEnabled: false
+  dbBalanceReadBackendAllowlist:
+    - smp-1
+  dbBalanceReadCacheSeconds: 30
+  dbBalanceReadMaxPlayersPerBatch: 100
   # Maximum amount for the admin-only /rf economy test command. Minor units:
   # $1.00 = 100, so the default is a tiny $1.00 staging credit.
   stagingTestMaxCreditMinor: 100

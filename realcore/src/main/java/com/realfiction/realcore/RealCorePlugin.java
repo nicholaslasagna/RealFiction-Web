@@ -429,6 +429,15 @@ public final class RealCorePlugin extends JavaPlugin {
           + ", failures=" + vaultDeltaShadowService.failureCount()
           + (ago >= 0 ? ", last " + ago + "s ago" : ", never run") + ")");
     }
+    if (economyService != null) {
+      long ago = economyService.lastBalanceReadAgoSeconds();
+      getLogger().info("| DB balance reads: "
+          + (economyService.dbBalanceReadAllowed() ? "enabled" : "disabled")
+          + " (cache=" + economyService.cachedBalanceCount()
+          + ", ok=" + economyService.balanceReadSuccessCount()
+          + ", failures=" + economyService.balanceReadFailureCount()
+          + (ago >= 0 ? ", last " + ago + "s ago" : ", never read") + ")");
+    }
     getLogger().info("| Commands: " + commands);
     getLogger().info("| Menus: " + (menus.isBlank() ? "none" : menus));
     getLogger().info("+--------------------------------------------------+");
@@ -613,6 +622,10 @@ public final class RealCorePlugin extends JavaPlugin {
         || !getConfig().isConfigurationSection("rewards.messages")
         || !getConfig().isConfigurationSection("rewards.economy")
         || !getConfig().isConfigurationSection("economy")
+        || !getConfig().contains("economy.dbBalanceReadEnabled")
+        || !getConfig().contains("economy.dbBalanceReadBackendAllowlist")
+        || !getConfig().contains("economy.dbBalanceReadCacheSeconds")
+        || !getConfig().contains("economy.dbBalanceReadMaxPlayersPerBatch")
         || !getConfig().contains("economy.voteRewardsToLedger")
         || !getConfig().contains("economy.voteRewardsLedgerDryRun")
         || !getConfig().contains("economy.voteRewardsLedgerWritesEnabled")

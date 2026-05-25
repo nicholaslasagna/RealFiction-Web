@@ -121,9 +121,6 @@ public final class VaultDeltaShadowService {
     if (!config.modules().economy()) {
       return "modules.economy is false";
     }
-    if (!economy.enabled()) {
-      return "economy.enabled is false";
-    }
     if (!economy.vaultDeltaShadowEnabled()) {
       return "economy.vaultDeltaShadowEnabled is false";
     }
@@ -133,6 +130,10 @@ public final class VaultDeltaShadowService {
     String serverId = config.serverId() == null ? "" : config.serverId().toLowerCase(Locale.ROOT);
     if (!economy.vaultDeltaShadowBackendAllowlist().contains(serverId)) {
       return "server.id is not in economy.vaultDeltaShadowBackendAllowlist";
+    }
+    String readGuard = EconomyService.dbBalanceReadGuardReason(config);
+    if (!readGuard.isBlank()) {
+      return "DB balance read is unavailable: " + readGuard;
     }
     return "";
   }
@@ -209,7 +210,11 @@ public final class VaultDeltaShadowService {
           finishRun(runStarted);
           return;
         }
-        List<PlayerSample> players = onlinePlayerSamples(config.economy().vaultDeltaShadowMaxPlayersPerRun());
+        int maxPlayers = Math.min(
+            config.economy().vaultDeltaShadowMaxPlayersPerRun(),
+            config.economy().dbBalanceReadMaxPlayersPerBatch()
+        );
+        List<PlayerSample> players = onlinePlayerSamples(maxPlayers);
         scheduler.runAsync(() -> runShadowSample(runStarted, players));
       } catch (Throwable error) {
         recordFailure(error);
@@ -243,7 +248,7 @@ public final class VaultDeltaShadowService {
         continue;
       }
       long dbStarted = System.nanoTime();
-      futures.add(economy.fetchBalance(player.uuid())
+      futures.add(economy.fetchBalanceReadOnly(player.uuid())
           .thenAccept(snapshot -> {
             recordDbLatency(dbStarted);
             observeDelta(player, binding.name(), vaultBalance.balanceMinor(), snapshot.balanceMinor());

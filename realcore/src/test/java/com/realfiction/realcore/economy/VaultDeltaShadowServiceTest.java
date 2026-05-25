@@ -14,7 +14,7 @@ import org.junit.jupiter.api.Test;
 final class VaultDeltaShadowServiceTest {
   @Test
   void guardRequiresExplicitEnablementAndAllowlist() throws InvalidConfigurationException {
-    assertEquals("economy.enabled is false",
+    assertEquals("DB balance read is unavailable: economy.dbBalanceReadEnabled is false",
         VaultDeltaShadowService.guardReason(config("smp-1", "smp", true, false, true, List.of("smp-1"))));
     assertEquals("economy.vaultDeltaShadowEnabled is false",
         VaultDeltaShadowService.guardReason(config("smp-1", "smp", true, true, false, List.of("smp-1"))));
@@ -114,10 +114,13 @@ final class VaultDeltaShadowServiceTest {
           economy: %s
         economy:
           enabled: %s
+          dbBalanceReadEnabled: %s
+          dbBalanceReadBackendAllowlist:
+        %s
           vaultDeltaShadowEnabled: %s
           vaultDeltaShadowBackendAllowlist:
         %s
-        """.formatted(serverId, serverGroup, moduleEnabled, economyEnabled, shadowEnabled, allowlistYaml));
+        """.formatted(serverId, serverGroup, moduleEnabled, economyEnabled, economyEnabled, allowlistYaml, shadowEnabled, allowlistYaml));
     return RealCoreConfig.from(yaml);
   }
 }
