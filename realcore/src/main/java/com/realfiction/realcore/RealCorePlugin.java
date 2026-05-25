@@ -424,6 +424,7 @@ public final class RealCorePlugin extends JavaPlugin {
           + " (sampled=" + vaultDeltaShadowService.sampledCount()
           + ", matched=" + vaultDeltaShadowService.matchedCount()
           + ", deltas=" + vaultDeltaShadowService.deltaCount()
+          + ", severe=" + vaultDeltaShadowService.severeDeltaCount()
           + ", skipped=" + vaultDeltaShadowService.skippedCount()
           + ", failures=" + vaultDeltaShadowService.failureCount()
           + (ago >= 0 ? ", last " + ago + "s ago" : ", never run") + ")");
@@ -621,7 +622,12 @@ public final class RealCorePlugin extends JavaPlugin {
         || !getConfig().contains("economy.vaultDeltaShadowMaxPlayersPerRun")
         || !getConfig().contains("economy.vaultDeltaShadowMinDeltaMinor")
         || !getConfig().contains("economy.vaultDeltaShadowMaxLoggedDeltaMinor")
-        || !getConfig().contains("economy.vaultDeltaShadowBackendAllowlist");
+        || !getConfig().contains("economy.vaultDeltaShadowBackendAllowlist")
+        || !getConfig().contains("economy.shadow.warningDeltaMinor")
+        || !getConfig().contains("economy.shadow.severeDeltaMinor")
+        || !getConfig().contains("economy.shadow.ignoreNegativeOneMinorNoise")
+        || !getConfig().contains("economy.shadow.repeatedOffenderThreshold")
+        || !getConfig().contains("economy.shadow.observationCacheSize");
     if (!missingLobbyDefaults) {
       return;
     }

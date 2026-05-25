@@ -152,6 +152,12 @@ economy:
   vaultDeltaShadowMaxLoggedDeltaMinor: 250000
   vaultDeltaShadowBackendAllowlist:
     - smp-1
+  shadow:
+    warningDeltaMinor: 5000
+    severeDeltaMinor: 50000
+    ignoreNegativeOneMinorNoise: true
+    repeatedOffenderThreshold: 5
+    observationCacheSize: 500
 ```
 
 Suggested logged fields:
@@ -169,6 +175,26 @@ Suggested logged fields:
 
 The observer should cap, filter, or flag huge deltas rather than treating them
 as normal. Large unexplained deltas should stop rollout until reviewed.
+
+Phase 2 telemetry should aggregate enough signal for staff to decide whether a
+real sync trial is safe:
+
+- total sampled players,
+- exact matches,
+- positive and negative deltas,
+- ignored and capped deltas,
+- average absolute delta,
+- largest absolute, positive, and negative deltas,
+- repeated offenders from a bounded in-memory observation window,
+- shadow run duration,
+- DB balance read latency,
+- Vault read latency.
+
+The `/rf economy shadow` command is staff-only and should report these counters,
+the backend allowlist, top repeated offenders, and an estimated health label.
+Shadow logs should be structured key/value lines so staff can scrape or filter
+them later. The cache must remain bounded; this is operational telemetry, not a
+durable accounting source.
 
 For future 1000-player scale, real economy sync should be transaction/event
 based, not a periodic full-player sync. Polling Vault balances is only shadow

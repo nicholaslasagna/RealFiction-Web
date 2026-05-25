@@ -87,6 +87,12 @@ economy:
   vaultDeltaShadowMaxLoggedDeltaMinor: 250000
   vaultDeltaShadowBackendAllowlist:
     - smp-1
+  shadow:
+    warningDeltaMinor: 5000
+    severeDeltaMinor: 50000
+    ignoreNegativeOneMinorNoise: true
+    repeatedOffenderThreshold: 5
+    observationCacheSize: 500
 
 # Network playtime tracking (feeds the "Top Players" leaderboard/holograms).
 # Each backend records its own sessions; the website sums them per player.

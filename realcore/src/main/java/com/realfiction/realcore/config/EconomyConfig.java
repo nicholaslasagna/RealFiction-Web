@@ -30,7 +30,8 @@ public record EconomyConfig(
     int vaultDeltaShadowMaxPlayersPerRun,
     long vaultDeltaShadowMinDeltaMinor,
     long vaultDeltaShadowMaxLoggedDeltaMinor,
-    List<String> vaultDeltaShadowBackendAllowlist
+    List<String> vaultDeltaShadowBackendAllowlist,
+    ShadowConfig shadow
 ) {
   public static EconomyConfig disabledDefaults() {
     return new EconomyConfig(
@@ -52,7 +53,8 @@ public record EconomyConfig(
         100,
         1,
         250_000,
-        List.of("smp-1")
+        List.of("smp-1"),
+        ShadowConfig.defaults()
     );
   }
 
@@ -94,7 +96,8 @@ public record EconomyConfig(
         Math.max(1, section.getLong(
             "vaultDeltaShadowMaxLoggedDeltaMinor",
             defaults.vaultDeltaShadowMaxLoggedDeltaMinor())),
-        normalizeAllowlist(section.getStringList("vaultDeltaShadowBackendAllowlist"), defaults.vaultDeltaShadowBackendAllowlist())
+        normalizeAllowlist(section.getStringList("vaultDeltaShadowBackendAllowlist"), defaults.vaultDeltaShadowBackendAllowlist()),
+        ShadowConfig.from(section.getConfigurationSection("shadow"), defaults.shadow())
     );
   }
 
@@ -105,5 +108,33 @@ public record EconomyConfig(
         .filter(value -> !value.isBlank())
         .distinct()
         .toList();
+  }
+
+  public record ShadowConfig(
+      long warningDeltaMinor,
+      long severeDeltaMinor,
+      boolean ignoreNegativeOneMinorNoise,
+      int repeatedOffenderThreshold,
+      int observationCacheSize
+  ) {
+    public static ShadowConfig defaults() {
+      return new ShadowConfig(5_000, 50_000, true, 5, 500);
+    }
+
+    public static ShadowConfig from(ConfigurationSection section, ShadowConfig fallback) {
+      ShadowConfig defaults = fallback == null ? defaults() : fallback;
+      if (section == null) {
+        return defaults;
+      }
+      long warning = Math.max(1, section.getLong("warningDeltaMinor", defaults.warningDeltaMinor()));
+      long severe = Math.max(warning, section.getLong("severeDeltaMinor", defaults.severeDeltaMinor()));
+      return new ShadowConfig(
+          warning,
+          severe,
+          section.getBoolean("ignoreNegativeOneMinorNoise", defaults.ignoreNegativeOneMinorNoise()),
+          Math.max(1, section.getInt("repeatedOffenderThreshold", defaults.repeatedOffenderThreshold())),
+          Math.max(10, Math.min(10_000, section.getInt("observationCacheSize", defaults.observationCacheSize())))
+      );
+    }
   }
 }

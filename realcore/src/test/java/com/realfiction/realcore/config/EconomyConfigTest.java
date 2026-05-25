@@ -33,6 +33,11 @@ final class EconomyConfigTest {
     assertEquals(1, config.vaultDeltaShadowMinDeltaMinor());
     assertEquals(250000, config.vaultDeltaShadowMaxLoggedDeltaMinor());
     assertEquals(List.of("smp-1"), config.vaultDeltaShadowBackendAllowlist());
+    assertEquals(5000, config.shadow().warningDeltaMinor());
+    assertEquals(50000, config.shadow().severeDeltaMinor());
+    assertTrue(config.shadow().ignoreNegativeOneMinorNoise());
+    assertEquals(5, config.shadow().repeatedOffenderThreshold());
+    assertEquals(500, config.shadow().observationCacheSize());
   }
 
   @Test
@@ -63,6 +68,12 @@ final class EconomyConfigTest {
             - smp-1
             - ""
             - factions-1
+          shadow:
+            warningDeltaMinor: 0
+            severeDeltaMinor: 5
+            ignoreNegativeOneMinorNoise: false
+            repeatedOffenderThreshold: 0
+            observationCacheSize: 2
         """);
 
     EconomyConfig config = EconomyConfig.from(yaml.getConfigurationSection("economy"));
@@ -86,6 +97,11 @@ final class EconomyConfigTest {
     assertEquals(0, config.vaultDeltaShadowMinDeltaMinor());
     assertEquals(1, config.vaultDeltaShadowMaxLoggedDeltaMinor());
     assertEquals(List.of("smp-1", "factions-1"), config.vaultDeltaShadowBackendAllowlist());
+    assertEquals(1, config.shadow().warningDeltaMinor());
+    assertEquals(5, config.shadow().severeDeltaMinor());
+    assertFalse(config.shadow().ignoreNegativeOneMinorNoise());
+    assertEquals(1, config.shadow().repeatedOffenderThreshold());
+    assertEquals(10, config.shadow().observationCacheSize());
   }
 
   @Test

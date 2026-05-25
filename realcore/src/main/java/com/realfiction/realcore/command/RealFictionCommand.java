@@ -217,7 +217,7 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
     }
     if (sender.hasPermission("realcore.admin")) {
       send(sender, ChatColor.YELLOW + "Admin: " + ChatColor.WHITE + "/" + label
-          + " status|stats|stats flush|economy|economy audit|economy sync-vault|economy flush|economy test|rewards|reload|setspawn");
+          + " status|stats|stats flush|economy|economy audit|economy shadow|economy sync-vault|economy flush|economy test|rewards|reload|setspawn");
     }
     return true;
   }
@@ -400,6 +400,11 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
     }
     if (args.length >= 2 && "sync-vault".equalsIgnoreCase(args[1])) {
       return handleEconomyVaultSync(sender, args);
+    }
+    if (args.length >= 2 && "shadow".equalsIgnoreCase(args[1])) {
+      send(sender, ChatColor.GOLD + "RealCore Vault Delta Shadow");
+      appendVaultDeltaShadowStatus(sender, true);
+      return true;
     }
 
     send(sender, ChatColor.GOLD + "RealCore Global Economy");
@@ -609,7 +614,7 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
       send(sender, ChatColor.YELLOW + "Economy currency: " + ChatColor.WHITE + economy.currencyKey());
       appendVoteRewardLedgerShadowStatus(sender);
       appendVoteRewardLedgerWriteStatus(sender);
-      appendVaultDeltaShadowStatus(sender);
+      appendVaultDeltaShadowStatus(sender, false);
       return;
     }
     String state = economy.writerRunning() ? ChatColor.GREEN + "ready" : ChatColor.RED + "not ready";
@@ -630,11 +635,11 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
         + ChatColor.GRAY + ", max delta " + economy.syncVaultMaxDeltaMinor() + " minor units");
     appendVoteRewardLedgerShadowStatus(sender);
     appendVoteRewardLedgerWriteStatus(sender);
-    appendVaultDeltaShadowStatus(sender);
+    appendVaultDeltaShadowStatus(sender, false);
     sendEconomyWriterStatus(sender, economy.writer());
   }
 
-  private void appendVaultDeltaShadowStatus(CommandSender sender) {
+  private void appendVaultDeltaShadowStatus(CommandSender sender, boolean detailed) {
     VaultDeltaShadowService shadow = plugin.vaultDeltaShadowService();
     RealCoreConfig config = plugin.realCoreConfig();
     if (config == null) {
@@ -645,6 +650,8 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
     if (shadow == null) {
       send(sender, ChatColor.YELLOW + "Vault delta shadow: " + ChatColor.GRAY + "disabled"
           + ChatColor.GRAY + (guard.isBlank() ? "" : " (" + guard + ")"));
+      send(sender, ChatColor.YELLOW + "Shadow allowlist: " + ChatColor.WHITE
+          + String.join(", ", config.economy().vaultDeltaShadowBackendAllowlist()));
       return;
     }
     long ago = shadow.lastRunAgoSeconds();
@@ -653,11 +660,44 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
         + ChatColor.GRAY + ", sampled " + shadow.sampledCount()
         + ", matched " + shadow.matchedCount()
         + ", deltas " + shadow.deltaCount()
+        + ", severe " + shadow.severeDeltaCount()
         + ", skipped " + shadow.skippedCount()
         + ", failures " + shadow.failureCount()
         + (ago >= 0 ? ", last " + ago + "s ago" : ", never run"));
+    send(sender, ChatColor.YELLOW + "Shadow health: " + ChatColor.WHITE + shadow.estimatedSyncHealth()
+        + ChatColor.GRAY + ", avg abs delta " + shadow.averageAbsDeltaMinor()
+        + ", largest abs " + shadow.largestAbsDeltaMinor());
     if (shadow.lastFailure() != null && !shadow.lastFailure().isBlank()) {
       send(sender, ChatColor.YELLOW + "Last shadow error: " + ChatColor.RED + shadow.lastFailure());
+    }
+    if (!detailed) {
+      return;
+    }
+    send(sender, ChatColor.YELLOW + "Shadow allowlist: " + ChatColor.WHITE
+        + String.join(", ", config.economy().vaultDeltaShadowBackendAllowlist()));
+    send(sender, ChatColor.YELLOW + "Delta counts: " + ChatColor.WHITE + shadow.exactMatchCount()
+        + " exact" + ChatColor.GRAY + ", " + shadow.positiveDeltaCount() + " positive, "
+        + shadow.negativeDeltaCount() + " negative, " + shadow.ignoredDeltaCount() + " ignored, "
+        + shadow.cappedDeltaCount() + " capped");
+    send(sender, ChatColor.YELLOW + "Latency: " + ChatColor.WHITE + shadow.averageDbReadLatencyMillis()
+        + "ms avg DB" + ChatColor.GRAY + " (last " + shadow.lastDbReadLatencyMillis() + "ms), "
+        + shadow.averageVaultReadLatencyMillis() + "ms avg Vault"
+        + " (last " + shadow.lastVaultReadLatencyMillis() + "ms)");
+    send(sender, ChatColor.YELLOW + "Last run duration: " + ChatColor.WHITE
+        + shadow.lastRunDurationMillis() + "ms" + ChatColor.GRAY
+        + ", recent observations " + shadow.recentObservationCount());
+    send(sender, ChatColor.YELLOW + "Repeated offender threshold: " + ChatColor.WHITE
+        + config.economy().shadow().repeatedOffenderThreshold() + ChatColor.GRAY + " divergent samples");
+    List<VaultDeltaShadowService.OffenderSummary> offenders = shadow.topOffenders(5);
+    if (offenders.isEmpty()) {
+      send(sender, ChatColor.GRAY + "Top offenders: none");
+      return;
+    }
+    send(sender, ChatColor.YELLOW + "Top offenders:");
+    for (VaultDeltaShadowService.OffenderSummary offender : offenders) {
+      send(sender, ChatColor.GRAY + " - " + offender.username() + " "
+          + ChatColor.DARK_GRAY + "(" + offender.uuid() + ") "
+          + ChatColor.WHITE + offender.count() + " divergent samples");
     }
   }
 
@@ -776,7 +816,7 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
       return List.of("flush");
     }
     if (args.length == 2 && "economy".equalsIgnoreCase(args[0]) && sender.hasPermission("realcore.admin")) {
-      return List.of("audit", "flush", "sync-vault", "test");
+      return List.of("audit", "flush", "shadow", "sync-vault", "test");
     }
     if (args.length == 3 && "economy".equalsIgnoreCase(args[0])
         && "audit".equalsIgnoreCase(args[1])
