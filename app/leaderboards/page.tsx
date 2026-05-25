@@ -1,16 +1,16 @@
 import type { Metadata } from "next"
 import Image from "next/image"
-import { ShieldCheck, Sparkles, Trophy } from "lucide-react"
+import { Trophy } from "lucide-react"
 
+import { EconomyLeaderboard } from "@/components/economy-leaderboard"
 import { PlaytimeLeaderboards } from "@/components/playtime-leaderboards"
 import { Reveal } from "@/components/reveal"
 import { Badge } from "@/components/ui/badge"
-import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 
 export const metadata: Metadata = {
   title: "Leaderboards",
   description:
-    "Top RealFiction players across SMP, Factions, Anarchy, Arcade, and the lobby network — refreshed from the live RealCore stat cache."
+    "Top RealFiction players across playtime and economy leaderboards."
 }
 
 export default function LeaderboardsPage() {
@@ -33,42 +33,22 @@ export default function LeaderboardsPage() {
               Network leaderboards
             </Badge>
             <h1 className="display-font mt-5 text-5xl font-semibold leading-tight md:text-7xl">
-              Top players, real time on the server.
+              Top players across RealFiction.
             </h1>
             <p className="mt-5 max-w-3xl text-lg leading-8 text-muted-foreground">
-              Network-wide playtime totals across every RealFiction backend. Boards refresh from the live stat
-              cache, so they update as players log on and off.
+              See who is leading the network in playtime and balance. Simple boards, refreshed from RealFiction
+              server data.
             </p>
           </Reveal>
         </div>
       </div>
 
       <div className="container-shell py-10 md:py-14">
-        <Reveal className="grid gap-5 md:grid-cols-3">
-          <Card className="minecraft-card">
-            <CardHeader>
-              <Trophy className="h-5 w-5 text-amber-200" />
-              <CardTitle>Network-wide totals</CardTitle>
-              <CardDescription>Hours summed across SMP, Factions, Arcade, Anarchy, and lobby worlds.</CardDescription>
-            </CardHeader>
-          </Card>
-          <Card className="minecraft-card">
-            <CardHeader>
-              <Sparkles className="h-5 w-5 text-amber-200" />
-              <CardTitle>Live stat cache</CardTitle>
-              <CardDescription>RealCore reports each session and the website caches the top 10 every minute.</CardDescription>
-            </CardHeader>
-          </Card>
-          <Card className="minecraft-card">
-            <CardHeader>
-              <ShieldCheck className="h-5 w-5 text-emerald-200" />
-              <CardTitle>Fair counting</CardTitle>
-              <CardDescription>Idempotent session math. Crashes and proxy transfers can&rsquo;t double-count.</CardDescription>
-            </CardHeader>
-          </Card>
+        <Reveal>
+          <EconomyLeaderboard />
         </Reveal>
 
-        <Reveal className="mt-10">
+        <Reveal className="mt-8">
           <PlaytimeLeaderboards />
         </Reveal>
       </div>
