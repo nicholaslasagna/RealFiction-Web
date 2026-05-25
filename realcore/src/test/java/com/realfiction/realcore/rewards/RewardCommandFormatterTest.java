@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import com.realfiction.realcore.api.dto.RewardPayload;
 import com.realfiction.realcore.config.EconomyConfig;
 import com.realfiction.realcore.config.RealCoreConfig;
+import com.realfiction.realcore.config.RewardEconomyConfig;
 import com.realfiction.realcore.config.ServerModules;
 import java.net.URI;
 import java.time.Duration;
@@ -34,6 +35,7 @@ final class RewardCommandFormatterTest {
         Map.of("vote.standard", List.of("Thanks for voting on {voteSite}, {player}!")),
         false,
         Map.of(),
+        RewardEconomyConfig.empty(),
         "Lobby 1",
         false,
         ServerModules.defaults(),
@@ -67,5 +69,34 @@ final class RewardCommandFormatterTest {
         "Thanks for voting on mclist.io, RealPlayer!",
         RewardCommandFormatter.applyPlaceholders(config.playerMessagesByRewardKey().get("vote.standard").get(0), reward, config.serverId())
     );
+  }
+
+  @Test
+  void commandRewardsRemainWhenEconomyShadowMappingExists() throws Exception {
+    org.bukkit.configuration.file.YamlConfiguration yaml = new org.bukkit.configuration.file.YamlConfiguration();
+    yaml.loadFromString("""
+        hmacSecret: "secret"
+        rewards:
+          economy:
+            byRewardKey:
+              vote.standard:
+                amountMinor: 25000
+                currencyKey: realfiction_main
+                category: vote_reward
+          commands:
+            byRewardKey:
+              vote.standard:
+                - "eco give {player} 250"
+        """);
+    RealCoreConfig config = RealCoreConfig.from(yaml);
+
+    RewardPayload reward = new RewardPayload();
+    reward.id = "reward-1";
+    reward.rewardKey = "vote.standard";
+    reward.target = new RewardPayload.Target();
+    reward.target.minecraftUsername = "RealPlayer";
+    reward.delivery = new RewardPayload.Delivery();
+
+    assertEquals(List.of("eco give {player} 250"), RewardCommandFormatter.commandsFor(config, reward));
   }
 }

@@ -22,6 +22,8 @@ final class EconomyConfigTest {
     assertEquals(100, config.stagingTestMaxCreditMinor());
     assertFalse(config.syncVaultAfterDb());
     assertEquals(100, config.syncVaultMaxDeltaMinor());
+    assertFalse(config.voteRewardsToLedger());
+    assertTrue(config.voteRewardsLedgerDryRun());
   }
 
   @Test
@@ -38,6 +40,8 @@ final class EconomyConfigTest {
           stagingTestMaxCreditMinor: 250000
           syncVaultAfterDb: true
           syncVaultMaxDeltaMinor: 999999999
+          voteRewardsToLedger: true
+          voteRewardsLedgerDryRun: false
         """);
 
     EconomyConfig config = EconomyConfig.from(yaml.getConfigurationSection("economy"));
@@ -51,6 +55,8 @@ final class EconomyConfigTest {
     assertEquals(10000, config.stagingTestMaxCreditMinor());
     assertTrue(config.syncVaultAfterDb());
     assertEquals(1000000, config.syncVaultMaxDeltaMinor());
+    assertTrue(config.voteRewardsToLedger());
+    assertFalse(config.voteRewardsLedgerDryRun());
   }
 
   @Test

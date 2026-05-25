@@ -19,7 +19,9 @@ public record EconomyConfig(
     Duration balanceCacheTtl,
     long stagingTestMaxCreditMinor,
     boolean syncVaultAfterDb,
-    long syncVaultMaxDeltaMinor
+    long syncVaultMaxDeltaMinor,
+    boolean voteRewardsToLedger,
+    boolean voteRewardsLedgerDryRun
 ) {
   public static EconomyConfig disabledDefaults() {
     return new EconomyConfig(
@@ -31,7 +33,9 @@ public record EconomyConfig(
         Duration.ofSeconds(30),
         100,
         false,
-        100
+        100,
+        false,
+        true
     );
   }
 
@@ -55,7 +59,9 @@ public record EconomyConfig(
         Duration.ofSeconds(Math.max(5, section.getLong("balanceCacheSeconds", defaults.balanceCacheTtl().toSeconds()))),
         Math.max(1, Math.min(10_000, section.getLong("stagingTestMaxCreditMinor", defaults.stagingTestMaxCreditMinor()))),
         section.getBoolean("syncVaultAfterDb", defaults.syncVaultAfterDb()),
-        Math.max(1, Math.min(1_000_000, section.getLong("syncVaultMaxDeltaMinor", defaults.syncVaultMaxDeltaMinor())))
+        Math.max(1, Math.min(1_000_000, section.getLong("syncVaultMaxDeltaMinor", defaults.syncVaultMaxDeltaMinor()))),
+        section.getBoolean("voteRewardsToLedger", defaults.voteRewardsToLedger()),
+        section.getBoolean("voteRewardsLedgerDryRun", defaults.voteRewardsLedgerDryRun())
     );
   }
 }
