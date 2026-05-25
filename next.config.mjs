@@ -10,6 +10,12 @@ const nextConfig = {
         has: [{ type: "host", value: "shop.realfiction.live" }],
         destination: "https://realfiction.live/store",
         permanent: true
+      },
+      {
+        source: "/:path*",
+        has: [{ type: "host", value: "store.realfiction.live" }],
+        destination: "https://realfiction.live/store",
+        permanent: true
       }
     ]
   }
