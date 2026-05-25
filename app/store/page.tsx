@@ -33,10 +33,10 @@ export default function StorePage() {
               <ShieldCheck className="mr-1.5 h-3.5 w-3.5" />
               Cosmetic-only server shop
             </div>
-            <h1 className="display-font mt-5 text-5xl font-semibold leading-tight md:text-7xl">
+            <h1 className="display-font mt-5 text-4xl font-semibold leading-tight sm:text-5xl md:text-7xl">
               RealFiction Store
             </h1>
-            <p className="mt-5 max-w-3xl text-lg leading-8 text-muted-foreground">
+            <p className="mt-5 max-w-3xl text-base leading-7 text-muted-foreground sm:text-lg sm:leading-8">
               Support the network with RealVIP, RealSupporter, pets, particles, username colors,
               lobby flight, cosmetic bundles, and gift cards. No paid power, no gameplay shortcuts.
             </p>
