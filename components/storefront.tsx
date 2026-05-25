@@ -134,9 +134,9 @@ export function Storefront() {
   }
 
   return (
-    <div className="grid gap-8 lg:grid-cols-[1fr_390px]">
-      <div className="space-y-6">
-        <div className="flex gap-2 overflow-x-auto pb-2">
+    <div className="grid min-w-0 gap-8 lg:grid-cols-[minmax(0,1fr)_390px]">
+      <div className="min-w-0 space-y-6">
+        <div className="-mx-4 flex max-w-[calc(100%+2rem)] gap-2 overflow-x-auto px-4 pb-2">
           {productCategories.map((item) => {
             const Icon = item.icon
             const active = category === item.id
@@ -179,7 +179,7 @@ export function Storefront() {
                 </div>
 
                 {isGiftCards ? (
-                  <div className="grid grid-cols-2 gap-5 lg:grid-cols-3">
+                  <div className="grid gap-4 min-[480px]:grid-cols-2 lg:grid-cols-3">
                     {section.cards.map((card) => (
                       <Card key={card.id} className="minecraft-card flex flex-col overflow-hidden">
                         <div className="flex justify-center bg-black/30 px-3 pt-4">
@@ -192,7 +192,7 @@ export function Storefront() {
                           />
                         </div>
                         <CardContent className="flex flex-1 flex-col gap-2 pt-4">
-                          <div className="flex items-center justify-between gap-2">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
                             <CardTitle className="display-font text-lg">{card.name}</CardTitle>
                             <span className="font-mono text-base font-semibold text-amber-100">
                               {formatCurrency(card.priceCents)}
@@ -233,7 +233,7 @@ export function Storefront() {
                             <CardTitle className="display-font text-xl">{product.name}</CardTitle>
                             <p className="text-sm leading-6 text-muted-foreground">{product.summary}</p>
 
-                            <div className="grid grid-cols-2 gap-2">
+                            <div className="grid gap-2 min-[430px]:grid-cols-2">
                               {product.tiers.map((entry) => {
                                 const selected = entry.months === months
                                 const pct = savePercent(product, entry.priceCents, entry.months)
@@ -295,7 +295,7 @@ export function Storefront() {
         </div>
       </div>
 
-      <aside className="lg:sticky lg:top-28 lg:self-start">
+      <aside className="min-w-0 lg:sticky lg:top-28 lg:self-start">
         <Card className="minecraft-panel">
           <CardHeader>
             <div className="rf-kicker">Cosmetic-only shop</div>
