@@ -21,14 +21,14 @@ import { cn, formatCurrency } from "@/lib/utils"
 
 type CartItem = { slug: string; quantity: number }
 
-const accentThemes: Record<string, { gradient: string; icon: string; glow: string }> = {
-  cyan: { gradient: "from-cyan-400/25 via-cyan-500/10 to-[#0a1726]", icon: "text-cyan-200", glow: "bg-cyan-400/25" },
-  amber: { gradient: "from-amber-400/25 via-amber-500/10 to-[#0a1726]", icon: "text-amber-200", glow: "bg-amber-400/25" },
-  emerald: { gradient: "from-emerald-400/25 via-emerald-500/10 to-[#0a1726]", icon: "text-emerald-200", glow: "bg-emerald-400/25" },
-  violet: { gradient: "from-violet-400/25 via-violet-500/10 to-[#0a1726]", icon: "text-violet-200", glow: "bg-violet-400/25" },
-  rose: { gradient: "from-rose-400/25 via-rose-500/10 to-[#0a1726]", icon: "text-rose-200", glow: "bg-rose-400/25" },
-  sky: { gradient: "from-sky-400/25 via-sky-500/10 to-[#0a1726]", icon: "text-sky-200", glow: "bg-sky-400/25" },
-  blue: { gradient: "from-blue-400/25 via-blue-500/10 to-[#0a1726]", icon: "text-blue-200", glow: "bg-blue-400/25" }
+const accentThemes: Record<string, { surface: string; icon: string }> = {
+  cyan: { surface: "border-cyan-300/16 bg-cyan-300/[0.055]", icon: "text-cyan-200" },
+  amber: { surface: "border-amber-300/18 bg-amber-300/[0.06]", icon: "text-amber-200" },
+  emerald: { surface: "border-emerald-300/16 bg-emerald-300/[0.055]", icon: "text-emerald-200" },
+  violet: { surface: "border-violet-300/16 bg-violet-300/[0.052]", icon: "text-violet-200" },
+  rose: { surface: "border-rose-300/16 bg-rose-300/[0.052]", icon: "text-rose-200" },
+  sky: { surface: "border-sky-300/16 bg-sky-300/[0.055]", icon: "text-sky-200" },
+  blue: { surface: "border-blue-300/16 bg-blue-300/[0.052]", icon: "text-blue-200" }
 }
 
 // Flat lookup for every purchasable slug (subscription tiers + gift cards).
@@ -218,11 +218,10 @@ export function Storefront() {
                         <Card key={product.id} className="minecraft-card flex flex-col overflow-hidden">
                           <div
                             className={cn(
-                              "relative flex h-24 items-center justify-center overflow-hidden border-b border-white/10 bg-gradient-to-br",
-                              theme.gradient
+                              "relative flex h-24 items-center justify-center overflow-hidden border-b",
+                              theme.surface
                             )}
                           >
-                            <div className={cn("absolute -right-5 -top-6 h-20 w-20 rounded-full blur-2xl", theme.glow)} />
                             <SectionIcon className={cn("relative h-10 w-10 drop-shadow-[0_6px_16px_rgba(0,0,0,0.5)]", theme.icon)} />
                             {product.featured ? (
                               <Badge variant="warning" className="absolute left-3 top-3">
@@ -299,7 +298,7 @@ export function Storefront() {
       <aside className="lg:sticky lg:top-28 lg:self-start">
         <Card className="minecraft-panel">
           <CardHeader>
-            <Badge variant="success">Cosmetic-only shop</Badge>
+            <div className="rf-kicker">Cosmetic-only shop</div>
             <CardTitle className="display-font flex items-center gap-2 text-3xl">
               <ShoppingCart className="h-5 w-5 text-amber-200" />
               Server Cart

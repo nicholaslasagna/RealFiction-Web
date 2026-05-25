@@ -3,6 +3,8 @@
 import { usePathname } from "next/navigation"
 import type { ReactNode } from "react"
 
+import { SocialRail } from "@/components/social-rail"
+
 export function SiteChrome({
   children,
   footer,
@@ -21,6 +23,7 @@ export function SiteChrome({
     <>
       {isAuthPage ? null : header}
       <main className={isAuthPage ? "min-h-screen" : "min-h-screen pt-20"}>{children}</main>
+      {isAuthPage ? null : <SocialRail />}
       {isAuthPage ? null : footer}
     </>
   )

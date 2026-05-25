@@ -5,7 +5,6 @@ import { Gift, ShieldCheck } from "lucide-react"
 
 import { Reveal } from "@/components/reveal"
 import { Storefront } from "@/components/storefront"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 
@@ -30,10 +29,10 @@ export default function StorePage() {
         <div className="absolute inset-0 -z-10 bg-gradient-to-b from-background/70 via-background/82 to-background" />
         <div className="container-shell">
           <Reveal className="max-w-4xl">
-            <Badge variant="success">
+            <div className="rf-kicker">
               <ShieldCheck className="mr-1.5 h-3.5 w-3.5" />
               Cosmetic-only server shop
-            </Badge>
+            </div>
             <h1 className="display-font mt-5 text-5xl font-semibold leading-tight md:text-7xl">
               RealFiction Store
             </h1>
@@ -49,28 +48,28 @@ export default function StorePage() {
       </div>
 
       <div className="container-shell py-10 md:py-14">
-      <Reveal className="grid gap-4 md:grid-cols-3">
-        {[
-          "Stripe, Apple Pay, Google Pay, and PayPal checkout",
-          "Rewards delivered to your linked Minecraft account",
-          "Cosmetics, supporter perks, lobby fun, and gift cards only"
-        ].map((item) => (
-          <Card key={item} className="minecraft-card">
-            <CardContent className="flex items-start gap-3 p-5">
-              {item.includes("gift") ? (
-                <Gift className="mt-0.5 h-4 w-4 text-amber-200" />
-              ) : (
-                <ShieldCheck className="mt-0.5 h-4 w-4 text-emerald-200" />
-              )}
-              <p className="text-sm leading-6 text-muted-foreground">{item}</p>
-            </CardContent>
-          </Card>
-        ))}
-      </Reveal>
+        <Reveal className="grid gap-3 md:grid-cols-3">
+          {[
+            "Stripe, Apple Pay, Google Pay, and PayPal checkout",
+            "Rewards delivered to your linked Minecraft account",
+            "Cosmetics, supporter perks, lobby fun, and gift cards only"
+          ].map((item) => (
+            <Card key={item} className="border-amber-200/12 bg-black/18 shadow-none backdrop-blur-sm">
+              <CardContent className="flex items-start gap-3 p-4">
+                {item.includes("gift") ? (
+                  <Gift className="mt-0.5 h-4 w-4 text-amber-200" />
+                ) : (
+                  <ShieldCheck className="mt-0.5 h-4 w-4 text-emerald-200" />
+                )}
+                <p className="text-sm leading-6 text-muted-foreground">{item}</p>
+              </CardContent>
+            </Card>
+          ))}
+        </Reveal>
 
-      <Reveal className="mt-10">
-        <Storefront />
-      </Reveal>
+        <Reveal className="mt-10">
+          <Storefront />
+        </Reveal>
       </div>
     </section>
   )

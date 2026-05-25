@@ -1,6 +1,6 @@
 "use client"
 
-import { AlertCircle, Clock3, Crown, Loader2, RefreshCw } from "lucide-react"
+import { AlertCircle, Clock3, Loader2, RefreshCw } from "lucide-react"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 
 import { Badge } from "@/components/ui/badge"
@@ -155,8 +155,8 @@ export function PlaytimeLeaderboards() {
               className={cn(
                 "rounded-md border px-3 py-1.5 text-sm font-semibold uppercase tracking-[0.08em] transition",
                 isActive
-                  ? "border-amber-200/40 bg-amber-200/12 text-amber-100 shadow-[0_0_24px_rgba(252,211,77,0.18)]"
-                  : "border-white/10 bg-black/30 text-slate-300 hover:border-amber-200/25 hover:text-amber-100"
+                  ? "border-amber-200/32 bg-amber-200/8 text-amber-100"
+                  : "border-white/10 bg-black/22 text-slate-300 hover:border-amber-200/22 hover:text-amber-100"
               )}
             >
               {board.label}
@@ -165,13 +165,13 @@ export function PlaytimeLeaderboards() {
         })}
       </div>
 
-      <Card className="minecraft-card overflow-hidden">
+      <Card className="minecraft-card overflow-hidden shadow-none">
         <CardHeader className="flex flex-row items-start justify-between gap-3">
           <div className="space-y-1.5">
             <Badge variant="outline" className="font-mono text-[11px] uppercase tracking-[0.16em]">
               {activeBoard.key}
             </Badge>
-            <CardTitle className="display-font text-3xl">Top {TOP_LIMIT} — {activeBoard.label}</CardTitle>
+            <CardTitle className="display-font text-3xl">Top {TOP_LIMIT} - {activeBoard.label}</CardTitle>
             <CardDescription>{activeBoard.description}</CardDescription>
           </div>
           <Button
@@ -203,7 +203,7 @@ export function PlaytimeLeaderboards() {
           ) : activeState.status === "empty" ? (
             <EmptyState
               title="No leaderboard yet"
-              body="Be the first — log in and start playing to appear here."
+              body="Log in and start playing to appear here."
               tone="muted"
             />
           ) : activeState.status === "error" ? (
@@ -246,12 +246,8 @@ function PlayerAvatar({ uuid }: { uuid: string }) {
 
 function LeaderboardRows({ entries }: { entries: LeaderboardEntry[] }) {
   return (
-    <ol className="divide-y divide-white/5 overflow-hidden rounded-md border border-white/8 bg-black/24">
+    <ol className="divide-y divide-white/5 overflow-hidden rounded-md border border-amber-200/10 bg-black/18">
       {entries.map((entry) => {
-        const isPodium = entry.position <= 3
-        const podiumColor =
-          entry.position === 1 ? "text-amber-200" : entry.position === 2 ? "text-slate-200" : "text-orange-300"
-
         return (
           <li
             key={`${entry.uuid}-${entry.position}`}
@@ -260,10 +256,14 @@ function LeaderboardRows({ entries }: { entries: LeaderboardEntry[] }) {
             <span
               className={cn(
                 "flex h-8 w-9 shrink-0 items-center justify-center rounded-md border text-sm font-bold",
-                isPodium ? `border-current ${podiumColor}` : "border-white/12 text-slate-300"
+                entry.position === 1
+                  ? "border-amber-200/45 text-amber-200"
+                  : entry.position <= 3
+                    ? "border-white/20 text-slate-100"
+                    : "border-white/12 text-slate-300"
               )}
             >
-              {isPodium ? <Crown className="h-4 w-4" aria-hidden /> : entry.position}
+              {entry.position}
             </span>
 
             <div className="flex min-w-0 flex-1 items-center gap-3">
@@ -286,7 +286,7 @@ function LeaderboardRows({ entries }: { entries: LeaderboardEntry[] }) {
 
 function LoadingRows() {
   return (
-    <ol aria-busy className="divide-y divide-white/5 overflow-hidden rounded-md border border-white/8 bg-black/24">
+    <ol aria-busy className="divide-y divide-white/5 overflow-hidden rounded-md border border-amber-200/10 bg-black/18">
       {Array.from({ length: 6 }).map((_, idx) => (
         <li key={idx} className="flex items-center gap-4 px-4 py-3">
           <div className="h-8 w-9 shrink-0 animate-pulse rounded-md bg-white/5" />
@@ -315,7 +315,7 @@ function EmptyState({
     tone === "error" ? "text-rose-300" : tone === "warning" ? "text-amber-200 animate-spin" : "text-slate-400"
 
   return (
-    <div className="flex flex-col items-center justify-center gap-3 rounded-md border border-dashed border-white/10 bg-black/24 px-6 py-12 text-center">
+    <div className="flex flex-col items-center justify-center gap-3 rounded-md border border-dashed border-amber-200/12 bg-black/18 px-6 py-12 text-center">
       <Icon className={cn("h-6 w-6", iconClass)} aria-hidden />
       <div>
         <p className="font-semibold text-slate-100">{title}</p>
