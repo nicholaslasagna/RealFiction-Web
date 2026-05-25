@@ -156,7 +156,7 @@ public final class RealCorePlugin extends JavaPlugin {
         scheduler = SchedulerFactory.create(this);
       }
       apiClient = new PlatformApiClient(realCoreConfig, getLogger());
-      luckPermsService = new LuckPermsService(this);
+      luckPermsService = LuckPermsService.create(this);
       RewardDispatcher dispatcher = new RewardDispatcher(this, realCoreConfig, scheduler, luckPermsService);
       accountLinkService = new AccountLinkService(this, realCoreConfig, scheduler, apiClient);
       rewardPoller = new RewardPoller(this, realCoreConfig, scheduler, apiClient, dispatcher);
