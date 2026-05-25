@@ -20,6 +20,10 @@ final class EconomyConfigTest {
     assertEquals(30, config.flushInterval().toSeconds());
     assertEquals(5000, config.bufferSize());
     assertEquals(100, config.maxBatchSize());
+    assertFalse(config.dbBalanceReadEnabled());
+    assertEquals(List.of("smp-1"), config.dbBalanceReadBackendAllowlist());
+    assertEquals(30, config.dbBalanceReadCacheTtl().toSeconds());
+    assertEquals(100, config.dbBalanceReadMaxPlayersPerBatch());
     assertEquals(100, config.stagingTestMaxCreditMinor());
     assertFalse(config.syncVaultAfterDb());
     assertEquals(100, config.syncVaultMaxDeltaMinor());
@@ -33,6 +37,11 @@ final class EconomyConfigTest {
     assertEquals(1, config.vaultDeltaShadowMinDeltaMinor());
     assertEquals(250000, config.vaultDeltaShadowMaxLoggedDeltaMinor());
     assertEquals(List.of("smp-1"), config.vaultDeltaShadowBackendAllowlist());
+    assertEquals(5000, config.shadow().warningDeltaMinor());
+    assertEquals(50000, config.shadow().severeDeltaMinor());
+    assertTrue(config.shadow().ignoreNegativeOneMinorNoise());
+    assertEquals(5, config.shadow().repeatedOffenderThreshold());
+    assertEquals(500, config.shadow().observationCacheSize());
   }
 
   @Test
@@ -46,6 +55,14 @@ final class EconomyConfigTest {
           bufferSize: 0
           maxBatchSize: 900
           balanceCacheSeconds: 2
+          dbBalanceReadEnabled: true
+          dbBalanceReadBackendAllowlist:
+            - SMP-1
+            - smp-1
+            - ""
+            - arcade-1
+          dbBalanceReadCacheSeconds: 1
+          dbBalanceReadMaxPlayersPerBatch: 900
           stagingTestMaxCreditMinor: 250000
           syncVaultAfterDb: true
           syncVaultMaxDeltaMinor: 999999999
@@ -63,6 +80,12 @@ final class EconomyConfigTest {
             - smp-1
             - ""
             - factions-1
+          shadow:
+            warningDeltaMinor: 0
+            severeDeltaMinor: 5
+            ignoreNegativeOneMinorNoise: false
+            repeatedOffenderThreshold: 0
+            observationCacheSize: 2
         """);
 
     EconomyConfig config = EconomyConfig.from(yaml.getConfigurationSection("economy"));
@@ -73,6 +96,10 @@ final class EconomyConfigTest {
     assertEquals(1, config.bufferSize());
     assertEquals(500, config.maxBatchSize());
     assertEquals(5, config.balanceCacheTtl().toSeconds());
+    assertTrue(config.dbBalanceReadEnabled());
+    assertEquals(List.of("smp-1", "arcade-1"), config.dbBalanceReadBackendAllowlist());
+    assertEquals(5, config.dbBalanceReadCacheTtl().toSeconds());
+    assertEquals(500, config.dbBalanceReadMaxPlayersPerBatch());
     assertEquals(10000, config.stagingTestMaxCreditMinor());
     assertTrue(config.syncVaultAfterDb());
     assertEquals(1000000, config.syncVaultMaxDeltaMinor());
@@ -86,6 +113,11 @@ final class EconomyConfigTest {
     assertEquals(0, config.vaultDeltaShadowMinDeltaMinor());
     assertEquals(1, config.vaultDeltaShadowMaxLoggedDeltaMinor());
     assertEquals(List.of("smp-1", "factions-1"), config.vaultDeltaShadowBackendAllowlist());
+    assertEquals(1, config.shadow().warningDeltaMinor());
+    assertEquals(5, config.shadow().severeDeltaMinor());
+    assertFalse(config.shadow().ignoreNegativeOneMinorNoise());
+    assertEquals(1, config.shadow().repeatedOffenderThreshold());
+    assertEquals(10, config.shadow().observationCacheSize());
   }
 
   @Test

@@ -7,11 +7,14 @@ import com.realfiction.realcore.config.EconomyConfig;
 import com.realfiction.realcore.config.RealCoreConfig;
 import com.realfiction.realcore.scheduler.RealCoreScheduler;
 import java.time.Instant;
+import java.time.Duration;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.logging.Logger;
 
 /**
@@ -22,36 +25,45 @@ import java.util.logging.Logger;
  * economy transactions.
  */
 public final class EconomyService {
+  private static final int MAX_BALANCE_CACHE_ENTRIES = 5000;
+
   private final RealCoreConfig config;
   private final EconomyConfig economyConfig;
-  private final PlatformApiClient apiClient;
+  private final EconomyBalanceTransport balanceTransport;
   private final BufferedEconomyTransactionWriter writer;
   private final Logger logger;
   private final Map<UUID, EconomyBalanceSnapshot> balanceCache = new ConcurrentHashMap<>();
+  private final AtomicInteger balanceReadSuccesses = new AtomicInteger();
+  private final AtomicInteger balanceReadFailures = new AtomicInteger();
+  private final AtomicLong balanceReadLatencyTotalMillis = new AtomicLong();
+  private final AtomicLong balanceReadLatencyCount = new AtomicLong();
+  private final AtomicLong lastBalanceReadLatencyMillis = new AtomicLong();
+  private final AtomicLong lastBalanceReadAtMillis = new AtomicLong();
   private volatile boolean running;
   private volatile String disabledReason = "";
 
   public EconomyService(RealCoreConfig config, RealCoreScheduler scheduler, PlatformApiClient apiClient, Logger logger) {
+    this(config, scheduler, apiClient::fetchEconomyBalance, apiClient::postEconomyTransactions, logger);
+  }
+
+  EconomyService(RealCoreConfig config, RealCoreScheduler scheduler, EconomyBalanceTransport balanceTransport,
+                 EconomyTransactionsTransport transactionsTransport, Logger logger) {
     this.config = config;
     this.economyConfig = config.economy();
-    this.apiClient = apiClient;
+    this.balanceTransport = balanceTransport;
     this.logger = logger;
     boolean mutationsAllowed = !"anarchy".equalsIgnoreCase(config.serverGroup());
     this.writer = new BufferedEconomyTransactionWriter(
         config,
         economyConfig,
         scheduler,
-        apiClient::postEconomyTransactions,
+        transactionsTransport,
         logger,
         mutationsAllowed
     );
   }
 
   public void start() {
-    if (!economyConfig.enabled()) {
-      disabledReason = "economy.enabled is false";
-      return;
-    }
     if (!config.modules().economy()) {
       disabledReason = "modules.economy is false";
       return;
@@ -61,9 +73,16 @@ public final class EconomyService {
       return;
     }
     if ("anarchy".equalsIgnoreCase(config.serverGroup())) {
-      disabledReason = "Anarchy is read-only for the global economy";
+      disabledReason = "Anarchy is blocked from global economy reads and writes";
       logger.warning("Global economy writer is disabled on Anarchy by policy.");
       running = true;
+      return;
+    }
+    if (!economyConfig.enabled()) {
+      disabledReason = dbBalanceReadGuardReason().isBlank()
+          ? "economy.enabled is false; DB balance reads are enabled"
+          : "economy.enabled is false";
+      running = dbBalanceReadGuardReason().isBlank();
       return;
     }
     disabledReason = "";
@@ -78,15 +97,23 @@ public final class EconomyService {
   }
 
   public CompletableFuture<EconomyBalanceSnapshot> fetchBalance(UUID minecraftUuid) {
+    return fetchBalanceWithGuard(minecraftUuid, balanceFetchGuardReason(), economyConfig.balanceCacheTtl());
+  }
+
+  public CompletableFuture<EconomyBalanceSnapshot> fetchBalanceReadOnly(UUID minecraftUuid) {
+    return fetchBalanceWithGuard(minecraftUuid, dbBalanceReadGuardReason(), economyConfig.dbBalanceReadCacheTtl());
+  }
+
+  private CompletableFuture<EconomyBalanceSnapshot> fetchBalanceWithGuard(UUID minecraftUuid, String guardReason, Duration ttl) {
     if (minecraftUuid == null) {
       return CompletableFuture.failedFuture(new IllegalArgumentException("minecraftUuid is required"));
     }
     EconomyBalanceSnapshot cached = balanceCache.get(minecraftUuid);
-    if (cached != null && !cacheExpired(cached)) {
+    if (cached != null && !cacheExpired(cached, ttl)) {
       return CompletableFuture.completedFuture(cached);
     }
-    if (!economyConfig.enabled() || !config.hmacSecretConfigured()) {
-      return CompletableFuture.failedFuture(new IllegalStateException("global economy client is disabled"));
+    if (!guardReason.isBlank()) {
+      return CompletableFuture.failedFuture(new IllegalStateException(guardReason));
     }
     EconomyBalanceRequest request = new EconomyBalanceRequest(
         config.serverId(),
@@ -94,7 +121,18 @@ public final class EconomyService {
         economyConfig.currencyKey(),
         minecraftUuid.toString()
     );
-    return apiClient.fetchEconomyBalance(request).thenApply(this::cacheResponse);
+    long started = System.nanoTime();
+    return balanceTransport.fetch(request)
+        .thenApply(response -> {
+          EconomyBalanceSnapshot snapshot = cacheResponse(response);
+          recordBalanceReadSuccess(started);
+          return snapshot;
+        })
+        .whenComplete((ignored, error) -> {
+          if (error != null) {
+            recordBalanceReadFailure(started);
+          }
+        });
   }
 
   public boolean enqueue(EconomyTransaction transaction) {
@@ -145,6 +183,96 @@ public final class EconomyService {
     return balanceCache.size();
   }
 
+  public EconomyBalanceSnapshot cachedBalance(UUID minecraftUuid) {
+    return minecraftUuid == null ? null : balanceCache.get(minecraftUuid);
+  }
+
+  public boolean dbBalanceReadConfiguredEnabled() {
+    return economyConfig.dbBalanceReadEnabled();
+  }
+
+  public boolean dbBalanceReadAllowed() {
+    return dbBalanceReadGuardReason().isBlank();
+  }
+
+  public String dbBalanceReadGuardReason() {
+    return dbBalanceReadGuardReason(config);
+  }
+
+  public static String dbBalanceReadGuardReason(RealCoreConfig config) {
+    if (config == null) {
+      return "config is not loaded";
+    }
+    EconomyConfig economy = config.economy();
+    if (!config.modules().economy()) {
+      return "modules.economy is false";
+    }
+    if (!config.hmacSecretConfigured()) {
+      return "website auth is not configured";
+    }
+    if ("anarchy".equalsIgnoreCase(config.serverGroup())) {
+      return "Anarchy is blocked from DB economy balance reads";
+    }
+    if (!economy.dbBalanceReadEnabled()) {
+      return "economy.dbBalanceReadEnabled is false";
+    }
+    String serverId = config.serverId() == null ? "" : config.serverId().toLowerCase(Locale.ROOT);
+    if (!economy.dbBalanceReadBackendAllowlist().contains(serverId)) {
+      return "server.id is not in economy.dbBalanceReadBackendAllowlist";
+    }
+    return "";
+  }
+
+  public String balanceFetchGuardReason() {
+    if (!config.modules().economy()) {
+      return "modules.economy is false";
+    }
+    if (!config.hmacSecretConfigured()) {
+      return "website auth is not configured";
+    }
+    if ("anarchy".equalsIgnoreCase(config.serverGroup())) {
+      return "Anarchy is blocked from DB economy balance reads";
+    }
+    if (economyConfig.enabled()) {
+      return "";
+    }
+    return dbBalanceReadGuardReason();
+  }
+
+  public long dbBalanceReadCacheSeconds() {
+    return economyConfig.dbBalanceReadCacheTtl().toSeconds();
+  }
+
+  public int dbBalanceReadMaxPlayersPerBatch() {
+    return economyConfig.dbBalanceReadMaxPlayersPerBatch();
+  }
+
+  public String dbBalanceReadAllowlistSummary() {
+    return String.join(", ", economyConfig.dbBalanceReadBackendAllowlist());
+  }
+
+  public int balanceReadSuccessCount() {
+    return balanceReadSuccesses.get();
+  }
+
+  public int balanceReadFailureCount() {
+    return balanceReadFailures.get();
+  }
+
+  public long averageBalanceReadLatencyMillis() {
+    long count = balanceReadLatencyCount.get();
+    return count <= 0 ? 0 : balanceReadLatencyTotalMillis.get() / count;
+  }
+
+  public long lastBalanceReadLatencyMillis() {
+    return lastBalanceReadLatencyMillis.get();
+  }
+
+  public long lastBalanceReadAgoSeconds() {
+    long at = lastBalanceReadAtMillis.get();
+    return at <= 0 ? -1 : Math.max(0, (System.currentTimeMillis() - at) / 1000);
+  }
+
   public long stagingTestMaxCreditMinor() {
     return economyConfig.stagingTestMaxCreditMinor();
   }
@@ -174,11 +302,51 @@ public final class EconomyService {
         Instant.now()
     );
     balanceCache.put(uuid, snapshot);
+    pruneBalanceCache();
     return snapshot;
   }
 
-  private boolean cacheExpired(EconomyBalanceSnapshot snapshot) {
-    return snapshot.cachedAt().plus(economyConfig.balanceCacheTtl()).isBefore(Instant.now());
+  private boolean cacheExpired(EconomyBalanceSnapshot snapshot, Duration ttl) {
+    return snapshot.cachedAt().plus(ttl).isBefore(Instant.now());
+  }
+
+  private void recordBalanceReadSuccess(long startedNanos) {
+    long elapsed = elapsedMillis(startedNanos);
+    balanceReadSuccesses.incrementAndGet();
+    lastBalanceReadAtMillis.set(System.currentTimeMillis());
+    lastBalanceReadLatencyMillis.set(elapsed);
+    balanceReadLatencyTotalMillis.addAndGet(elapsed);
+    balanceReadLatencyCount.incrementAndGet();
+  }
+
+  private void recordBalanceReadFailure(long startedNanos) {
+    long elapsed = elapsedMillis(startedNanos);
+    balanceReadFailures.incrementAndGet();
+    lastBalanceReadLatencyMillis.set(elapsed);
+    balanceReadLatencyTotalMillis.addAndGet(elapsed);
+    balanceReadLatencyCount.incrementAndGet();
+  }
+
+  private static long elapsedMillis(long startedNanos) {
+    return Math.max(0, (System.nanoTime() - startedNanos) / 1_000_000L);
+  }
+
+  private void pruneBalanceCache() {
+    if (balanceCache.size() <= MAX_BALANCE_CACHE_ENTRIES) {
+      return;
+    }
+    Instant now = Instant.now();
+    balanceCache.entrySet().removeIf(entry ->
+        entry.getValue().cachedAt().plus(economyConfig.dbBalanceReadCacheTtl()).isBefore(now));
+    if (balanceCache.size() <= MAX_BALANCE_CACHE_ENTRIES) {
+      return;
+    }
+    balanceCache.entrySet().stream()
+        .sorted(Map.Entry.comparingByValue((left, right) -> left.cachedAt().compareTo(right.cachedAt())))
+        .limit(Math.max(0, balanceCache.size() - MAX_BALANCE_CACHE_ENTRIES))
+        .map(Map.Entry::getKey)
+        .toList()
+        .forEach(balanceCache::remove);
   }
 
   private String safeCurrency(String value) {
