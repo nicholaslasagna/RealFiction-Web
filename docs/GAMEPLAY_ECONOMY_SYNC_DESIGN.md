@@ -226,6 +226,41 @@ For future 1000-player scale, real economy sync should be transaction/event
 based, not a periodic full-player sync. Polling Vault balances is only shadow
 telemetry for rollout discovery.
 
+## Phase 4 Manual DB-to-Vault Alignment
+
+After DB balance reads are available, staff can test a manual DB-to-Vault
+alignment tool on SMP. This remains a local Vault/Essentials alignment step; it
+does not write the DB ledger, does not create economy transactions, and does not
+change vote reward delivery.
+
+Config shape:
+
+```yaml
+economy:
+  syncVaultFromDbEnabled: false
+  syncVaultFromDbBackendAllowlist:
+    - smp-1
+  syncVaultFromDbMaxPlayersPerRun: 25
+  syncVaultFromDbMaxDeltaMinor: 250000
+  syncVaultFromDbRequireOnline: true
+  syncVaultFromDbDryRunDefault: true
+```
+
+Commands:
+
+```text
+/rf economy syncfromdb <player|uuid> --dry-run
+/rf economy syncfromdb <player|uuid> --apply
+/rf economy syncfromdb --online --dry-run
+/rf economy syncfromdb --online --apply
+```
+
+The command requires `modules.economy=true`, `economy.enabled=true`, the DB
+balance read path, a Vault economy provider, a non-Anarchy backend, and an
+allowlisted `server.id`. Dry-run remains the default. Apply mode can only align
+the bounded target set and skips any player whose absolute delta is above
+`syncVaultFromDbMaxDeltaMinor`.
+
 ## Future Real Implementation Requirements
 
 Real writes must follow the existing global economy principles:

@@ -1,6 +1,7 @@
 package com.realfiction.realcore.economy;
 
 import com.realfiction.realcore.RealCorePlugin;
+import com.realfiction.realcore.config.EconomyConfig;
 import com.realfiction.realcore.config.RealCoreConfig;
 import com.realfiction.realcore.scheduler.RealCoreScheduler;
 import java.lang.reflect.Method;
@@ -12,6 +13,8 @@ import java.nio.file.Path;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -21,11 +24,10 @@ import org.bukkit.OfflinePlayer;
 import org.bukkit.plugin.RegisteredServiceProvider;
 
 /**
- * Disabled-by-default, one-player DB-to-Vault sync helper.
+ * Disabled-by-default, manual DB-to-Vault alignment helper.
  *
- * <p>This does not register a Vault provider and never runs automatically. It is
- * only used by the explicit admin staging command after {@code economy.enabled}
- * and {@code economy.syncVaultAfterDb} are both enabled on a non-Anarchy backend.
+ * <p>This is a staging/operations tool only. It never writes the DB economy
+ * ledger, never registers a Vault provider, and never runs automatically.
  */
 public final class VaultBalanceSyncService {
   private static final String ECONOMY_CLASS = "net.milkbowl.vault.economy.Economy";
@@ -43,42 +45,142 @@ public final class VaultBalanceSyncService {
   }
 
   public CompletableFuture<SyncResult> syncOne(UUID minecraftUuid, String username, String actor) {
+    return syncTargets(List.of(new Target(minecraftUuid, username, true)), false, actor)
+        .thenApply(report -> report.results().isEmpty()
+            ? SyncResult.skipped(config.serverId(), config.serverGroup(), minecraftUuid, username, actor, "No result.")
+            : report.results().get(0));
+  }
+
+  public CompletableFuture<SyncReport> syncTargets(List<Target> requested, boolean dryRun, String actor) {
     String guard = guardReason();
     if (!guard.isBlank()) {
       return CompletableFuture.failedFuture(new IllegalStateException(guard));
     }
-    String safeUsername = username == null || username.isBlank() ? "unknown" : username;
-    return economy.fetchBalance(minecraftUuid)
-        .thenCompose(snapshot -> runVaultMutation(snapshot, safeUsername, actor == null ? "unknown" : actor));
+    List<Target> safeRequested = requested == null ? List.of() : requested.stream()
+        .filter(target -> target != null && target.minecraftUuid() != null)
+        .toList();
+    int maxPlayers = config.economy().syncVaultFromDbMaxPlayersPerRun();
+    List<Target> targets = limitTargets(safeRequested, maxPlayers);
+    int notScanned = Math.max(0, safeRequested.size() - targets.size());
+    if (targets.isEmpty()) {
+      return CompletableFuture.completedFuture(SyncReport.from(
+          config.serverId(), config.serverGroup(), dryRun, List.of(), notScanned));
+    }
+
+    return bindEconomyProviderAsync().thenCompose(binding -> {
+      if (binding == null) {
+        return CompletableFuture.failedFuture(new IllegalStateException("Vault Economy provider is not available."));
+      }
+      List<CompletableFuture<SyncResult>> futures = targets.stream()
+          .map(target -> syncTarget(binding, target, dryRun, actor == null ? "unknown" : actor))
+          .toList();
+      return CompletableFuture.allOf(futures.toArray(CompletableFuture[]::new))
+          .thenApply(ignored -> {
+            List<SyncResult> results = futures.stream().map(CompletableFuture::join).toList();
+            return SyncReport.from(config.serverId(), config.serverGroup(), dryRun, results, notScanned);
+          });
+    });
   }
 
   private String guardReason() {
-    if (config == null || economy == null) {
-      return "Global economy is not loaded.";
+    return guardReason(config, economy);
+  }
+
+  public static String guardReason(RealCoreConfig config, EconomyService economy) {
+    return guardReason(
+        config,
+        economy != null && economy.configuredEnabled(),
+        economy == null ? "Global economy is not loaded." : economy.dbBalanceReadGuardReason()
+    );
+  }
+
+  static String guardReason(RealCoreConfig config, boolean economyEnabled, String dbReadGuardReason) {
+    if (config == null) {
+      return "Global economy config is not loaded.";
     }
-    if (!economy.configuredEnabled()) {
-      return "Global economy is disabled by economy.enabled=false.";
-    }
+    EconomyConfig economyConfig = config.economy();
     if (!config.modules().economy()) {
       return "Global economy is disabled by modules.economy=false.";
     }
-    if (!economy.syncVaultAfterDb()) {
-      return "Vault sync is disabled by economy.syncVaultAfterDb=false.";
+    if (!economyEnabled) {
+      return "Global economy is disabled by economy.enabled=false.";
     }
     if ("anarchy".equalsIgnoreCase(config.serverGroup())) {
       return "Anarchy may not sync the global economy into Vault.";
     }
+    if (!economyConfig.syncVaultFromDbEnabled()) {
+      return "Vault sync from DB is disabled by economy.syncVaultFromDbEnabled=false.";
+    }
+    String serverId = config.serverId() == null ? "" : config.serverId().toLowerCase(Locale.ROOT);
+    if (!economyConfig.syncVaultFromDbBackendAllowlist().contains(serverId)) {
+      return "server.id is not in economy.syncVaultFromDbBackendAllowlist.";
+    }
+    if (dbReadGuardReason != null && !dbReadGuardReason.isBlank()) {
+      return "DB balance read is unavailable: " + dbReadGuardReason;
+    }
     return "";
   }
 
-  private CompletableFuture<SyncResult> runVaultMutation(EconomyBalanceSnapshot snapshot, String username, String actor) {
+  static List<Target> limitTargets(List<Target> targets, int maxPlayers) {
+    if (targets == null || targets.isEmpty()) {
+      return List.of();
+    }
+    int limit = Math.max(1, maxPlayers);
+    return targets.stream().limit(limit).toList();
+  }
+
+  private CompletableFuture<SyncResult> syncTarget(ProviderBinding binding, Target target, boolean dryRun, String actor) {
+    if (config.economy().syncVaultFromDbRequireOnline() && !target.online()) {
+      SyncResult result = SyncResult.skipped(
+          config.serverId(), config.serverGroup(), target.minecraftUuid(), target.username(), actor,
+          "Player is not online and economy.syncVaultFromDbRequireOnline=true.");
+      logResult(result);
+      return CompletableFuture.completedFuture(result);
+    }
+    return economy.fetchBalanceReadOnly(target.minecraftUuid())
+        .handle((snapshot, error) -> {
+          if (error != null) {
+            SyncResult result = SyncResult.failed(
+                config.serverId(), config.serverGroup(), target.minecraftUuid(), target.username(), actor,
+                "DB balance read failed: " + rootMessage(error));
+            logResult(result);
+            return CompletableFuture.completedFuture(result);
+          }
+          return runVaultAlignment(binding, target, snapshot, dryRun, actor);
+        })
+        .thenCompose(future -> future);
+  }
+
+  private CompletableFuture<ProviderBinding> bindEconomyProviderAsync() {
+    CompletableFuture<ProviderBinding> future = new CompletableFuture<>();
+    Runnable task = () -> future.complete(bindEconomyProvider());
+    RealCoreScheduler scheduler = plugin.scheduler();
+    if (scheduler == null) {
+      task.run();
+    } else {
+      scheduler.runGlobal(task);
+    }
+    return future;
+  }
+
+  private CompletableFuture<SyncResult> runVaultAlignment(
+      ProviderBinding binding,
+      Target target,
+      EconomyBalanceSnapshot snapshot,
+      boolean dryRun,
+      String actor
+  ) {
     CompletableFuture<SyncResult> future = new CompletableFuture<>();
     Runnable task = () -> {
       try {
-        SyncResult result = applyVaultSync(snapshot, username, actor);
+        SyncResult result = applyVaultAlignment(binding, target, snapshot, dryRun, actor);
         future.complete(result);
       } catch (Throwable error) {
-        future.completeExceptionally(error);
+        SyncResult result = SyncResult.failed(
+            config.serverId(), config.serverGroup(), target.minecraftUuid(), target.username(), actor,
+            rootMessage(error));
+        logResult(result);
+        future.complete(result);
       }
     };
     RealCoreScheduler scheduler = plugin.scheduler();
@@ -90,53 +192,73 @@ public final class VaultBalanceSyncService {
     return future;
   }
 
-  private SyncResult applyVaultSync(EconomyBalanceSnapshot snapshot, String username, String actor) throws Exception {
-    ProviderBinding binding = bindEconomyProvider();
-    if (binding == null) {
-      throw new IllegalStateException("Vault Economy provider is not available.");
-    }
-
+  private SyncResult applyVaultAlignment(
+      ProviderBinding binding,
+      Target target,
+      EconomyBalanceSnapshot snapshot,
+      boolean dryRun,
+      String actor
+  ) throws Exception {
     OfflinePlayer player = Bukkit.getOfflinePlayer(snapshot.minecraftUuid());
     createAccountIfSupported(binding, player);
 
     double beforeVault = readBalance(binding, player);
     long beforeMinor = toMinorUnits(beforeVault, snapshot.scale());
     long targetMinor = snapshot.balanceMinor();
-    long deltaMinor = targetMinor - beforeMinor;
-    long absDelta = Math.abs(deltaMinor);
-    if (absDelta > economy.syncVaultMaxDeltaMinor()) {
-      throw new IllegalStateException("Vault sync delta " + absDelta
-          + " exceeds economy.syncVaultMaxDeltaMinor=" + economy.syncVaultMaxDeltaMinor());
+    SyncDecision decision = decide(targetMinor, beforeMinor, config.economy().syncVaultFromDbMaxDeltaMinor());
+    long afterMinor = beforeMinor;
+    boolean applied = false;
+
+    if (!decision.skipped() && !dryRun) {
+      if (decision.action() == SyncAction.DEPOSIT) {
+        invokeMoneyMutation(binding.deposit(), binding.provider(), player, toVaultAmount(decision.absDeltaMinor(), snapshot.scale()));
+        applied = true;
+      } else if (decision.action() == SyncAction.WITHDRAW) {
+        invokeMoneyMutation(binding.withdraw(), binding.provider(), player, toVaultAmount(decision.absDeltaMinor(), snapshot.scale()));
+        applied = true;
+      }
+      afterMinor = toMinorUnits(readBalance(binding, player), snapshot.scale());
     }
 
-    if (deltaMinor > 0) {
-      invokeMoneyMutation(binding.deposit(), binding.provider(), player, toVaultAmount(deltaMinor, snapshot.scale()));
-    } else if (deltaMinor < 0) {
-      invokeMoneyMutation(binding.withdraw(), binding.provider(), player, toVaultAmount(-deltaMinor, snapshot.scale()));
-    }
-
-    double afterVault = readBalance(binding, player);
-    long afterMinor = toMinorUnits(afterVault, snapshot.scale());
     SyncResult result = new SyncResult(
         config.serverId(),
         config.serverGroup(),
         binding.name(),
         snapshot.minecraftUuid(),
-        username,
+        target.username(),
         snapshot.currencyKey(),
         snapshot.scale(),
         targetMinor,
         beforeMinor,
         afterMinor,
-        deltaMinor,
+        decision.deltaMinor(),
+        decision.action(),
+        decision.reason(),
+        dryRun,
+        applied,
+        decision.skipped(),
+        false,
         actor,
         Instant.now()
     );
-    writeAudit(result);
-    plugin.getLogger().info("Vault sync applied for " + username + " (" + snapshot.minecraftUuid()
-        + "): targetMinor=" + targetMinor + ", beforeMinor=" + beforeMinor + ", afterMinor=" + afterMinor
-        + ", deltaMinor=" + deltaMinor + ", actor=" + actor);
+    logResult(result);
     return result;
+  }
+
+  static SyncDecision decide(long targetMinor, long beforeMinor, long maxDeltaMinor) {
+    long deltaMinor = targetMinor - beforeMinor;
+    long absDelta = Math.abs(deltaMinor);
+    if (absDelta > Math.max(1, maxDeltaMinor)) {
+      return new SyncDecision(SyncAction.SKIP, deltaMinor, absDelta, true,
+          "delta exceeds economy.syncVaultFromDbMaxDeltaMinor");
+    }
+    if (deltaMinor > 0) {
+      return new SyncDecision(SyncAction.DEPOSIT, deltaMinor, absDelta, false, "");
+    }
+    if (deltaMinor < 0) {
+      return new SyncDecision(SyncAction.WITHDRAW, deltaMinor, absDelta, false, "");
+    }
+    return new SyncDecision(SyncAction.NOOP, deltaMinor, 0, false, "");
   }
 
   private ProviderBinding bindEconomyProvider() {
@@ -235,11 +357,31 @@ public final class VaultBalanceSyncService {
     }
   }
 
+  private void logResult(SyncResult result) {
+    writeAudit(result);
+    plugin.getLogger().info("Vault sync from DB "
+        + "timestamp=" + result.at()
+        + " backend=" + result.serverId()
+        + " group=" + result.serverGroup()
+        + " uuid=" + result.minecraftUuid()
+        + " username=" + result.username()
+        + " dbBalanceMinor=" + result.targetMinor()
+        + " vaultBalanceMinor=" + result.beforeMinor()
+        + " afterVaultMinor=" + result.afterMinor()
+        + " deltaMinor=" + result.deltaMinor()
+        + " action=" + result.action().name().toLowerCase(Locale.ROOT)
+        + " dryRun=" + result.dryRun()
+        + " applied=" + result.applied()
+        + " skipped=" + result.skipped()
+        + " failed=" + result.failed()
+        + (result.reason().isBlank() ? "" : " reason=\"" + result.reason().replace("\"", "'") + "\""));
+  }
+
   private void writeAudit(SyncResult result) {
     try {
       Path auditDir = plugin.getDataFolder().toPath().resolve("audits");
       Files.createDirectories(auditDir);
-      Path file = auditDir.resolve("vault-sync-audit-" + safeFilePart(config.serverId()) + ".csv");
+      Path file = auditDir.resolve("vault-sync-from-db-audit-" + safeFilePart(config.serverId()) + ".csv");
       boolean newFile = Files.notExists(file);
       String line = String.join(",",
           csv(result.at().toString()),
@@ -253,11 +395,17 @@ public final class VaultBalanceSyncService {
           Long.toString(result.targetMinor()),
           Long.toString(result.beforeMinor()),
           Long.toString(result.afterMinor()),
-          Long.toString(result.deltaMinor())
+          Long.toString(result.deltaMinor()),
+          csv(result.action().name().toLowerCase(Locale.ROOT)),
+          Boolean.toString(result.dryRun()),
+          Boolean.toString(result.applied()),
+          Boolean.toString(result.skipped()),
+          Boolean.toString(result.failed()),
+          csv(result.reason())
       );
       StringBuilder body = new StringBuilder();
       if (newFile) {
-        body.append("at,actor,serverId,serverGroup,provider,minecraftUuid,username,currencyKey,targetMinor,beforeMinor,afterMinor,deltaMinor\n");
+        body.append("at,actor,serverId,serverGroup,provider,minecraftUuid,username,currencyKey,targetMinor,beforeMinor,afterMinor,deltaMinor,action,dryRun,applied,skipped,failed,reason\n");
       }
       body.append(line).append('\n');
       Files.writeString(file, body.toString(), StandardCharsets.UTF_8,
@@ -289,6 +437,15 @@ public final class VaultBalanceSyncService {
     return safe.isBlank() ? "server" : safe;
   }
 
+  private static String rootMessage(Throwable error) {
+    Throwable current = error;
+    while (current.getCause() != null) {
+      current = current.getCause();
+    }
+    String message = current.getMessage();
+    return message == null || message.isBlank() ? current.getClass().getSimpleName() : message;
+  }
+
   private static String csv(String value) {
     String safe = value == null ? "" : value;
     boolean quote = safe.contains(",") || safe.contains("\"") || safe.contains("\n") || safe.contains("\r");
@@ -305,6 +462,77 @@ public final class VaultBalanceSyncService {
       Method createAccount
   ) {}
 
+  public record Target(UUID minecraftUuid, String username, boolean online) {}
+
+  public enum SyncAction {
+    DEPOSIT,
+    WITHDRAW,
+    NOOP,
+    SKIP
+  }
+
+  public record SyncDecision(
+      SyncAction action,
+      long deltaMinor,
+      long absDeltaMinor,
+      boolean skipped,
+      String reason
+  ) {}
+
+  public record SyncReport(
+      String serverId,
+      String serverGroup,
+      boolean dryRun,
+      List<SyncResult> results,
+      int notScannedDueToLimit
+  ) {
+    static SyncReport from(String serverId, String serverGroup, boolean dryRun, List<SyncResult> results,
+                           int notScannedDueToLimit) {
+      return new SyncReport(serverId, serverGroup, dryRun, List.copyOf(results), notScannedDueToLimit);
+    }
+
+    public int scanned() {
+      return results.size();
+    }
+
+    public int wouldUpdate() {
+      return (int) results.stream()
+          .filter(result -> !result.skipped() && !result.failed() && result.action() != SyncAction.NOOP)
+          .count();
+    }
+
+    public int applied() {
+      return (int) results.stream().filter(SyncResult::applied).count();
+    }
+
+    public int skipped() {
+      return notScannedDueToLimit + (int) results.stream().filter(SyncResult::skipped).count();
+    }
+
+    public int failed() {
+      return (int) results.stream().filter(SyncResult::failed).count();
+    }
+
+    public long largestDeltaMinor() {
+      return results.stream()
+          .mapToLong(result -> Math.abs(result.deltaMinor()))
+          .max()
+          .orElse(0);
+    }
+
+    public long totalPositiveDeltaMinor() {
+      return results.stream()
+          .mapToLong(result -> Math.max(0, result.deltaMinor()))
+          .sum();
+    }
+
+    public long totalNegativeDeltaMinor() {
+      return results.stream()
+          .mapToLong(result -> Math.min(0, result.deltaMinor()))
+          .sum();
+    }
+  }
+
   public record SyncResult(
       String serverId,
       String serverGroup,
@@ -317,9 +545,27 @@ public final class VaultBalanceSyncService {
       long beforeMinor,
       long afterMinor,
       long deltaMinor,
+      SyncAction action,
+      String reason,
+      boolean dryRun,
+      boolean applied,
+      boolean skipped,
+      boolean failed,
       String actor,
       Instant at
   ) {
+    static SyncResult skipped(String serverId, String serverGroup, UUID minecraftUuid, String username, String actor,
+                              String reason) {
+      return new SyncResult(serverId, serverGroup, "", minecraftUuid, username, "", 100, 0, 0, 0, 0,
+          SyncAction.SKIP, reason, true, false, true, false, actor, Instant.now());
+    }
+
+    static SyncResult failed(String serverId, String serverGroup, UUID minecraftUuid, String username, String actor,
+                             String reason) {
+      return new SyncResult(serverId, serverGroup, "", minecraftUuid, username, "", 100, 0, 0, 0, 0,
+          SyncAction.SKIP, reason, true, false, false, true, actor, Instant.now());
+    }
+
     public String targetDollars() {
       return EconomyBalanceFormat.formatMinor(targetMinor, scale);
     }

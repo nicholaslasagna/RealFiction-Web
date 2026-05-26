@@ -251,6 +251,30 @@ public final class EconomyService {
     return String.join(", ", economyConfig.dbBalanceReadBackendAllowlist());
   }
 
+  public boolean syncVaultFromDbEnabled() {
+    return economyConfig.syncVaultFromDbEnabled();
+  }
+
+  public String syncVaultFromDbAllowlistSummary() {
+    return String.join(", ", economyConfig.syncVaultFromDbBackendAllowlist());
+  }
+
+  public int syncVaultFromDbMaxPlayersPerRun() {
+    return economyConfig.syncVaultFromDbMaxPlayersPerRun();
+  }
+
+  public long syncVaultFromDbMaxDeltaMinor() {
+    return economyConfig.syncVaultFromDbMaxDeltaMinor();
+  }
+
+  public boolean syncVaultFromDbRequireOnline() {
+    return economyConfig.syncVaultFromDbRequireOnline();
+  }
+
+  public boolean syncVaultFromDbDryRunDefault() {
+    return economyConfig.syncVaultFromDbDryRunDefault();
+  }
+
   public int balanceReadSuccessCount() {
     return balanceReadSuccesses.get();
   }

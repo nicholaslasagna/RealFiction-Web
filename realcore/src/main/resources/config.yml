@@ -66,6 +66,17 @@ economy:
     - smp-1
   dbBalanceReadCacheSeconds: 30
   dbBalanceReadMaxPlayersPerBatch: 100
+  # Phase 4 manual DB-to-Vault alignment. This reads canonical DB balances and,
+  # only from an explicit admin command, can align local Vault/Essentials balance
+  # for online SMP players. It never writes DB ledger entries and never runs
+  # automatically. Keep dry-run default on until staging proves the path.
+  syncVaultFromDbEnabled: false
+  syncVaultFromDbBackendAllowlist:
+    - smp-1
+  syncVaultFromDbMaxPlayersPerRun: 25
+  syncVaultFromDbMaxDeltaMinor: 250000
+  syncVaultFromDbRequireOnline: true
+  syncVaultFromDbDryRunDefault: true
   # Maximum amount for the admin-only /rf economy test command. Minor units:
   # $1.00 = 100, so the default is a tiny $1.00 staging credit.
   stagingTestMaxCreditMinor: 100
