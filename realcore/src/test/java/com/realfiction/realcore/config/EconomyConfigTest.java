@@ -24,6 +24,12 @@ final class EconomyConfigTest {
     assertEquals(List.of("smp-1"), config.dbBalanceReadBackendAllowlist());
     assertEquals(30, config.dbBalanceReadCacheTtl().toSeconds());
     assertEquals(100, config.dbBalanceReadMaxPlayersPerBatch());
+    assertFalse(config.syncVaultFromDbEnabled());
+    assertEquals(List.of("smp-1"), config.syncVaultFromDbBackendAllowlist());
+    assertEquals(25, config.syncVaultFromDbMaxPlayersPerRun());
+    assertEquals(250000, config.syncVaultFromDbMaxDeltaMinor());
+    assertTrue(config.syncVaultFromDbRequireOnline());
+    assertTrue(config.syncVaultFromDbDryRunDefault());
     assertEquals(100, config.stagingTestMaxCreditMinor());
     assertFalse(config.syncVaultAfterDb());
     assertEquals(100, config.syncVaultMaxDeltaMinor());
@@ -63,6 +69,16 @@ final class EconomyConfigTest {
             - arcade-1
           dbBalanceReadCacheSeconds: 1
           dbBalanceReadMaxPlayersPerBatch: 900
+          syncVaultFromDbEnabled: true
+          syncVaultFromDbBackendAllowlist:
+            - SMP-1
+            - smp-1
+            - ""
+            - factions-1
+          syncVaultFromDbMaxPlayersPerRun: 500
+          syncVaultFromDbMaxDeltaMinor: 999999999
+          syncVaultFromDbRequireOnline: false
+          syncVaultFromDbDryRunDefault: false
           stagingTestMaxCreditMinor: 250000
           syncVaultAfterDb: true
           syncVaultMaxDeltaMinor: 999999999
@@ -100,6 +116,12 @@ final class EconomyConfigTest {
     assertEquals(List.of("smp-1", "arcade-1"), config.dbBalanceReadBackendAllowlist());
     assertEquals(5, config.dbBalanceReadCacheTtl().toSeconds());
     assertEquals(500, config.dbBalanceReadMaxPlayersPerBatch());
+    assertTrue(config.syncVaultFromDbEnabled());
+    assertEquals(List.of("smp-1", "factions-1"), config.syncVaultFromDbBackendAllowlist());
+    assertEquals(100, config.syncVaultFromDbMaxPlayersPerRun());
+    assertEquals(10000000, config.syncVaultFromDbMaxDeltaMinor());
+    assertFalse(config.syncVaultFromDbRequireOnline());
+    assertFalse(config.syncVaultFromDbDryRunDefault());
     assertEquals(10000, config.stagingTestMaxCreditMinor());
     assertTrue(config.syncVaultAfterDb());
     assertEquals(1000000, config.syncVaultMaxDeltaMinor());
