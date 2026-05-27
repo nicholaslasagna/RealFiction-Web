@@ -36,6 +36,9 @@ Run on the target backend (console or staff with `realcore.admin`):
 
 ## Dry-run preflight (typical SMP shop-sell trial)
 
+Record results in [ECONOMY_SMP_DRY_RUN_VALIDATION_RESULTS.md](./ECONOMY_SMP_DRY_RUN_VALIDATION_RESULTS.md)
+(Phase 16 operator checklist).
+
 1. Deploy RealCore with Phase 13+ observability and Phase 14 jar.
 2. Keep `economy.gameplaySync.dryRun: true` and DB policy read-only per
    [ECONOMY_SMP_SHOP_SELL_DRY_RUN_ROLLOUT.md](./ECONOMY_SMP_SHOP_SELL_DRY_RUN_ROLLOUT.md).
