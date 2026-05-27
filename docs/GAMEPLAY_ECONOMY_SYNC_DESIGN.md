@@ -362,6 +362,20 @@ safety limits, structured `[GameplaySync:*]` logs, and expanded `/rf economy
 gameplay` diagnostics. Defaults unchanged (`enabled=false`, `dryRun=true`). See
 [`docs/ECONOMY_GAMEPLAY_OBSERVABILITY.md`](ECONOMY_GAMEPLAY_OBSERVABILITY.md).
 
+### Phases 14–20: Preflight through authority ADR
+
+| Phase | Doc |
+|-------|-----|
+| 14 | [`ECONOMY_GAMEPLAY_PREFLIGHT.md`](ECONOMY_GAMEPLAY_PREFLIGHT.md) |
+| 16–19 | SMP dry-run, DB readiness, live execution, monitoring (see release plan) |
+| 20 | [`ECONOMY_AUTHORITY_MODEL_PHASE20.md`](ECONOMY_AUTHORITY_MODEL_PHASE20.md) |
+
+### Phase 21: Shop buy and spend design
+
+Debit-side categories (`shop_buy`, `gameplay_spend`, legacy `spend`): semantics,
+idempotency, rollout phases B–G, policy/SQL templates — **not enabled** in this phase.
+See [`docs/ECONOMY_SHOP_BUY_SPEND_DESIGN_PHASE21.md`](ECONOMY_SHOP_BUY_SPEND_DESIGN_PHASE21.md).
+
 ### Phase 0: Design Only
 
 Document current behavior, risks, and rollout criteria. Do not change code,

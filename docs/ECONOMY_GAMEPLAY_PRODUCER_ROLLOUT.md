@@ -56,7 +56,7 @@ Summary: SMP-only jar + config with `gameplaySync.enabled=true`, both `dryRun=tr
 
 ## Not in this phase
 
-- `shop_buy` / `gameplay_spend`
+- `shop_buy` / `gameplay_spend` — see [`ECONOMY_SHOP_BUY_SPEND_DESIGN_PHASE21.md`](ECONOMY_SHOP_BUY_SPEND_DESIGN_PHASE21.md)
 - Vault balance mutation
 - Automatic DB policy enablement
 - Factions / Arcade producers
