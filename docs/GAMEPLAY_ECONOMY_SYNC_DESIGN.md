@@ -341,6 +341,17 @@ Dry-run log format:
 
 `shop_buy` / `gameplay_spend` are intentionally not implemented in this phase.
 
+### Phase 22: EconomyShopGUI buy producer skeleton (code PR)
+
+Disabled-by-default `economyShopGuiBuy` on `PostTransactionEvent` (BUY + SUCCESS).
+See [ECONOMY_SHOP_BUY_SPEND_DESIGN_PHASE21.md](ECONOMY_SHOP_BUY_SPEND_DESIGN_PHASE21.md).
+
+### Phase 23: SMP shop_buy dry-run ops plan
+
+Operator checklist for SMP-only EconomyShopGUI **buy** capture validation: no DB
+rows, `dryRun=true`, `can_spend` unchanged. Requires Phase 22 jar. See
+[`ECONOMY_SMP_SHOP_BUY_DRY_RUN_ROLLOUT.md`](ECONOMY_SMP_SHOP_BUY_DRY_RUN_ROLLOUT.md).
+
 ### Phase 10: SMP shop_sell dry-run ops plan
 
 Operator rollout to install Phase 8/9 jar on SMP and verify EconomyShopGUI sell
