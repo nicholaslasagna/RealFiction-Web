@@ -20,7 +20,6 @@ public final class GameplayEconomySyncService {
   private final GameplaySyncLogger syncLogger;
   private final Logger logger;
 
-  private final GameplayEconomyProducerMetrics metrics = new GameplayEconomyProducerMetrics();
   private final GameplayEconomyIdempotencyDedupCache dedupCache;
   private final GameplayEconomyCaptureService captureService;
   private final List<GameplayEconomyProducer> producers;
@@ -46,9 +45,10 @@ public final class GameplayEconomySyncService {
         config.economy().gameplaySync().producers().dedupCacheTtl(),
         config.economy().gameplaySync().producers().dedupCacheMaxEntries()
     );
-    this.captureService = new GameplayEconomyCaptureService(config, buffer, dedupCache, metrics, gameplayMetrics, syncLogger, logger);
+    this.captureService = new GameplayEconomyCaptureService(config, buffer, dedupCache, gameplayMetrics, syncLogger, logger);
     EconomyShopGuiSellProducer economyShopGuiSell = new EconomyShopGuiSellProducer(plugin, config, captureService, logger);
-    this.producers = List.of(economyShopGuiSell);
+    EconomyShopGuiBuyProducer economyShopGuiBuy = new EconomyShopGuiBuyProducer(plugin, config, captureService, logger);
+    this.producers = List.of(economyShopGuiSell, economyShopGuiBuy);
     long flushSeconds = Math.max(5, config.economy().gameplaySync().flushInterval().toSeconds());
     if (scheduler != null) {
       this.flushWindowTask = scheduler.runAsyncRepeating(this::onFlushWindowTick, flushSeconds, flushSeconds);
@@ -93,9 +93,18 @@ public final class GameplayEconomySyncService {
     }
     StringBuilder summary = new StringBuilder();
     summary.append("server=").append(config.serverId());
-    summary.append(" captured=").append(metrics.captured());
-    summary.append(" dryRun=").append(metrics.dryRunCaptured());
-    summary.append(" queued=").append(metrics.queued());
+    long captured = 0;
+    long dryRun = 0;
+    long queued = 0;
+    for (GameplayEconomyProducer producer : producers) {
+      GameplayEconomyProducerMetrics producerMetrics = producer.metrics();
+      captured += producerMetrics.captured();
+      dryRun += producerMetrics.dryRunCaptured();
+      queued += producerMetrics.queued();
+    }
+    summary.append(" captured=").append(captured);
+    summary.append(" dryRun=").append(dryRun);
+    summary.append(" queued=").append(queued);
     if (gameplayMetrics != null) {
       summary.append(" gameplayQueued=").append(gameplayMetrics.gameplayQueued());
       summary.append(" gameplayOk=").append(gameplayMetrics.gameplaySucceeded());
@@ -108,10 +117,6 @@ public final class GameplayEconomySyncService {
 
   public GameplayEconomyCaptureService captureService() {
     return captureService;
-  }
-
-  public GameplayEconomyProducerMetrics metrics() {
-    return metrics;
   }
 
   public GameplayEconomyWriterMetrics gameplayMetrics() {

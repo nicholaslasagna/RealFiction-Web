@@ -54,9 +54,38 @@ Use the operator checklist: **[ECONOMY_SMP_SHOP_SELL_DRY_RUN_ROLLOUT.md](ECONOMY
 Summary: SMP-only jar + config with `gameplaySync.enabled=true`, both `dryRun=true`,
 `shopSell` category on, producer enabled — **without** `can_earn` DB policy changes.
 
-## Not in this phase
+## Phase 22: EconomyShopGUI buy skeleton (disabled by default)
 
-- `shop_buy` / `gameplay_spend`
+`economyShopGuiBuy` is registered alongside sell but **off** in default `config.yml`.
+When enabled for SMP dry-run testing, keep **both** `gameplaySync.dryRun=true` and
+`producers.economyShopGuiBuy.dryRun=true`, and leave `categories.shopBuy: false`
+until a later approved debit trial.
+
+| Setting | Default | Notes |
+|---------|---------|--------|
+| `producers.economyShopGuiBuy.enabled` | `false` | No event hook registration |
+| `producers.economyShopGuiBuy.dryRun` | `true` | Captures count only; no writer/HTTP/DB |
+| `categories.shopBuy` | `false` | Category guard rejects capture even if producer on |
+
+Event hook (same as sell):
+
+- `me.gypopo.economyshopgui.api.events.PostTransactionEvent`
+- Filter: type contains `BUY`, result `SUCCESS*`, Vault/money price, `amountMinor > 0`
+
+Dry-run log example:
+
+```text
+[GameplaySync:DRYRUN] server=smp-1 category=shop_buy player=Alex(uuid) amountMinor=1250 source=EconomyShopGUI eventId=BUY:...
+```
+
+`/rf economy gameplay producers` shows **economyShopGuiSell** and **economyShopGuiBuy**
+with separate hook status and metrics.
+
+**Not in Phase 22:** live debits, `can_spend` enablement, Vault mutation, migrations, deploy.
+
+## Not in Phase 9
+
+- Live `shop_buy` / `gameplay_spend` ledger writes (see Phase 22 skeleton + Phase 21 design)
 - Vault balance mutation
 - Automatic DB policy enablement
 - Factions / Arcade producers

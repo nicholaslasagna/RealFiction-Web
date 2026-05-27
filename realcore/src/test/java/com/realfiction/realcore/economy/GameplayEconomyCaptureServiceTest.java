@@ -6,7 +6,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import com.realfiction.realcore.api.PlatformApiClient;
 import com.realfiction.realcore.config.GameplayEconomyProducerConfig;
 import com.realfiction.realcore.config.RealCoreConfig;
-import com.realfiction.realcore.economy.GameplayEconomyCategory;
 import com.realfiction.realcore.scheduler.RealCoreScheduler;
 import com.realfiction.realcore.scheduler.ScheduledTaskHandle;
 import java.time.Duration;
@@ -23,6 +22,7 @@ final class GameplayEconomyCaptureServiceTest {
 
   private EconomyService economyService;
   private GameplayEconomyCaptureService capture;
+  private GameplayEconomyProducerMetrics metrics;
   private GameplayEconomyProducerConfig producerConfig;
 
   @BeforeEach
@@ -47,14 +47,8 @@ final class GameplayEconomyCaptureServiceTest {
     economyService = new EconomyService(
         config, new NoopScheduler(), new PlatformApiClient(config, Logger.getLogger("test")), Logger.getLogger("test"));
     economyService.start();
-    capture = new GameplayEconomyCaptureService(
-        config,
-        new GameplayEconomyTransactionBuffer(config, economyService, null, null, Logger.getLogger("test")),
-        new GameplayEconomyIdempotencyDedupCache(Duration.ofMinutes(5), 1000),
-        new GameplayEconomyProducerMetrics(),
-        null,
-        null,
-        Logger.getLogger("test"));
+    metrics = new GameplayEconomyProducerMetrics();
+    capture = newCapture(config, metrics);
     producerConfig = config.economy().gameplaySync().producers().economyShopGuiSell();
   }
 
@@ -71,9 +65,10 @@ final class GameplayEconomyCaptureServiceTest {
               economyShopGuiSell:
                 enabled: false
         """);
-    GameplayEconomyCaptureService service = newCapture(config);
-    service.capture(request(config, 100));
-    assertEquals(1, service.metrics().producerDisabledRejected());
+    GameplayEconomyProducerMetrics disabledMetrics = new GameplayEconomyProducerMetrics();
+    GameplayEconomyCaptureService service = newCapture(config, disabledMetrics);
+    service.capture(sellRequest(config, disabledMetrics, 100));
+    assertEquals(1, disabledMetrics.producerDisabledRejected());
   }
 
   @Test
@@ -90,26 +85,101 @@ final class GameplayEconomyCaptureServiceTest {
                 enabled: true
                 category: shop_sell
         """);
-    GameplayEconomyCaptureService service = newCapture(config);
-    service.capture(request(config, 100));
-    assertEquals(1, service.metrics().invalidRejected());
+    GameplayEconomyProducerMetrics rejectMetrics = new GameplayEconomyProducerMetrics();
+    GameplayEconomyCaptureService service = newCapture(config, rejectMetrics);
+    service.capture(sellRequest(config, rejectMetrics, 100));
+    assertEquals(1, rejectMetrics.invalidRejected());
   }
 
   @Test
   void dryRunDoesNotQueueToWriter() {
-    capture.capture(request(producerConfig, 250));
-    assertEquals(1, capture.metrics().dryRunCaptured());
+    capture.capture(sellRequest(producerConfig, metrics, 250));
+    assertEquals(1, metrics.dryRunCaptured());
     assertEquals(0, economyService.writer().queuedTransactionCount());
-    assertEquals(0, capture.metrics().queued());
+    assertEquals(0, metrics.queued());
+  }
+
+  @Test
+  void shopBuyDryRunDoesNotQueueToWriter() throws InvalidConfigurationException {
+    RealCoreConfig config = loadConfig("""
+        modules:
+          economy: true
+        economy:
+          enabled: true
+          gameplaySync:
+            enabled: true
+            dryRun: true
+            categories:
+              shopBuy: true
+            producers:
+              economyShopGuiBuy:
+                enabled: true
+                category: shop_buy
+                dryRun: true
+        """);
+    GameplayEconomyProducerMetrics buyMetrics = new GameplayEconomyProducerMetrics();
+    GameplayEconomyCaptureService service = newCapture(config, buyMetrics);
+    GameplayEconomyProducerConfig buyConfig = config.economy().gameplaySync().producers().economyShopGuiBuy();
+    service.capture(buyRequest(buyConfig, buyMetrics, 500));
+    assertEquals(1, buyMetrics.dryRunCaptured());
+    assertEquals(0, buyMetrics.queued());
+  }
+
+  @Test
+  void overDebitCapRejected() throws InvalidConfigurationException {
+    RealCoreConfig config = loadConfig("""
+        modules:
+          economy: true
+        economy:
+          enabled: true
+          gameplaySync:
+            enabled: true
+            maxDebitMinorPerTx: 100
+            categories:
+              shopBuy: true
+            producers:
+              economyShopGuiBuy:
+                enabled: true
+                category: shop_buy
+                dryRun: true
+        """);
+    GameplayEconomyProducerMetrics buyMetrics = new GameplayEconomyProducerMetrics();
+    GameplayEconomyCaptureService service = newCapture(config, buyMetrics);
+    GameplayEconomyProducerConfig buyConfig = config.economy().gameplaySync().producers().economyShopGuiBuy();
+    service.capture(buyRequest(buyConfig, buyMetrics, 500));
+    assertEquals(1, buyMetrics.overCapRejected());
+  }
+
+  @Test
+  void shopBuyCategoryDisabledRejected() throws InvalidConfigurationException {
+    RealCoreConfig config = loadConfig("""
+        modules:
+          economy: true
+        economy:
+          enabled: true
+          gameplaySync:
+            enabled: true
+            categories:
+              shopBuy: false
+            producers:
+              economyShopGuiBuy:
+                enabled: true
+                category: shop_buy
+        """);
+    GameplayEconomyProducerMetrics buyMetrics = new GameplayEconomyProducerMetrics();
+    GameplayEconomyCaptureService service = newCapture(config, buyMetrics);
+    GameplayEconomyProducerConfig buyConfig = config.economy().gameplaySync().producers().economyShopGuiBuy();
+    service.capture(buyRequest(buyConfig, buyMetrics, 100));
+    assertEquals(1, buyMetrics.invalidRejected());
   }
 
   @Test
   void duplicateSuppression() {
-    GameplayEconomyCaptureService.CaptureRequest first = request(producerConfig, 100);
+    GameplayEconomyCaptureService.CaptureRequest first = sellRequest(producerConfig, metrics, 100);
     capture.capture(first);
     capture.capture(first);
-    assertEquals(1, capture.metrics().captured());
-    assertEquals(1, capture.metrics().duplicateRejected());
+    assertEquals(1, metrics.captured());
+    assertEquals(1, metrics.duplicateRejected());
   }
 
   @Test
@@ -130,9 +200,10 @@ final class GameplayEconomyCaptureServiceTest {
                 category: shop_sell
                 dryRun: true
         """);
-    GameplayEconomyCaptureService service = newCapture(config);
-    service.capture(request(config, 500));
-    assertEquals(1, service.metrics().overCapRejected());
+    GameplayEconomyProducerMetrics sellMetrics = new GameplayEconomyProducerMetrics();
+    GameplayEconomyCaptureService service = newCapture(config, sellMetrics);
+    service.capture(sellRequest(config, sellMetrics, 500));
+    assertEquals(1, sellMetrics.overCapRejected());
   }
 
   @Test
@@ -155,9 +226,10 @@ final class GameplayEconomyCaptureServiceTest {
               economyShopGuiSell:
                 enabled: true
         """);
-    GameplayEconomyCaptureService service = newCapture(config);
-    service.capture(request(config, 100));
-    assertEquals(1, service.metrics().invalidRejected());
+    GameplayEconomyProducerMetrics sellMetrics = new GameplayEconomyProducerMetrics();
+    GameplayEconomyCaptureService service = newCapture(config, sellMetrics);
+    service.capture(sellRequest(config, sellMetrics, 100));
+    assertEquals(1, sellMetrics.invalidRejected());
   }
 
   @Test
@@ -178,9 +250,10 @@ final class GameplayEconomyCaptureServiceTest {
               economyShopGuiSell:
                 enabled: true
         """);
-    GameplayEconomyCaptureService service = newCapture(config);
-    service.capture(request(config, 100));
-    assertEquals(1, service.metrics().invalidRejected());
+    GameplayEconomyProducerMetrics sellMetrics = new GameplayEconomyProducerMetrics();
+    GameplayEconomyCaptureService service = newCapture(config, sellMetrics);
+    service.capture(sellRequest(config, sellMetrics, 100));
+    assertEquals(1, sellMetrics.invalidRejected());
   }
 
   @Test
@@ -199,9 +272,10 @@ final class GameplayEconomyCaptureServiceTest {
                 enabled: true
                 category: shop_sell
         """);
-    GameplayEconomyCaptureService service = newCapture(config);
-    service.capture(request(config, 100));
-    assertEquals(1, service.metrics().invalidRejected());
+    GameplayEconomyProducerMetrics sellMetrics = new GameplayEconomyProducerMetrics();
+    GameplayEconomyCaptureService service = newCapture(config, sellMetrics);
+    service.capture(sellRequest(config, sellMetrics, 100));
+    assertEquals(1, sellMetrics.invalidRejected());
   }
 
   @Test
@@ -221,6 +295,14 @@ final class GameplayEconomyCaptureServiceTest {
         "event-42"
     );
     assertEquals(key, again);
+    String buyKey = GameplayEconomyIdempotencyKeys.build(
+        "smp-1",
+        GameplayEconomyCategory.SHOP_BUY,
+        EconomyShopGuiBuyProducer.SOURCE,
+        PLAYER,
+        "event-42"
+    );
+    assertEquals("gameplay:smp-1:shop_buy:economyshopgui:" + PLAYER + ":event-42", buyKey);
   }
 
   @Test
@@ -243,20 +325,20 @@ final class GameplayEconomyCaptureServiceTest {
     EconomyService economy = new EconomyService(
         config, new NoopScheduler(), new PlatformApiClient(config, Logger.getLogger("test")), Logger.getLogger("test"));
     economy.start();
+    GameplayEconomyProducerMetrics sellMetrics = new GameplayEconomyProducerMetrics();
     GameplayEconomyCaptureService service = new GameplayEconomyCaptureService(
         config,
         new GameplayEconomyTransactionBuffer(config, economy, null, null, Logger.getLogger("test")),
         new GameplayEconomyIdempotencyDedupCache(Duration.ofMinutes(5), 1000),
-        new GameplayEconomyProducerMetrics(),
         null,
         null,
         Logger.getLogger("test"));
-    service.capture(request(config, 100));
-    assertEquals(1, service.metrics().queued());
+    service.capture(sellRequest(config, sellMetrics, 100));
+    assertEquals(1, sellMetrics.queued());
     assertTrue(economy.writer().queuedTransactionCount() > 0);
   }
 
-  private GameplayEconomyCaptureService newCapture(RealCoreConfig config) {
+  private GameplayEconomyCaptureService newCapture(RealCoreConfig config, GameplayEconomyProducerMetrics metrics) {
     EconomyService economy = new EconomyService(
         config, new NoopScheduler(), new PlatformApiClient(config, Logger.getLogger("test")), Logger.getLogger("test"));
     economy.start();
@@ -264,17 +346,24 @@ final class GameplayEconomyCaptureServiceTest {
         config,
         new GameplayEconomyTransactionBuffer(config, economy, null, null, Logger.getLogger("test")),
         new GameplayEconomyIdempotencyDedupCache(Duration.ofMinutes(5), 1000),
-        new GameplayEconomyProducerMetrics(),
         null,
         null,
         Logger.getLogger("test"));
   }
 
-  private static GameplayEconomyCaptureService.CaptureRequest request(RealCoreConfig config, long amountMinor) {
-    return request(config.economy().gameplaySync().producers().economyShopGuiSell(), amountMinor);
+  private static GameplayEconomyCaptureService.CaptureRequest sellRequest(
+      RealCoreConfig config,
+      GameplayEconomyProducerMetrics metrics,
+      long amountMinor
+  ) {
+    return sellRequest(config.economy().gameplaySync().producers().economyShopGuiSell(), metrics, amountMinor);
   }
 
-  private static GameplayEconomyCaptureService.CaptureRequest request(GameplayEconomyProducerConfig config, long amountMinor) {
+  private static GameplayEconomyCaptureService.CaptureRequest sellRequest(
+      GameplayEconomyProducerConfig config,
+      GameplayEconomyProducerMetrics metrics,
+      long amountMinor
+  ) {
     return new GameplayEconomyCaptureService.CaptureRequest(
         EconomyShopGuiSellProducer.ID,
         config,
@@ -283,7 +372,26 @@ final class GameplayEconomyCaptureServiceTest {
         amountMinor,
         EconomyShopGuiSellProducer.SOURCE,
         "event-" + amountMinor,
-        "test"
+        "test",
+        metrics
+    );
+  }
+
+  private static GameplayEconomyCaptureService.CaptureRequest buyRequest(
+      GameplayEconomyProducerConfig config,
+      GameplayEconomyProducerMetrics metrics,
+      long amountMinor
+  ) {
+    return new GameplayEconomyCaptureService.CaptureRequest(
+        EconomyShopGuiBuyProducer.ID,
+        config,
+        PLAYER,
+        "Alex",
+        amountMinor,
+        EconomyShopGuiBuyProducer.SOURCE,
+        "event-" + amountMinor,
+        "test",
+        metrics
     );
   }
 

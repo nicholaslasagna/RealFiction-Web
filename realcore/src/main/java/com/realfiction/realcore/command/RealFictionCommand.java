@@ -1026,6 +1026,40 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
     }
   }
 
+  private void appendGameplayProducerLine(
+      CommandSender sender,
+      GameplayEconomySyncService sync,
+      String label,
+      com.realfiction.realcore.config.GameplayEconomyProducerConfig producerConfig,
+      String producerId
+  ) {
+    send(sender, ChatColor.YELLOW + "Producer " + label + ": "
+        + (producerConfig.enabled() ? ChatColor.GREEN + "enabled" : ChatColor.GRAY + "disabled")
+        + ChatColor.GRAY + ", category " + producerConfig.category().ledgerCategory().apiValue()
+        + ", producer dry-run " + statusToggle(producerConfig.dryRun())
+        + ", maxEventsPerFlush " + producerConfig.maxEventsPerFlush());
+    GameplayEconomyProducer producer = sync.producer(producerId);
+    if (producer != null) {
+      send(sender, ChatColor.YELLOW + "Hook (" + label + "): " + ChatColor.WHITE + producer.statusSummary()
+          + ChatColor.GRAY + ", running=" + producer.running());
+      GameplayEconomyProducerMetrics metrics = producer.metrics();
+      long captured = metrics.captured();
+      send(sender, ChatColor.YELLOW + "Metrics (" + label + "): " + ChatColor.WHITE + captured
+          + " captured" + ChatColor.GRAY + ", " + metrics.dryRunCaptured() + " dry-run, "
+          + metrics.queued() + " queued, dup " + metrics.duplicateRejected()
+          + ", invalid " + metrics.invalidRejected() + ", over-cap " + metrics.overCapRejected()
+          + ", disabled " + metrics.producerDisabledRejected());
+      if (captured > 0) {
+        double dryRunRate = metrics.dryRunCaptured() * 100.0 / captured;
+        double queueRate = metrics.queued() * 100.0 / captured;
+        send(sender, ChatColor.YELLOW + "Capture rates (" + label + "): " + ChatColor.WHITE
+            + String.format(java.util.Locale.US, "%.1f", dryRunRate) + "% dry-run"
+            + ChatColor.GRAY + ", "
+            + String.format(java.util.Locale.US, "%.1f", queueRate) + "% queued");
+      }
+    }
+  }
+
   private void appendGameplayProducerStatus(CommandSender sender) {
     GameplayEconomySyncService sync = plugin.gameplayEconomySyncService();
     RealCoreConfig config = plugin.realCoreConfig();
@@ -1037,32 +1071,12 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
       send(sender, ChatColor.YELLOW + "Gameplay producers: " + ChatColor.RED + "not loaded");
       return;
     }
-    var producerConfig = config.economy().gameplaySync().producers().economyShopGuiSell();
-    send(sender, ChatColor.YELLOW + "Producer economyShopGuiSell: "
-        + (producerConfig.enabled() ? ChatColor.GREEN + "enabled" : ChatColor.GRAY + "disabled")
-        + ChatColor.GRAY + ", category " + producerConfig.category().ledgerCategory().apiValue()
-        + ", producer dry-run " + statusToggle(producerConfig.dryRun())
-        + ", maxEventsPerFlush " + producerConfig.maxEventsPerFlush());
-    GameplayEconomyProducer producer = sync.producer(com.realfiction.realcore.economy.EconomyShopGuiSellProducer.ID);
-    if (producer != null) {
-      send(sender, ChatColor.YELLOW + "Hook: " + ChatColor.WHITE + producer.statusSummary()
-          + ChatColor.GRAY + ", running=" + producer.running());
-    }
-    GameplayEconomyProducerMetrics metrics = sync.metrics();
-    long captured = metrics.captured();
-    send(sender, ChatColor.YELLOW + "Producer metrics: " + ChatColor.WHITE + captured
-        + " captured" + ChatColor.GRAY + ", " + metrics.dryRunCaptured() + " dry-run, "
-        + metrics.queued() + " queued, dup " + metrics.duplicateRejected()
-        + ", invalid " + metrics.invalidRejected() + ", over-cap " + metrics.overCapRejected()
-        + ", disabled " + metrics.producerDisabledRejected());
-    if (captured > 0) {
-      double dryRunRate = metrics.dryRunCaptured() * 100.0 / captured;
-      double queueRate = metrics.queued() * 100.0 / captured;
-      send(sender, ChatColor.YELLOW + "Capture rates: " + ChatColor.WHITE
-          + String.format(java.util.Locale.US, "%.1f", dryRunRate) + "% dry-run"
-          + ChatColor.GRAY + ", "
-          + String.format(java.util.Locale.US, "%.1f", queueRate) + "% queued");
-    }
+    appendGameplayProducerLine(sender, sync, "economyShopGuiSell",
+        config.economy().gameplaySync().producers().economyShopGuiSell(),
+        com.realfiction.realcore.economy.EconomyShopGuiSellProducer.ID);
+    appendGameplayProducerLine(sender, sync, "economyShopGuiBuy",
+        config.economy().gameplaySync().producers().economyShopGuiBuy(),
+        com.realfiction.realcore.economy.EconomyShopGuiBuyProducer.ID);
     send(sender, ChatColor.YELLOW + "Dedup cache: " + ChatColor.WHITE + sync.dedupCacheSize()
         + "/" + sync.dedupCacheMaxEntries() + " keys"
         + ChatColor.GRAY + " (TTL " + config.economy().gameplaySync().producers().dedupCacheTtl().toSeconds() + "s)");
@@ -1078,8 +1092,11 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
     if (economy != null && economy.writerRunning()) {
       sendGameplayWriterDiagnostics(sender, economy.writer(), config.economy().gameplaySync());
     }
-    if (!metrics.lastEventSummary().isBlank()) {
-      send(sender, ChatColor.YELLOW + "Last event: " + ChatColor.GRAY + metrics.lastEventSummary());
+    for (GameplayEconomyProducer producer : sync.producers()) {
+      String summary = producer.metrics().lastEventSummary();
+      if (summary != null && !summary.isBlank()) {
+        send(sender, ChatColor.YELLOW + "Last event (" + producer.id() + "): " + ChatColor.GRAY + summary);
+      }
     }
   }
 

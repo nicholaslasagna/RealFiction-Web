@@ -14,11 +14,13 @@ import org.bukkit.event.Listener;
 import org.bukkit.plugin.Plugin;
 
 /**
- * Captures EconomyShopGUI sell {@code PostTransactionEvent} instances via reflection so
- * RealCore does not require a compile-time dependency on EconomyShopGUI-API.
+ * Captures EconomyShopGUI buy {@code PostTransactionEvent} instances via reflection.
+ *
+ * <p>Disabled by default. When enabled with dry-run, events are logged and counted only;
+ * no Vault mutation and no ledger HTTP writes occur until a later rollout phase.
  */
-public final class EconomyShopGuiSellProducer implements GameplayEconomyProducer, Listener {
-  public static final String ID = "economyShopGuiSell";
+public final class EconomyShopGuiBuyProducer implements GameplayEconomyProducer, Listener {
+  public static final String ID = "economyShopGuiBuy";
   public static final String SOURCE = "EconomyShopGUI";
 
   private final Plugin plugin;
@@ -31,7 +33,7 @@ public final class EconomyShopGuiSellProducer implements GameplayEconomyProducer
   private volatile boolean running;
   private volatile String hookStatus = "not started";
 
-  public EconomyShopGuiSellProducer(
+  public EconomyShopGuiBuyProducer(
       Plugin plugin,
       RealCoreConfig config,
       GameplayEconomyCaptureService captureService,
@@ -39,7 +41,7 @@ public final class EconomyShopGuiSellProducer implements GameplayEconomyProducer
   ) {
     this.plugin = Objects.requireNonNull(plugin, "plugin");
     this.config = Objects.requireNonNull(config, "config");
-    this.producerConfig = config.economy().gameplaySync().producers().economyShopGuiSell();
+    this.producerConfig = config.economy().gameplaySync().producers().economyShopGuiBuy();
     this.captureService = Objects.requireNonNull(captureService, "captureService");
     this.metrics = new GameplayEconomyProducerMetrics();
     this.logger = logger == null ? Logger.getLogger("RealCore") : logger;
@@ -76,14 +78,14 @@ public final class EconomyShopGuiSellProducer implements GameplayEconomyProducer
           false
       );
       running = true;
-      hookStatus = "listening for PostTransactionEvent (SELL)";
-      logger.info("Gameplay sync EconomyShopGUI sell producer registered.");
+      hookStatus = "listening for PostTransactionEvent (BUY)";
+      logger.info("Gameplay sync EconomyShopGUI buy producer registered.");
     } catch (ClassNotFoundException error) {
       hookStatus = "PostTransactionEvent class not found";
-      logger.log(Level.WARNING, "EconomyShopGUI API classes unavailable; sell producer inactive.", error);
+      logger.log(Level.WARNING, "EconomyShopGUI API classes unavailable; buy producer inactive.", error);
     } catch (RuntimeException error) {
       hookStatus = "registration failed: " + error.getMessage();
-      logger.log(Level.WARNING, "EconomyShopGUI sell producer registration failed.", error);
+      logger.log(Level.WARNING, "EconomyShopGUI buy producer registration failed.", error);
     }
   }
 
@@ -116,7 +118,7 @@ public final class EconomyShopGuiSellProducer implements GameplayEconomyProducer
       return;
     }
     try {
-      if (!EconomyShopGuiPostTransactionSupport.isSellTransaction(event)
+      if (!EconomyShopGuiPostTransactionSupport.isBuyTransaction(event)
           || !EconomyShopGuiPostTransactionSupport.isSuccessfulTransaction(event)) {
         return;
       }
@@ -137,11 +139,11 @@ public final class EconomyShopGuiSellProducer implements GameplayEconomyProducer
           amountMinor,
           SOURCE,
           eventId,
-          "EconomyShopGUI sell",
+          "EconomyShopGUI buy",
           metrics
       ));
     } catch (ReflectiveOperationException | RuntimeException error) {
-      logger.log(Level.FINE, "EconomyShopGUI sell capture skipped", error);
+      logger.log(Level.FINE, "EconomyShopGUI buy capture skipped", error);
     }
   }
 

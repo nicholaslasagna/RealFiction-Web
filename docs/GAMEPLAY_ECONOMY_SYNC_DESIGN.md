@@ -339,7 +339,40 @@ Dry-run log format:
 [GameplaySync:DRYRUN] server=smp-1 category=shop_sell player=Alex(uuid) amountMinor=2500 source=EconomyShopGUI eventId=...
 ```
 
-`shop_buy` / `gameplay_spend` are intentionally not implemented in this phase.
+`shop_buy` / `gameplay_spend` producers were not implemented in this phase.
+
+### Phase 22: EconomyShopGUI buy producer skeleton (disabled, dry-run only)
+
+`EconomyShopGuiBuyProducer` hooks the same `PostTransactionEvent` reflection path as
+sell, filtering `BUY` + `SUCCESS` + Vault/money prices with `amountMinor > 0`.
+
+Defaults (no live debits):
+
+```yaml
+economy:
+  gameplaySync:
+    categories:
+      shopBuy: false
+    producers:
+      economyShopGuiBuy:
+        enabled: false
+        category: shop_buy
+        dryRun: true
+        logEvents: true
+        maxEventsPerFlush: 250
+```
+
+Behavior:
+
+- `[GameplaySync:DRYRUN]` logs and per-producer metrics (`economyShopGuiBuy`) when enabled for testing
+- No writer enqueue, HTTP, or DB rows while `dryRun=true` (default)
+- No Vault mutation; no `can_spend` policy changes
+- Idempotency: `gameplay:<serverId>:shop_buy:economyshopgui:<uuid>:<eventId>`
+
+Operator status: `/rf economy gameplay producers` lists **economyShopGuiSell** and
+**economyShopGuiBuy** separately.
+
+See [`ECONOMY_SHOP_BUY_SPEND_DESIGN_PHASE21.md`](ECONOMY_SHOP_BUY_SPEND_DESIGN_PHASE21.md) for debit rollout design and later live-enable steps.
 
 ### Phase 10: SMP shop_sell dry-run ops plan
 

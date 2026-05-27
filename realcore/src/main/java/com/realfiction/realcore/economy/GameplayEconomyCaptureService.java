@@ -22,7 +22,8 @@ public final class GameplayEconomyCaptureService {
       long amountMinor,
       String source,
       String eventId,
-      String reason
+      String reason,
+      GameplayEconomyProducerMetrics metrics
   ) {
     public CaptureRequest {
       Objects.requireNonNull(producerId, "producerId");
@@ -30,6 +31,7 @@ public final class GameplayEconomyCaptureService {
       Objects.requireNonNull(minecraftUuid, "minecraftUuid");
       Objects.requireNonNull(source, "source");
       Objects.requireNonNull(eventId, "eventId");
+      Objects.requireNonNull(metrics, "metrics");
     }
   }
 
@@ -38,7 +40,6 @@ public final class GameplayEconomyCaptureService {
   private final GameplayEconomyProducersConfig producersConfig;
   private final GameplayEconomyTransactionBuffer buffer;
   private final GameplayEconomyIdempotencyDedupCache dedupCache;
-  private final GameplayEconomyProducerMetrics metrics;
   private final GameplayEconomyWriterMetrics gameplayMetrics;
   private final GameplaySyncLogger syncLogger;
   private final Logger logger;
@@ -48,7 +49,6 @@ public final class GameplayEconomyCaptureService {
       RealCoreConfig config,
       GameplayEconomyTransactionBuffer buffer,
       GameplayEconomyIdempotencyDedupCache dedupCache,
-      GameplayEconomyProducerMetrics metrics,
       GameplayEconomyWriterMetrics gameplayMetrics,
       GameplaySyncLogger syncLogger,
       Logger logger
@@ -58,7 +58,6 @@ public final class GameplayEconomyCaptureService {
     this.producersConfig = gameplayConfig.producers();
     this.buffer = buffer;
     this.dedupCache = dedupCache;
-    this.metrics = metrics;
     this.gameplayMetrics = gameplayMetrics;
     this.syncLogger = syncLogger == null ? new GameplaySyncLogger(logger) : syncLogger;
     this.logger = logger == null ? Logger.getLogger("RealCore") : logger;
@@ -72,11 +71,8 @@ public final class GameplayEconomyCaptureService {
     return eventsThisFlushWindow.getAndSet(0);
   }
 
-  public GameplayEconomyProducerMetrics metrics() {
-    return metrics;
-  }
-
   public void capture(CaptureRequest request) {
+    GameplayEconomyProducerMetrics metrics = request.metrics();
     String guard = guardReason(request.producerConfig());
     if (guard != null) {
       if (guard.contains("producer") && guard.contains("disabled")) {
@@ -99,12 +95,12 @@ public final class GameplayEconomyCaptureService {
     }
 
     GameplayEconomyCategory category = request.producerConfig().category();
-    if (!category.credit()) {
-      metrics.recordInvalidRejected();
-      return;
-    }
-
-    if (category.credit() && request.amountMinor() > gameplayConfig.maxCreditMinorPerTx()) {
+    if (category.credit()) {
+      if (request.amountMinor() > gameplayConfig.maxCreditMinorPerTx()) {
+        metrics.recordOverCapRejected();
+        return;
+      }
+    } else if (request.amountMinor() > gameplayConfig.maxDebitMinorPerTx()) {
       metrics.recordOverCapRejected();
       return;
     }
