@@ -7,7 +7,10 @@ import org.bukkit.configuration.ConfigurationSection;
 /**
  * Per-producer gameplay economy sync settings.
  *
- * <p>Only credit categories ({@code gameplay_earn}, {@code shop_sell}) are allowed in Phase 9.
+ * <p>Accepts both credit ({@code gameplay_earn}, {@code shop_sell}) and debit
+ * ({@code gameplay_spend}, {@code shop_buy}) categories. Debit producers still go
+ * through every guard ({@code GameplayEconomyCaptureService.guardReason}) and a
+ * direction-appropriate per-transaction cap before reaching the buffer.
  */
 public record GameplayEconomyProducerConfig(
     boolean enabled,
@@ -43,8 +46,11 @@ public record GameplayEconomyProducerConfig(
     return switch (normalized) {
       case "gameplay_earn" -> GameplayEconomyCategory.GAMEPLAY_EARN;
       case "shop_sell" -> GameplayEconomyCategory.SHOP_SELL;
+      case "gameplay_spend" -> GameplayEconomyCategory.GAMEPLAY_SPEND;
+      case "shop_buy" -> GameplayEconomyCategory.SHOP_BUY;
       default -> throw new IllegalArgumentException(
-          "economy.gameplaySync.producers category must be gameplay_earn or shop_sell, not " + value);
+          "economy.gameplaySync.producers category must be one of "
+              + "gameplay_earn, shop_sell, gameplay_spend, or shop_buy, not " + value);
     };
   }
 }

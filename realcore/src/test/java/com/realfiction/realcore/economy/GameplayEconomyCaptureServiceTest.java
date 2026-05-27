@@ -51,7 +51,7 @@ final class GameplayEconomyCaptureServiceTest {
         config,
         new GameplayEconomyTransactionBuffer(config, economyService, null, null, Logger.getLogger("test")),
         new GameplayEconomyIdempotencyDedupCache(Duration.ofMinutes(5), 1000),
-        new GameplayEconomyProducerMetrics(),
+        new GameplayEconomyProducerMetricsRegistry(),
         null,
         null,
         Logger.getLogger("test"));
@@ -247,13 +247,344 @@ final class GameplayEconomyCaptureServiceTest {
         config,
         new GameplayEconomyTransactionBuffer(config, economy, null, null, Logger.getLogger("test")),
         new GameplayEconomyIdempotencyDedupCache(Duration.ofMinutes(5), 1000),
-        new GameplayEconomyProducerMetrics(),
+        new GameplayEconomyProducerMetricsRegistry(),
         null,
         null,
         Logger.getLogger("test"));
     service.capture(request(config, 100));
     assertEquals(1, service.metrics().queued());
     assertTrue(economy.writer().queuedTransactionCount() > 0);
+  }
+
+  // ---- shop_buy producer tests (Phase 16) -------------------------------
+  // These mirror the shop_sell suite to prove the debit path goes through
+  // every guard (producer-off, sync-off, category-off, Anarchy, allowlist,
+  // dry-run, idempotency dedup) and is capped by maxDebitMinorPerTx, not
+  // maxCreditMinorPerTx. Vote reward writes are architecturally isolated
+  // (VoteRewardLedgerWriteService) and are not reachable from this path.
+
+  @Test
+  void shopBuyDryRunDoesNotQueue() throws InvalidConfigurationException {
+    RealCoreConfig config = loadConfig("""
+        modules:
+          economy: true
+        economy:
+          enabled: true
+          gameplaySync:
+            enabled: true
+            dryRun: true
+            categories:
+              shopBuy: true
+            producers:
+              economyShopGuiBuy:
+                enabled: true
+                category: shop_buy
+                dryRun: true
+                logEvents: false
+        """);
+    EconomyService economy = new EconomyService(
+        config, new NoopScheduler(), new PlatformApiClient(config, Logger.getLogger("test")), Logger.getLogger("test"));
+    economy.start();
+    GameplayEconomyCaptureService service = new GameplayEconomyCaptureService(
+        config,
+        new GameplayEconomyTransactionBuffer(config, economy, null, null, Logger.getLogger("test")),
+        new GameplayEconomyIdempotencyDedupCache(Duration.ofMinutes(5), 1000),
+        new GameplayEconomyProducerMetricsRegistry(),
+        null,
+        null,
+        Logger.getLogger("test"));
+    service.capture(buyRequest(config, 250));
+    assertEquals(1, service.metrics().dryRunCaptured());
+    assertEquals(0, service.metrics().queued());
+    assertEquals(0, economy.writer().queuedTransactionCount());
+  }
+
+  @Test
+  void shopBuyLiveEnqueueWhenDryRunDisabled() throws InvalidConfigurationException {
+    RealCoreConfig config = loadConfig("""
+        modules:
+          economy: true
+        economy:
+          enabled: true
+          gameplaySync:
+            enabled: true
+            dryRun: false
+            categories:
+              shopBuy: true
+            producers:
+              economyShopGuiBuy:
+                enabled: true
+                category: shop_buy
+                dryRun: false
+        """);
+    EconomyService economy = new EconomyService(
+        config, new NoopScheduler(), new PlatformApiClient(config, Logger.getLogger("test")), Logger.getLogger("test"));
+    economy.start();
+    GameplayEconomyCaptureService service = new GameplayEconomyCaptureService(
+        config,
+        new GameplayEconomyTransactionBuffer(config, economy, null, null, Logger.getLogger("test")),
+        new GameplayEconomyIdempotencyDedupCache(Duration.ofMinutes(5), 1000),
+        new GameplayEconomyProducerMetricsRegistry(),
+        null,
+        null,
+        Logger.getLogger("test"));
+    service.capture(buyRequest(config, 100));
+    assertEquals(1, service.metrics().queued());
+    assertTrue(economy.writer().queuedTransactionCount() > 0);
+  }
+
+  @Test
+  void shopBuyOverDebitCapRejected() throws InvalidConfigurationException {
+    RealCoreConfig config = loadConfig("""
+        modules:
+          economy: true
+        economy:
+          enabled: true
+          gameplaySync:
+            enabled: true
+            maxDebitMinorPerTx: 100
+            categories:
+              shopBuy: true
+            producers:
+              economyShopGuiBuy:
+                enabled: true
+                category: shop_buy
+                dryRun: true
+        """);
+    GameplayEconomyCaptureService service = newCapture(config);
+    service.capture(buyRequest(config, 500));
+    assertEquals(1, service.metrics().overCapRejected());
+  }
+
+  @Test
+  void shopBuyAnarchyRejected() throws InvalidConfigurationException {
+    RealCoreConfig config = loadConfig("""
+        server:
+          id: "anarchy-1"
+          group: "anarchy"
+        modules:
+          economy: true
+        economy:
+          enabled: true
+          gameplaySync:
+            enabled: true
+            backendAllowlist:
+              - anarchy-1
+            categories:
+              shopBuy: true
+            producers:
+              economyShopGuiBuy:
+                enabled: true
+                category: shop_buy
+        """);
+    GameplayEconomyCaptureService service = newCapture(config);
+    service.capture(buyRequest(config, 100));
+    assertEquals(1, service.metrics().invalidRejected());
+  }
+
+  @Test
+  void shopBuyAllowlistEnforced() throws InvalidConfigurationException {
+    RealCoreConfig config = loadConfig("""
+        server:
+          id: "factions-1"
+          group: "factions"
+        modules:
+          economy: true
+        economy:
+          enabled: true
+          gameplaySync:
+            enabled: true
+            categories:
+              shopBuy: true
+            producers:
+              economyShopGuiBuy:
+                enabled: true
+                category: shop_buy
+        """);
+    GameplayEconomyCaptureService service = newCapture(config);
+    service.capture(buyRequest(config, 100));
+    assertEquals(1, service.metrics().invalidRejected());
+  }
+
+  @Test
+  void shopBuyCategoryDisabledRejected() throws InvalidConfigurationException {
+    RealCoreConfig config = loadConfig("""
+        modules:
+          economy: true
+        economy:
+          enabled: true
+          gameplaySync:
+            enabled: true
+            categories:
+              shopBuy: false
+            producers:
+              economyShopGuiBuy:
+                enabled: true
+                category: shop_buy
+        """);
+    GameplayEconomyCaptureService service = newCapture(config);
+    service.capture(buyRequest(config, 100));
+    assertEquals(1, service.metrics().invalidRejected());
+  }
+
+  @Test
+  void shopBuyProducerDisabledRejected() throws InvalidConfigurationException {
+    RealCoreConfig config = loadConfig("""
+        modules:
+          economy: true
+        economy:
+          enabled: true
+          gameplaySync:
+            enabled: true
+            categories:
+              shopBuy: true
+            producers:
+              economyShopGuiBuy:
+                enabled: false
+                category: shop_buy
+        """);
+    GameplayEconomyCaptureService service = newCapture(config);
+    service.capture(buyRequest(config, 100));
+    assertEquals(1, service.metrics().producerDisabledRejected());
+  }
+
+  @Test
+  void shopBuyDuplicateSuppression() throws InvalidConfigurationException {
+    RealCoreConfig config = loadConfig("""
+        modules:
+          economy: true
+        economy:
+          enabled: true
+          gameplaySync:
+            enabled: true
+            dryRun: true
+            categories:
+              shopBuy: true
+            producers:
+              economyShopGuiBuy:
+                enabled: true
+                category: shop_buy
+                dryRun: true
+        """);
+    GameplayEconomyCaptureService service = newCapture(config);
+    GameplayEconomyCaptureService.CaptureRequest first = buyRequest(config, 100);
+    service.capture(first);
+    service.capture(first);
+    assertEquals(1, service.metrics().captured());
+    assertEquals(1, service.metrics().duplicateRejected());
+  }
+
+  @Test
+  void shopBuyIdempotencyStableForSameEvent() {
+    String key = GameplayEconomyIdempotencyKeys.build(
+        "smp-1",
+        GameplayEconomyCategory.SHOP_BUY,
+        EconomyShopGuiBuyProducer.SOURCE,
+        PLAYER,
+        "event-77"
+    );
+    String again = GameplayEconomyIdempotencyKeys.build(
+        "smp-1",
+        GameplayEconomyCategory.SHOP_BUY,
+        EconomyShopGuiBuyProducer.SOURCE,
+        PLAYER,
+        "event-77"
+    );
+    assertEquals(key, again);
+  }
+
+  private static GameplayEconomyCaptureService.CaptureRequest buyRequest(RealCoreConfig config, long amountMinor) {
+    GameplayEconomyProducerConfig producer = config.economy().gameplaySync().producers().economyShopGuiBuy();
+    return new GameplayEconomyCaptureService.CaptureRequest(
+        EconomyShopGuiBuyProducer.ID,
+        producer,
+        PLAYER,
+        "Alex",
+        amountMinor,
+        EconomyShopGuiBuyProducer.SOURCE,
+        "event-buy-" + amountMinor,
+        "test buy"
+    );
+  }
+
+  @Test
+  void perProducerMetricsAreIsolated() throws InvalidConfigurationException {
+    RealCoreConfig bothConfig = loadConfig("""
+        modules:
+          economy: true
+        economy:
+          enabled: true
+          gameplaySync:
+            enabled: true
+            dryRun: true
+            categories:
+              shopSell: true
+              shopBuy: true
+            producers:
+              economyShopGuiSell:
+                enabled: true
+                category: shop_sell
+                dryRun: true
+              economyShopGuiBuy:
+                enabled: true
+                category: shop_buy
+                dryRun: true
+        """);
+    GameplayEconomyCaptureService service = newCapture(bothConfig);
+    service.capture(request(bothConfig, 100));
+    service.capture(buyRequest(bothConfig, 50));
+    assertEquals(1, service.metricsForProducer(EconomyShopGuiSellProducer.ID).captured());
+    assertEquals(1, service.metricsForProducer(EconomyShopGuiBuyProducer.ID).captured());
+    assertEquals(2, service.metrics().captured());
+  }
+
+  @Test
+  void dryRunLogIncludesProducerIdAndDryRunFlag() throws InvalidConfigurationException {
+    RealCoreConfig config = loadConfig("""
+        modules:
+          economy: true
+        economy:
+          enabled: true
+          gameplaySync:
+            enabled: true
+            dryRun: true
+            categories:
+              shopSell: true
+            producers:
+              economyShopGuiSell:
+                enabled: true
+                category: shop_sell
+                dryRun: true
+                logEvents: true
+        """);
+    java.util.logging.Logger logger = java.util.logging.Logger.getLogger("dry-run-log-test");
+    java.util.concurrent.atomic.AtomicReference<String> lastLog = new java.util.concurrent.atomic.AtomicReference<>("");
+    logger.setUseParentHandlers(false);
+    logger.addHandler(new java.util.logging.Handler() {
+      @Override
+      public void publish(java.util.logging.LogRecord record) {
+        lastLog.set(record.getMessage());
+      }
+      @Override public void flush() {}
+      @Override public void close() {}
+    });
+    EconomyService economy = new EconomyService(
+        config, new NoopScheduler(), new PlatformApiClient(config, Logger.getLogger("test")), Logger.getLogger("test"));
+    economy.start();
+    GameplayEconomyCaptureService service = new GameplayEconomyCaptureService(
+        config,
+        new GameplayEconomyTransactionBuffer(config, economy, null, null, Logger.getLogger("test")),
+        new GameplayEconomyIdempotencyDedupCache(Duration.ofMinutes(5), 1000),
+        new GameplayEconomyProducerMetricsRegistry(),
+        null,
+        null,
+        logger);
+    service.capture(request(config, 250));
+    String logLine = lastLog.get();
+    assertTrue(logLine.contains("dryRun=true"));
+    assertTrue(logLine.contains("producerId=economyShopGuiSell"));
+    assertTrue(logLine.contains("serverId=smp-1"));
+    assertTrue(logLine.contains("category=shop_sell"));
   }
 
   private GameplayEconomyCaptureService newCapture(RealCoreConfig config) {
@@ -264,7 +595,7 @@ final class GameplayEconomyCaptureServiceTest {
         config,
         new GameplayEconomyTransactionBuffer(config, economy, null, null, Logger.getLogger("test")),
         new GameplayEconomyIdempotencyDedupCache(Duration.ofMinutes(5), 1000),
-        new GameplayEconomyProducerMetrics(),
+        new GameplayEconomyProducerMetricsRegistry(),
         null,
         null,
         Logger.getLogger("test"));

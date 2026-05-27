@@ -1,11 +1,16 @@
 # SMP EconomyShopGUI Sell Dry-Run Rollout (Phase 10)
 
-Operator plan to install the Phase 8/9 RealCore jar on **SMP only** and verify
+Operator plan to install the Phase 8/9+ RealCore jar on **SMP only** and verify
 `economyShopGuiSell` captures sell events in **dry-run mode** with **no DB ledger
 writes**.
 
 This is **SMP dry-run only**. It does not enable `can_earn`, `can_spend`, or any
 Supabase gameplay write policy.
+
+**Phase 16 (current RC):** use the validation checklist and results template in
+[`ECONOMY_SMP_DRY_RUN_VALIDATION_RESULTS.md`](./ECONOMY_SMP_DRY_RUN_VALIDATION_RESULTS.md)
+with jar built from `main` at `9787587ed46bf6a2e516aa9e84b9a21e94094620` (Phase 13/14
+observability + preflight on `main`).
 
 **Before SMP deploy:** confirm the full gameplay economy stack is on `main` and
 follow the RC checklist in
@@ -100,7 +105,9 @@ Keep producer dry-run aligned:
 
 ## Jar install (operator steps)
 
-1. Build or obtain jar containing Phase 8 + Phase 9 (e.g. `RealCore-0.1.0-SNAPSHOT.jar` from CI or local `mvn package`).
+1. Build or obtain jar from current `main` RC (Phase 13/14+), e.g.
+   `realcore/target/RealCore-0.1.0-SNAPSHOT.jar` at commit `9787587…` (see Phase 16
+   validation doc for checksum recording).
 2. **Maintenance window** on SMP only: stop server or use your standard plugin reload procedure.
 3. Replace `plugins/RealCore/RealCore-*.jar` with the new jar (keep a backup of the previous jar).
 4. Apply the SMP dry-run config section above.
@@ -135,7 +142,16 @@ Expected (values approximate):
 - `Gameplay buffer: 0 accepted`, dry-run/rejected as applicable
 - Producer section shows `economyShopGuiSell` enabled, producer dry-run on
 
-### 3. Producer metrics (before sell)
+### 3. Dry-run preflight (Phase 14+)
+
+```
+/rf economy gameplay preflight dryrun
+```
+
+Expected: summary **READY**; `dryRun=true`; `shopSell` on; producer enabled; `queued=0`;
+no writer failures. If **NOT READY**, stop and roll back before any sell test.
+
+### 4. Producer metrics (before sell)
 
 ```
 /rf economy gameplay producers
@@ -147,19 +163,19 @@ Record baseline counters:
 - `duplicateRejected`, `invalidRejected`, `overCapRejected`
 - `Hook: listening for PostTransactionEvent (SELL)` when EconomyShopGUI is installed
 
-### 4. Perform one small EconomyShopGUI sell
+### 5. Perform one small EconomyShopGUI sell
 
 - Use a staff alt or test account.
 - Sell a **small** stack of a common item (low value) through EconomyShopGUI GUI or sell command.
 - Confirm the player receives Vault/Essentials money normally (local economy unchanged).
 
-### 5. Re-check producer metrics (after sell)
+### 6. Re-check producer metrics (after sell)
 
 ```
 /rf economy gameplay producers
 ```
 
-### 6. Check server logs
+### 7. Check server logs
 
 Search console/log file for:
 
@@ -167,7 +183,7 @@ Search console/log file for:
 [GameplaySync:DRYRUN]
 ```
 
-### 7. Vote rewards unchanged (Lobby1)
+### 8. Vote rewards unchanged (Lobby1)
 
 On **Lobby1** (not SMP), if verifying vote path separately:
 
@@ -181,7 +197,7 @@ On SMP, vote reward **writes** should not occur; SMP is not a vote reward backen
 ### Log line format
 
 ```text
-[GameplaySync:DRYRUN] server=smp-1 category=shop_sell player=Steve(550e8400-e29b-41d4-a716-446655440000) amountMinor=125 source=EconomyShopGUI eventId=SELL_GUI_SCREEN:blocks.cobblestone:64:125:550e8400-e29b-41d4-a716-446655440000
+[GameplaySync:DRYRUN] dryRun=true serverId=smp-1 producerId=economyShopGuiSell category=shop_sell player=Steve(550e8400-e29b-41d4-a716-446655440000) amountMinor=125 source=EconomyShopGUI eventId=SELL_GUI_SCREEN:blocks.cobblestone:64:125:550e8400-e29b-41d4-a716-446655440000
 ```
 
 Fields may vary; `category=shop_sell`, `source=EconomyShopGUI`, and `amountMinor` must be present.
@@ -299,10 +315,13 @@ No compensating ledger entries are required for dry-run-only testing unless acci
 - **Do not** disable vote reward fallback on Lobby1 as part of this SMP test.
 - **Do not** run `admin_import_economy_balances` or manual balance overwrites during the test.
 - **Do not** confuse EconomyShopGUI Vault payouts (normal) with DB ledger writes (must not happen in dry-run).
+- **Do not** run `/rf economy test` during dry-run soak — it enqueues through the global writer and can POST to the economy API, bypassing gameplay producer dry-run.
 
 ## Success criteria
 
-- [ ] SMP running Phase 8/9 jar without startup errors
+- [ ] Results recorded in [ECONOMY_SMP_DRY_RUN_VALIDATION_RESULTS.md](./ECONOMY_SMP_DRY_RUN_VALIDATION_RESULTS.md)
+- [ ] SMP running Phase 13/14 RC jar (`9787587…`) without startup errors
+- [ ] `/rf economy gameplay preflight dryrun` → READY
 - [ ] EconomyShopGUI sell produces `[GameplaySync:DRYRUN]` log line
 - [ ] `captured` and `dryRunCaptured` increment; `queued` stays 0
 - [ ] No new `shop_sell` ledger rows in Supabase
@@ -312,6 +331,9 @@ No compensating ledger entries are required for dry-run-only testing unless acci
 
 ## Related docs
 
+- [ECONOMY_SMP_DRY_RUN_VALIDATION_RESULTS.md](./ECONOMY_SMP_DRY_RUN_VALIDATION_RESULTS.md) — Phase 16 checklist + results template
+- [ECONOMY_DATABASE_READINESS_PHASE17.md](./ECONOMY_DATABASE_READINESS_PHASE17.md) — Supabase migration/policy verification before live writes
+- [ECONOMY_GAMEPLAY_PREFLIGHT.md](./ECONOMY_GAMEPLAY_PREFLIGHT.md) — preflight commands
 - [REALCORE_GAMEPLAY_ECONOMY_RELEASE_PLAN.md](REALCORE_GAMEPLAY_ECONOMY_RELEASE_PLAN.md) — merge order, RC build, SMP deploy/rollback
 - [ECONOMY_GAMEPLAY_PRODUCER_ROLLOUT.md](ECONOMY_GAMEPLAY_PRODUCER_ROLLOUT.md) — producer design
 - [ECONOMY_SMP_GAMEPLAY_WRITE_POLICY_ROLLOUT.md](ECONOMY_SMP_GAMEPLAY_WRITE_POLICY_ROLLOUT.md) — future live writes (not this rollout)
