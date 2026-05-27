@@ -399,6 +399,13 @@ target architecture, risks, performance, failure modes, compatibility, and stage
 migration from Option B. No provider registration in this phase. See
 [`ECONOMY_DB_BACKED_VAULT_PROVIDER_PHASE30.md`](ECONOMY_DB_BACKED_VAULT_PROVIDER_PHASE30.md).
 
+### Phase 31: Factions economy rollout risk assessment
+
+Docs-only Factions-specific prerequisites, risks, Old_Factions policy, dry-run/live
+strategies, SQL verification, and stop/rollback rules. **Does not enable** Factions
+reads/writes. See
+[`ECONOMY_FACTIONS_ROLLOUT_RISK_PHASE31.md`](ECONOMY_FACTIONS_ROLLOUT_RISK_PHASE31.md).
+
 ### Phase 10: SMP shop_sell dry-run ops plan
 
 Operator rollout to install Phase 8/9 jar on SMP and verify EconomyShopGUI sell

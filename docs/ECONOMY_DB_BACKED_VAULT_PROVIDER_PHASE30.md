@@ -227,7 +227,7 @@ do not block Lobby1 delivery.
 | **Multi-server balance** | DB is network-wide; provider on each SMP host must see consistent cache or regional partitioning |
 | **Concurrent sessions** | Same UUID on two servers (if possible) — conflict resolution |
 | **SMP** | First and only initial canary for Option A prototype |
-| **Factions** | Future only after long SMP stability; separate approval |
+| **Factions** | Future only after long SMP stability; see [ECONOMY_FACTIONS_ROLLOUT_RISK_PHASE31.md](ECONOMY_FACTIONS_ROLLOUT_RISK_PHASE31.md) |
 
 ### Producer path during transition
 
@@ -315,6 +315,7 @@ stages A–E pass on a canary and rollback is rehearsed.
 - [ECONOMY_GENERIC_GAMEPLAY_LIVE_APPROVAL_PHASE29.md](ECONOMY_GENERIC_GAMEPLAY_LIVE_APPROVAL_PHASE29.md) — generic source gates under Option B
 - [ECONOMY_GENERIC_GAMEPLAY_SIMULATOR_PHASE28.md](ECONOMY_GENERIC_GAMEPLAY_SIMULATOR_PHASE28.md)
 - [ECONOMY_SMP_EARN_SPEND_MONITORING_PHASE25.md](ECONOMY_SMP_EARN_SPEND_MONITORING_PHASE25.md)
+- [ECONOMY_FACTIONS_ROLLOUT_RISK_PHASE31.md](ECONOMY_FACTIONS_ROLLOUT_RISK_PHASE31.md)
 
 ---
 

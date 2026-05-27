@@ -196,7 +196,8 @@ Stop SMP test and roll back immediately if:
 ## Explicit non-goals (this RC)
 
 - No real SMP gameplay ledger writes (`dryRun=false`, `can_earn=true`)
-- No Factions or Arcade deployment of gameplay sync RC
+- No Factions or Arcade deployment of gameplay sync RC (Factions prerequisites:
+  [ECONOMY_FACTIONS_ROLLOUT_RISK_PHASE31.md](ECONOMY_FACTIONS_ROLLOUT_RISK_PHASE31.md))
 - No Anarchy economy mutation (ever)
 - No Vault economy provider registration yet (see Option A feasibility:
   [ECONOMY_DB_BACKED_VAULT_PROVIDER_PHASE30.md](ECONOMY_DB_BACKED_VAULT_PROVIDER_PHASE30.md))
@@ -224,3 +225,4 @@ Stop SMP test and roll back immediately if:
 | [ECONOMY_GAMEPLAY_OBSERVABILITY.md](ECONOMY_GAMEPLAY_OBSERVABILITY.md) | Observability before live writes (#13) |
 | [ECONOMY_VOTE_REWARD_LEDGER_ROLLOUT.md](ECONOMY_VOTE_REWARD_LEDGER_ROLLOUT.md) | Lobby1 vote rewards (separate) |
 | [ECONOMY_DB_BACKED_VAULT_PROVIDER_PHASE30.md](ECONOMY_DB_BACKED_VAULT_PROVIDER_PHASE30.md) | Option A feasibility (long-term; not this RC) |
+| [ECONOMY_FACTIONS_ROLLOUT_RISK_PHASE31.md](ECONOMY_FACTIONS_ROLLOUT_RISK_PHASE31.md) | Factions risk assessment (not enabled) |

@@ -319,3 +319,8 @@ Stop expanding hooks or starting Option A pilot if:
 | Ops / DB | | | |
 
 **shop_buy / gameplay_spend enablement:** blocked until row above complete.
+
+Lobby1 `vote_reward` uses a separate write path and must remain unchanged.
+
+Factions economy sync is **not approved**; risk assessment and prerequisites:
+[ECONOMY_FACTIONS_ROLLOUT_RISK_PHASE31.md](ECONOMY_FACTIONS_ROLLOUT_RISK_PHASE31.md).
