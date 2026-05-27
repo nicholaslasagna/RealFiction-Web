@@ -362,6 +362,25 @@ safety limits, structured `[GameplaySync:*]` logs, and expanded `/rf economy
 gameplay` diagnostics. Defaults unchanged (`enabled=false`, `dryRun=true`). See
 [`docs/ECONOMY_GAMEPLAY_OBSERVABILITY.md`](ECONOMY_GAMEPLAY_OBSERVABILITY.md).
 
+### Phase 14: Gameplay economy preflight
+
+See [`docs/ECONOMY_GAMEPLAY_PREFLIGHT.md`](ECONOMY_GAMEPLAY_PREFLIGHT.md).
+
+### Phases 16–19: SMP dry-run through live monitoring
+
+| Phase | Doc |
+|-------|-----|
+| 16 | [`ECONOMY_SMP_DRY_RUN_VALIDATION_RESULTS.md`](ECONOMY_SMP_DRY_RUN_VALIDATION_RESULTS.md) |
+| 17 | [`ECONOMY_DATABASE_READINESS_PHASE17.md`](ECONOMY_DATABASE_READINESS_PHASE17.md) |
+| 18 | [`ECONOMY_SMP_SHOP_SELL_LIVE_EXECUTION.md`](ECONOMY_SMP_SHOP_SELL_LIVE_EXECUTION.md) |
+| 19 | [`ECONOMY_SMP_LIVE_MONITORING_PHASE19.md`](ECONOMY_SMP_LIVE_MONITORING_PHASE19.md) |
+
+### Phase 20: DB / Vault authority model (ADR)
+
+Short term **Option B** (plugin hooks), long term **Option A** (DB-backed Vault provider),
+**reject Option C** for production live sync. See
+[`docs/ECONOMY_AUTHORITY_MODEL_PHASE20.md`](ECONOMY_AUTHORITY_MODEL_PHASE20.md).
+
 ### Phase 0: Design Only
 
 Document current behavior, risks, and rollout criteria. Do not change code,
@@ -381,14 +400,11 @@ ledger entries.
 
 ### Phase 3: Choose The Real Sync Strategy
 
-Choose between:
+**Resolved in Phase 20:** see [`docs/ECONOMY_AUTHORITY_MODEL_PHASE20.md`](ECONOMY_AUTHORITY_MODEL_PHASE20.md).
 
-- DB-backed Vault provider,
-- plugin-specific integrations,
-- a temporary, capped `vault_mirror_adjustment` delta bridge.
-
-The DB-backed Vault provider remains the clean long-term target, but it should
-not be the first live change.
+- **Short term:** plugin hook integration (Option B) — current `shop_sell` path.
+- **Long term:** DB-backed Vault provider (Option A).
+- **Rejected for production:** Vault polling / delta mirror (Option C) — shadow only.
 
 ### Phase 4: One-Server Real Write Trial
 
