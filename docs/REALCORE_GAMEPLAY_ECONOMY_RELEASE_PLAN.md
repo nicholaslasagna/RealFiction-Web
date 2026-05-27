@@ -156,7 +156,9 @@ Full detail: [ECONOMY_SMP_SHOP_SELL_DRY_RUN_ROLLOUT.md](ECONOMY_SMP_SHOP_SELL_DR
 
 - [ ] `/rf economy`
 - [ ] `/rf economy gameplay`
+- [ ] `/rf economy gameplay preflight dryrun` — summary **READY**
 - [ ] `/rf economy gameplay producers` — hook listening, counters at baseline
+- [ ] Record results in [ECONOMY_SMP_DRY_RUN_VALIDATION_RESULTS.md](ECONOMY_SMP_DRY_RUN_VALIDATION_RESULTS.md) (Phase 16)
 - [ ] One small **EconomyShopGUI sell**
 - [ ] Log contains `[GameplaySync:DRYRUN] server=smp-1 category=shop_sell ... source=EconomyShopGUI ...`
 - [ ] `captured` and `dryRunCaptured` increment; **`queued` stays 0**
@@ -210,5 +212,7 @@ Stop SMP test and roll back immediately if:
 | [ECONOMY_SMP_GAMEPLAY_WRITE_POLICY_ROLLOUT.md](ECONOMY_SMP_GAMEPLAY_WRITE_POLICY_ROLLOUT.md) | Future live SMP policy (#50) |
 | [ECONOMY_GAMEPLAY_PRODUCER_ROLLOUT.md](ECONOMY_GAMEPLAY_PRODUCER_ROLLOUT.md) | Producer (#52) |
 | [ECONOMY_SMP_SHOP_SELL_DRY_RUN_ROLLOUT.md](ECONOMY_SMP_SHOP_SELL_DRY_RUN_ROLLOUT.md) | SMP dry-run ops (#53) |
+| [ECONOMY_SMP_DRY_RUN_VALIDATION_RESULTS.md](ECONOMY_SMP_DRY_RUN_VALIDATION_RESULTS.md) | Phase 16 checklist + results template |
+| [ECONOMY_GAMEPLAY_PREFLIGHT.md](ECONOMY_GAMEPLAY_PREFLIGHT.md) | Preflight before live writes (#57) |
 | [ECONOMY_GAMEPLAY_OBSERVABILITY.md](ECONOMY_GAMEPLAY_OBSERVABILITY.md) | Observability before live writes (#13) |
 | [ECONOMY_VOTE_REWARD_LEDGER_ROLLOUT.md](ECONOMY_VOTE_REWARD_LEDGER_ROLLOUT.md) | Lobby1 vote rewards (separate) |
