@@ -219,6 +219,23 @@ Anarchy must stay disabled at the DB/RPC, API, RealCore, and config layers.
 Schema/API category support only. No gameplay write enablement. See
 `docs/ECONOMY_TRANSACTION_CATEGORIES.md`.
 
+### Phase 7: SMP gameplay write policy preparation
+
+Manual operator SQL for a future capped SMP write trial. See
+`docs/ECONOMY_SMP_GAMEPLAY_WRITE_POLICY_ROLLOUT.md`.
+
+### Phase 8: RealCore gameplay transaction buffer skeleton
+
+`GameplayEconomyTransactionBuffer` validates future producer proposals and
+optionally enqueues to `BufferedEconomyTransactionWriter`. Defaults:
+`economy.gameplaySync.enabled=false`, `dryRun=true`. No Vault, shop, or command
+producers are wired. Vote rewards remain on `VoteRewardLedgerWriteService`.
+
+Future producers call `propose(...)` with explicit `source` and `eventId`.
+Idempotency: `gameplay:<serverId>:<category>:<source>:<uuid>:<eventId>`.
+
+Rollback: set `economy.gameplaySync.enabled=false` (and `dryRun=true`) and reload.
+
 ### Phase 0: Design Only
 
 Document current behavior, risks, and rollout criteria. Do not change code,

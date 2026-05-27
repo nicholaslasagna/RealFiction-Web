@@ -30,7 +30,8 @@ public record EconomyConfig(
     int vaultDeltaShadowMaxPlayersPerRun,
     long vaultDeltaShadowMinDeltaMinor,
     long vaultDeltaShadowMaxLoggedDeltaMinor,
-    List<String> vaultDeltaShadowBackendAllowlist
+    List<String> vaultDeltaShadowBackendAllowlist,
+    GameplayEconomySyncConfig gameplaySync
 ) {
   public static EconomyConfig disabledDefaults() {
     return new EconomyConfig(
@@ -52,7 +53,8 @@ public record EconomyConfig(
         100,
         1,
         250_000,
-        List.of("smp-1")
+        List.of("smp-1"),
+        GameplayEconomySyncConfig.disabledDefaults()
     );
   }
 
@@ -94,7 +96,8 @@ public record EconomyConfig(
         Math.max(1, section.getLong(
             "vaultDeltaShadowMaxLoggedDeltaMinor",
             defaults.vaultDeltaShadowMaxLoggedDeltaMinor())),
-        normalizeAllowlist(section.getStringList("vaultDeltaShadowBackendAllowlist"), defaults.vaultDeltaShadowBackendAllowlist())
+        normalizeAllowlist(section.getStringList("vaultDeltaShadowBackendAllowlist"), defaults.vaultDeltaShadowBackendAllowlist()),
+        GameplayEconomySyncConfig.from(section.getConfigurationSection("gameplaySync"))
     );
   }
 

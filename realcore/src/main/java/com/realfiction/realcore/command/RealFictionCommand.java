@@ -6,8 +6,10 @@ import com.realfiction.realcore.lobby.LobbyManager;
 import com.realfiction.realcore.playtime.PlaytimeTracker;
 import com.realfiction.realcore.scheduler.RealCoreScheduler;
 import com.realfiction.realcore.config.StatsConfig;
+import com.realfiction.realcore.config.GameplayEconomySyncConfig;
 import com.realfiction.realcore.economy.BufferedEconomyTransactionWriter;
 import com.realfiction.realcore.economy.EconomyService;
+import com.realfiction.realcore.economy.GameplayEconomyTransactionBuffer;
 import com.realfiction.realcore.economy.EconomyStagingTestTransaction;
 import com.realfiction.realcore.economy.EconomyTransaction;
 import com.realfiction.realcore.economy.VaultBalanceAuditService;
@@ -401,6 +403,11 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
     if (args.length >= 2 && "sync-vault".equalsIgnoreCase(args[1])) {
       return handleEconomyVaultSync(sender, args);
     }
+    if (args.length >= 2 && "gameplay".equalsIgnoreCase(args[1])) {
+      send(sender, ChatColor.GOLD + "RealCore Gameplay Economy Sync");
+      appendGameplayEconomyStatus(sender, true);
+      return true;
+    }
 
     send(sender, ChatColor.GOLD + "RealCore Global Economy");
     appendEconomyStatus(sender);
@@ -631,7 +638,68 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
     appendVoteRewardLedgerShadowStatus(sender);
     appendVoteRewardLedgerWriteStatus(sender);
     appendVaultDeltaShadowStatus(sender);
+    appendGameplayEconomyStatus(sender, false);
     sendEconomyWriterStatus(sender, economy.writer());
+  }
+
+  private void appendGameplayEconomyStatus(CommandSender sender, boolean detailed) {
+    RealCoreConfig config = plugin.realCoreConfig();
+    GameplayEconomyTransactionBuffer buffer = plugin.gameplayEconomyTransactionBuffer();
+    if (config == null) {
+      send(sender, ChatColor.YELLOW + "Gameplay sync: " + ChatColor.RED + "config not loaded");
+      return;
+    }
+    GameplayEconomySyncConfig gameplay = config.economy().gameplaySync();
+    if (buffer == null) {
+      send(sender, ChatColor.YELLOW + "Gameplay sync: " + ChatColor.RED + "not loaded");
+      return;
+    }
+    String enabled = gameplay.enabled() ? ChatColor.GREEN + "enabled" : ChatColor.GRAY + "disabled";
+    String dryRun = gameplay.dryRun() ? ChatColor.YELLOW + "dry-run" : ChatColor.GREEN + "live enqueue";
+    send(sender, ChatColor.YELLOW + "Gameplay sync: " + enabled
+        + ChatColor.GRAY + ", " + dryRun
+        + ChatColor.GRAY + ", allowlist " + String.join(", ", gameplay.backendAllowlist()));
+    send(sender, ChatColor.YELLOW + "Gameplay categories: "
+        + ChatColor.WHITE + categoryToggle("earn", gameplay.gameplayEarn())
+        + ChatColor.GRAY + ", "
+        + ChatColor.WHITE + categoryToggle("spend", gameplay.gameplaySpend())
+        + ChatColor.GRAY + ", "
+        + ChatColor.WHITE + categoryToggle("shop_sell", gameplay.shopSell())
+        + ChatColor.GRAY + ", "
+        + ChatColor.WHITE + categoryToggle("shop_buy", gameplay.shopBuy()));
+    send(sender, ChatColor.YELLOW + "Gameplay caps: " + ChatColor.WHITE
+        + "credit " + gameplay.maxCreditMinorPerTx()
+        + ChatColor.GRAY + " / "
+        + ChatColor.WHITE + "debit " + gameplay.maxDebitMinorPerTx()
+        + ChatColor.GRAY + " minor, batch " + gameplay.maxBatchSize()
+        + ChatColor.GRAY + ", buffer " + gameplay.bufferSize()
+        + ChatColor.GRAY + ", flush " + gameplay.flushInterval().toSeconds() + "s");
+    send(sender, ChatColor.YELLOW + "Gameplay buffer: " + ChatColor.WHITE + buffer.acceptedCount()
+        + " accepted" + ChatColor.GRAY + ", " + buffer.dryRunCount() + " dry-run, "
+        + buffer.rejectedCount() + " rejected"
+        + ChatColor.GRAY + ", writer queued " + buffer.writerQueuedCount());
+    if (!buffer.lastAcceptedMessage().isBlank()) {
+      send(sender, ChatColor.YELLOW + "Last accepted: " + ChatColor.GRAY + buffer.lastAcceptedMessage());
+    }
+    if (!buffer.lastRejectedMessage().isBlank()) {
+      send(sender, ChatColor.YELLOW + "Last rejected: " + ChatColor.RED + buffer.lastRejectedMessage());
+    }
+    if (detailed) {
+      EconomyService economy = plugin.economyService();
+      if (economy == null) {
+        send(sender, ChatColor.YELLOW + "Global writer: " + ChatColor.RED + "not loaded");
+      } else if (!economy.writerRunning()) {
+        send(sender, ChatColor.YELLOW + "Global writer: " + ChatColor.RED + "not running"
+            + ChatColor.GRAY + (economy.disabledReason().isBlank() ? "" : " (" + economy.disabledReason() + ")"));
+      } else {
+        sendEconomyWriterStatus(sender, economy.writer());
+      }
+      send(sender, ChatColor.GRAY + "Phase 8 skeleton only: no shop/Vault producers are wired.");
+    }
+  }
+
+  private String categoryToggle(String label, boolean on) {
+    return label + "=" + (on ? "on" : "off");
   }
 
   private void appendVaultDeltaShadowStatus(CommandSender sender) {

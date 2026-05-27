@@ -87,6 +87,25 @@ economy:
   vaultDeltaShadowMaxLoggedDeltaMinor: 250000
   vaultDeltaShadowBackendAllowlist:
     - smp-1
+  # Phase 8 gameplay economy sync buffer (no producers wired in this phase).
+  # Validates future gameplay deltas and optionally enqueues to the global writer.
+  # Default: disabled with dryRun=true so nothing is sent to the ledger API.
+  gameplaySync:
+    enabled: false
+    backendAllowlist:
+      - smp-1
+    categories:
+      gameplayEarn: false
+      gameplaySpend: false
+      shopSell: false
+      shopBuy: false
+    flushSeconds: 30
+    maxBatchSize: 50
+    bufferSize: 5000
+    maxCreditMinorPerTx: 50000
+    maxDebitMinorPerTx: 50000
+    dryRun: true
+    logTransactions: true
 
 # Network playtime tracking (feeds the "Top Players" leaderboard/holograms).
 # Each backend records its own sessions; the website sums them per player.
