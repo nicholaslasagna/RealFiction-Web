@@ -336,7 +336,7 @@ No DB ledger writes occur unless all flags are explicitly enabled later.
 Dry-run log format:
 
 ```text
-[GameplaySync:DRYRUN] server=smp-1 category=shop_sell player=Alex(uuid) amountMinor=2500 source=EconomyShopGUI eventId=...
+[GameplaySync:DRYRUN] dryRun=true serverId=smp-1 producerId=economyShopGuiSell category=shop_sell player=Alex(uuid) amountMinor=2500 source=EconomyShopGUI eventId=...
 ```
 
 `shop_buy` / `gameplay_spend` are intentionally not implemented in this phase.

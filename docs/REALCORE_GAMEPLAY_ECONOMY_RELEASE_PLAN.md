@@ -158,7 +158,7 @@ Full detail: [ECONOMY_SMP_SHOP_SELL_DRY_RUN_ROLLOUT.md](ECONOMY_SMP_SHOP_SELL_DR
 - [ ] `/rf economy gameplay`
 - [ ] `/rf economy gameplay producers` — hook listening, counters at baseline
 - [ ] One small **EconomyShopGUI sell**
-- [ ] Log contains `[GameplaySync:DRYRUN] server=smp-1 category=shop_sell ... source=EconomyShopGUI ...`
+- [ ] Log contains `[GameplaySync:DRYRUN] dryRun=true ... producerId=economyShopGuiSell ... category=shop_sell ... source=EconomyShopGUI ...`
 - [ ] `captured` and `dryRunCaptured` increment; **`queued` stays 0**
 - [ ] No new `shop_sell` rows in `economy_ledger` (optional SQL in dry-run doc)
 - [ ] Player Vault balance still changes from EconomyShopGUI (local economy normal)

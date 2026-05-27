@@ -83,15 +83,28 @@ final class EconomyShopGuiProducerTest {
   }
 
   @Test
-  void sellIgnoresBuyTransaction() {
+  void sellIgnoresBuyScreenTransaction() {
     sellProducer.handlePostTransaction(successfulBuyEvent(5.00));
     assertEquals(0, captureService.metricsForProducer(EconomyShopGuiSellProducer.ID).captured());
   }
 
   @Test
-  void buyIgnoresSellTransaction() {
+  void buyIgnoresSellGuiTransaction() {
     buyProducer.handlePostTransaction(successfulSellEvent(5.00));
     assertEquals(0, captureService.metricsForProducer(EconomyShopGuiBuyProducer.ID).captured());
+  }
+
+  @Test
+  void sellIgnoresAmbiguousBuyAndSellTypeName() {
+    var event = new StubEconomyShopGuiPostTransactionEvent(
+        "SELL_BUY_MIXED",
+        "SUCCESS",
+        player,
+        10.0
+    );
+    sellProducer.handlePostTransaction(event);
+    buyProducer.handlePostTransaction(event);
+    assertEquals(0, captureService.metrics().captured());
   }
 
   @Test
