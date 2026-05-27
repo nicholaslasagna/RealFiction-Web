@@ -365,6 +365,12 @@ monitoring on `smp-1` only (`shop_sell` + `shop_buy`, no generic gameplay catego
 Docs/ops only. See
 [`ECONOMY_SMP_EARN_SPEND_MONITORING_PHASE25.md`](ECONOMY_SMP_EARN_SPEND_MONITORING_PHASE25.md).
 
+### Phase 26: Generic gameplay_earn / gameplay_spend design
+
+Non-shop categories for quests, events, minigames, staff grants, and gameplay fees.
+Design only — no producers, policy changes, or category enablement. See
+[`ECONOMY_GENERIC_GAMEPLAY_EARN_SPEND_DESIGN_PHASE26.md`](ECONOMY_GENERIC_GAMEPLAY_EARN_SPEND_DESIGN_PHASE26.md).
+
 ### Phase 10: SMP shop_sell dry-run ops plan
 
 Operator rollout to install Phase 8/9 jar on SMP and verify EconomyShopGUI sell

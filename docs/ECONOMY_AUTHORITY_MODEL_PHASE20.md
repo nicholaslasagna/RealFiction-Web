@@ -12,4 +12,8 @@ During SMP `shop_sell` / `shop_buy` rollout, do not treat shadow reads as automa
 reconciliation. See combined monitoring:
 [ECONOMY_SMP_EARN_SPEND_MONITORING_PHASE25.md](ECONOMY_SMP_EARN_SPEND_MONITORING_PHASE25.md).
 
+Generic non-shop categories (`gameplay_earn`, `gameplay_spend`) are defined in
+[ECONOMY_GENERIC_GAMEPLAY_EARN_SPEND_DESIGN_PHASE26.md](ECONOMY_GENERIC_GAMEPLAY_EARN_SPEND_DESIGN_PHASE26.md)
+— still disabled until a later phased rollout.
+
 Lobby1 `vote_reward` uses a separate write path and must remain unchanged.
