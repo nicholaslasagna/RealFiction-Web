@@ -2,7 +2,6 @@ package com.realfiction.realcore.economy;
 
 import com.realfiction.realcore.config.GameplayEconomyProducerConfig;
 import com.realfiction.realcore.config.RealCoreConfig;
-import java.util.Locale;
 import java.util.Objects;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -154,7 +153,11 @@ abstract class AbstractEconomyShopGuiProducer implements GameplayEconomyProducer
     }
   }
 
-  static boolean typeContains(String typeNameUpper, String token) {
-    return typeNameUpper.contains(token.toUpperCase(Locale.ROOT));
+  static boolean matchesSellTransactionType(String typeNameUpper) {
+    return typeNameUpper.contains("SELL") && !typeNameUpper.contains("BUY");
+  }
+
+  static boolean matchesBuyTransactionType(String typeNameUpper) {
+    return typeNameUpper.contains("BUY") && !typeNameUpper.contains("SELL");
   }
 }

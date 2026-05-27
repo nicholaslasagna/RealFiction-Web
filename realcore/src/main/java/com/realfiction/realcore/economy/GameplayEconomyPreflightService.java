@@ -265,6 +265,17 @@ public final class GameplayEconomyPreflightService {
         mode == Mode.LIVE ? "true" : "required-off"
     ));
 
+    GameplayEconomyProducerConfig buyProducer = gameplay.producers().economyShopGuiBuy();
+    if (mode == Mode.DRYRUN && gameplay.shopBuy() && !buyProducer.enabled()) {
+      checks.add(new Check("shopBuyProducerDisabled", Status.WARN, "true"));
+    } else if (gameplay.shopBuy() && buyProducer.enabled()) {
+      checks.add(new Check("shopBuyProducerDisabled", Status.PASS, "false"));
+    } else if (mode == Mode.LIVE && gameplay.shopBuy() && !buyProducer.enabled()) {
+      checks.add(new Check("shopBuyProducerDisabled", Status.FAIL, "true"));
+    } else {
+      checks.add(new Check("shopBuyProducerDisabled", Status.PASS, "category-off"));
+    }
+
     checks.add(capCheck("maxCreditMinorPerTx", gameplay.maxCreditMinorPerTx(), 1, 1_000_000_000_000L));
     checks.add(capCheck("maxDebitMinorPerTx", gameplay.maxDebitMinorPerTx(), 1, 1_000_000_000_000L));
     checks.add(capCheck("maxBatchSize", gameplay.maxBatchSize(), 1, 500));
@@ -284,7 +295,8 @@ public final class GameplayEconomyPreflightService {
     checks.add(boolCheck("vaultPresent", runtime.vaultInstalled(), "true"));
     checks.add(boolCheck("vaultEconomyProvider", runtime.vaultEconomyProviderRegistered(), "true"));
 
-    if (gameplay.producers().economyShopGuiSell().enabled()) {
+    if (gameplay.producers().economyShopGuiSell().enabled()
+        || gameplay.producers().economyShopGuiBuy().enabled()) {
       checks.add(boolCheck("economyShopGuiPresent", runtime.economyShopGuiPresent(), "true"));
     } else {
       checks.add(new Check("economyShopGuiPresent", Status.PASS, "producer-disabled"));

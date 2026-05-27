@@ -181,7 +181,7 @@ On SMP, vote reward **writes** should not occur; SMP is not a vote reward backen
 ### Log line format
 
 ```text
-[GameplaySync:DRYRUN] server=smp-1 category=shop_sell player=Steve(550e8400-e29b-41d4-a716-446655440000) amountMinor=125 source=EconomyShopGUI eventId=SELL_GUI_SCREEN:blocks.cobblestone:64:125:550e8400-e29b-41d4-a716-446655440000
+[GameplaySync:DRYRUN] dryRun=true serverId=smp-1 producerId=economyShopGuiSell category=shop_sell player=Steve(550e8400-e29b-41d4-a716-446655440000) amountMinor=125 source=EconomyShopGUI eventId=SELL_GUI_SCREEN:blocks.cobblestone:64:125:550e8400-e29b-41d4-a716-446655440000
 ```
 
 Fields may vary; `category=shop_sell`, `source=EconomyShopGUI`, and `amountMinor` must be present.
@@ -299,6 +299,7 @@ No compensating ledger entries are required for dry-run-only testing unless acci
 - **Do not** disable vote reward fallback on Lobby1 as part of this SMP test.
 - **Do not** run `admin_import_economy_balances` or manual balance overwrites during the test.
 - **Do not** confuse EconomyShopGUI Vault payouts (normal) with DB ledger writes (must not happen in dry-run).
+- **Do not** run `/rf economy test` during dry-run soak — it enqueues through the global writer and can POST to the economy API, bypassing gameplay producer dry-run.
 
 ## Success criteria
 

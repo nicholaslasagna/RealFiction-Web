@@ -89,3 +89,20 @@ Expected log line shape:
 ```
 
 Dry-run must **never** enqueue to writer or POST gameplay transactions.
+
+## Pre-test complete baseline (main)
+
+When labeled **SMP dry-run pre-test complete**, record the jar fingerprint at build time:
+
+```bash
+git rev-parse HEAD
+shasum -a 256 realcore/target/RealCore-0.1.0-SNAPSHOT.jar
+```
+
+Example after Phase 18 merge (`80e04ed`): SHA256 `735a0eee6a80cf4a29312c21b3aff5e503875a744e88cbc3019e03d5f4e32af2`. **Always re-record after rebuilding from main** — do not reuse an old hash in operator logs.
+
+## Dry-run soak cautions
+
+- Do **not** run `/rf economy test` during Gates B/C dry-run unless intentionally testing the global writer — it bypasses gameplay producer dry-run and can POST to the economy API.
+- Do **not** enable `dryRun=false` or Supabase `can_earn`/`can_spend` during Stage 2.
+- EconomyShopGUI must be installed before Gate B/C; absent plugin is a clean no-op at startup but capture will not occur.

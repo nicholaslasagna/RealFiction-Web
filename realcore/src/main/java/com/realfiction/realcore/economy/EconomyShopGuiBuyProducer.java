@@ -29,7 +29,7 @@ public final class EconomyShopGuiBuyProducer extends AbstractEconomyShopGuiProdu
 
   @Override
   protected boolean acceptsTransactionType(String typeNameUpper) {
-    return typeContains(typeNameUpper, "BUY");
+    return matchesBuyTransactionType(typeNameUpper);
   }
 
   @Override
