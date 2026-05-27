@@ -18,6 +18,7 @@ import com.realfiction.realcore.economy.GameplayEconomyWriterMetrics;
 import com.realfiction.realcore.config.GameplayEconomySyncConfig;
 import com.realfiction.realcore.economy.EconomyStagingTestTransaction;
 import com.realfiction.realcore.economy.EconomyTransaction;
+import com.realfiction.realcore.economy.GameplayEconomyPreflightService;
 import com.realfiction.realcore.economy.VaultBalanceAuditService;
 import com.realfiction.realcore.economy.VaultBalanceSyncService;
 import com.realfiction.realcore.economy.VaultDeltaShadowService;
@@ -31,6 +32,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import org.bukkit.Bukkit;
@@ -428,6 +430,9 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
       return true;
     }
     if (args.length >= 2 && "gameplay".equalsIgnoreCase(args[1])) {
+      if (args.length >= 3 && "preflight".equalsIgnoreCase(args[2])) {
+        return handleEconomyGameplayPreflight(sender, args);
+      }
       send(sender, ChatColor.GOLD + "RealCore Gameplay Economy Sync");
       if (args.length >= 3 && "producers".equalsIgnoreCase(args[2])) {
         appendGameplayProducerStatus(sender);
@@ -441,6 +446,132 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
     appendEconomyStatus(sender);
     send(sender, ChatColor.GRAY + "No Vault provider is registered by RealCore.");
     return true;
+  }
+
+  private boolean handleEconomyGameplayPreflight(CommandSender sender, String[] args) {
+    RealCoreConfig config = plugin.realCoreConfig();
+    if (config == null) {
+      send(sender, ChatColor.RED + "RealCore config is not loaded.");
+      return true;
+    }
+
+    GameplayEconomyPreflightService.Mode mode = parseGameplayPreflightMode(args);
+    EconomyService economy = plugin.economyService();
+    GameplayEconomyTransactionBuffer buffer = plugin.gameplayEconomyTransactionBuffer();
+    GameplayEconomyPreflightService service = new GameplayEconomyPreflightService();
+    GameplayEconomyPreflightService.Snapshot snapshot = new GameplayEconomyPreflightService.Snapshot(
+        config,
+        economy,
+        buffer,
+        GameplayEconomyPreflightService.runtimeProbeFromPlugin(plugin)
+    );
+
+    send(sender, ChatColor.YELLOW + "Running gameplay economy preflight (" + mode.name().toLowerCase(Locale.ROOT) + ")...");
+    GameplayEconomyPreflightService.Report report = service.run(mode, snapshot);
+    sendGameplayPreflightReport(sender, report);
+
+    if (economy == null || !config.hmacSecretConfigured()) {
+      send(sender, ChatColor.GRAY + "API probe skipped: economy service or HMAC not ready.");
+      send(sender, ChatColor.GOLD + "Summary: " + colorPreflightSummary(report.summaryLabel()));
+      send(sender, ChatColor.GRAY + "Read-only: no transactions, Vault changes, or policy writes.");
+      return true;
+    }
+
+    String balanceGuard = economy.dbBalanceReadGuardReason();
+    if (!balanceGuard.isBlank()) {
+      GameplayEconomyPreflightService.Report withApi = service.withApiChecks(
+          report,
+          GameplayEconomyPreflightService.ApiProbeResult.skipped(balanceGuard)
+      );
+      sendGameplayPreflightApiChecks(sender, withApi, report.checks().size());
+      send(sender, ChatColor.GOLD + "Summary: " + colorPreflightSummary(withApi.summaryLabel()));
+      send(sender, ChatColor.GRAY + "Read-only: no transactions, Vault changes, or policy writes.");
+      return true;
+    }
+
+    send(sender, ChatColor.YELLOW + "Probing read-only economy API (balance)...");
+    economy.fetchBalanceReadOnly(GameplayEconomyPreflightService.API_PROBE_UUID).whenComplete((snapshotResult, error) -> {
+      GameplayEconomyPreflightService.ApiProbeResult apiResult = mapPreflightApiProbe(error);
+      GameplayEconomyPreflightService.Report withApi = service.withApiChecks(report, apiResult);
+      sendGameplayPreflightApiChecks(sender, withApi, report.checks().size());
+      send(sender, ChatColor.GOLD + "Summary: " + colorPreflightSummary(withApi.summaryLabel()));
+      send(sender, ChatColor.GRAY + "Read-only: no transactions, Vault changes, or policy writes.");
+    });
+    return true;
+  }
+
+  private GameplayEconomyPreflightService.Mode parseGameplayPreflightMode(String[] args) {
+    if (args.length >= 4) {
+      if ("live".equalsIgnoreCase(args[3])) {
+        return GameplayEconomyPreflightService.Mode.LIVE;
+      }
+      if ("dryrun".equalsIgnoreCase(args[3])) {
+        return GameplayEconomyPreflightService.Mode.DRYRUN;
+      }
+    }
+    return GameplayEconomyPreflightService.Mode.DRYRUN;
+  }
+
+  private GameplayEconomyPreflightService.ApiProbeResult mapPreflightApiProbe(Throwable error) {
+    if (error == null) {
+      return GameplayEconomyPreflightService.ApiProbeResult.success();
+    }
+    String message = rootMessage(error);
+    String lower = message.toLowerCase(Locale.ROOT);
+    if (lower.contains("401") || lower.contains("403") || lower.contains("hmac") || lower.contains("signature")) {
+      return GameplayEconomyPreflightService.ApiProbeResult.failed(message);
+    }
+    if (lower.contains("policy") || lower.contains("not allowed") || lower.contains("denied")) {
+      return GameplayEconomyPreflightService.ApiProbeResult.reachableButNotBalance(message);
+    }
+    return GameplayEconomyPreflightService.ApiProbeResult.failed(message);
+  }
+
+  private void sendGameplayPreflightReport(CommandSender sender, GameplayEconomyPreflightService.Report report) {
+    for (String line : report.formatLines()) {
+      sendPreflightLine(sender, line);
+    }
+  }
+
+  private void sendGameplayPreflightApiChecks(
+      CommandSender sender,
+      GameplayEconomyPreflightService.Report report,
+      int previousCheckCount
+  ) {
+    List<GameplayEconomyPreflightService.Check> checks = report.checks();
+    for (int index = previousCheckCount; index < checks.size(); index++) {
+      GameplayEconomyPreflightService.Check check = checks.get(index);
+      sendPreflightLine(sender, check.status().name() + " " + check.id()
+          + (check.detail().isBlank() ? "" : "=" + check.detail()));
+    }
+  }
+
+  private void sendPreflightLine(CommandSender sender, String line) {
+    if (line.startsWith("RealCore Gameplay Economy Preflight:")) {
+      send(sender, ChatColor.GOLD + line);
+      return;
+    }
+    if (line.startsWith("Summary:")) {
+      return;
+    }
+    if (line.startsWith("PASS ")) {
+      send(sender, ChatColor.GREEN + line);
+      return;
+    }
+    if (line.startsWith("WARN ")) {
+      send(sender, ChatColor.YELLOW + line);
+      return;
+    }
+    if (line.startsWith("FAIL ")) {
+      send(sender, ChatColor.RED + line);
+    }
+  }
+
+  private String colorPreflightSummary(String summary) {
+    if ("READY".equals(summary)) {
+      return ChatColor.GREEN + summary;
+    }
+    return ChatColor.RED + summary;
   }
 
   private boolean handleEconomyAudit(CommandSender sender, String[] args) {
@@ -1292,7 +1423,18 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
       return List.of("flush");
     }
     if (args.length == 2 && "economy".equalsIgnoreCase(args[0]) && sender.hasPermission("realcore.admin")) {
-      return List.of("audit", "balance", "flush", "shadow", "syncfromdb", "test");
+      return List.of("audit", "balance", "flush", "gameplay", "shadow", "syncfromdb", "test");
+    }
+    if (args.length == 3 && "economy".equalsIgnoreCase(args[0])
+        && "gameplay".equalsIgnoreCase(args[1])
+        && sender.hasPermission("realcore.admin")) {
+      return List.of("preflight", "producers");
+    }
+    if (args.length == 4 && "economy".equalsIgnoreCase(args[0])
+        && "gameplay".equalsIgnoreCase(args[1])
+        && "preflight".equalsIgnoreCase(args[2])
+        && sender.hasPermission("realcore.admin")) {
+      return List.of("dryrun", "live");
     }
     if (args.length == 3 && "economy".equalsIgnoreCase(args[0])
         && "syncfromdb".equalsIgnoreCase(args[1])

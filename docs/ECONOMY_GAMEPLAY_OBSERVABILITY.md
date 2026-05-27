@@ -3,6 +3,9 @@
 Operator and engineering guide for **batch visibility**, **retry/duplicate/failure
 telemetry**, and **queue safety** before enabling live SMP `shop_sell` ledger writes.
 
+For automated go/no-go checks, use [ECONOMY_GAMEPLAY_PREFLIGHT.md](./ECONOMY_GAMEPLAY_PREFLIGHT.md)
+(`/rf economy gameplay preflight dryrun` / `live`).
+
 Defaults keep `economy.gameplaySync.enabled=false` and `dryRun=true`. This phase
 does **not** enable gameplay writes.
 
