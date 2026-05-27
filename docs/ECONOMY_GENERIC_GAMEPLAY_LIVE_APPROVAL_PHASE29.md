@@ -339,7 +339,7 @@ Phase 29 does not commit to Option A timeline or design detail.
 | 31+ | Minigame rewards | Per-minigame source ID and approval record |
 | 32+ | `gameplay_spend` live trials | Fees/penalties after earn path stable |
 | 33+ | Factions evaluation | Separate doc; months after SMP stability |
-| Research | DB-backed Vault provider (Option A) | Not a rollout phase; architecture spike |
+| 30 | DB-backed Vault provider (Option A) | Feasibility spike — [ECONOMY_DB_BACKED_VAULT_PROVIDER_PHASE30.md](ECONOMY_DB_BACKED_VAULT_PROVIDER_PHASE30.md) |
 
 Numbers are illustrative; actual phase IDs may shift in
 [GAMEPLAY_ECONOMY_SYNC_DESIGN.md](GAMEPLAY_ECONOMY_SYNC_DESIGN.md).
@@ -354,6 +354,7 @@ Numbers are illustrative; actual phase IDs may shift in
 - [ECONOMY_GENERIC_GAMEPLAY_SIMULATOR_PHASE28.md](ECONOMY_GENERIC_GAMEPLAY_SIMULATOR_PHASE28.md) — dry-run simulator
 - [ECONOMY_GAMEPLAY_PRODUCER_ROLLOUT.md](ECONOMY_GAMEPLAY_PRODUCER_ROLLOUT.md) — producer rollout index
 - [ECONOMY_SMP_GAMEPLAY_WRITE_POLICY_ROLLOUT.md](ECONOMY_SMP_GAMEPLAY_WRITE_POLICY_ROLLOUT.md) — future policy enablement (not Phase 29)
+- [ECONOMY_DB_BACKED_VAULT_PROVIDER_PHASE30.md](ECONOMY_DB_BACKED_VAULT_PROVIDER_PHASE30.md) — Option A long-term feasibility
 
 ---
 

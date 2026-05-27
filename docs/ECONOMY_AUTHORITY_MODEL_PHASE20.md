@@ -5,6 +5,10 @@ and the **Supabase canonical ledger** aligned long-term.
 
 **Status:** Design / decision doc only. No code, migrations, deploy, or category enablement in this phase.
 
+**Long-term (Option A):** DB-backed authority when ready — not part of current SMP
+shop monitoring. Feasibility spike:
+[ECONOMY_DB_BACKED_VAULT_PROVIDER_PHASE30.md](ECONOMY_DB_BACKED_VAULT_PROVIDER_PHASE30.md).
+
 **Prerequisites (operational, not replaced by this doc):**
 
 - [ECONOMY_SMP_SHOP_SELL_LIVE_EXECUTION.md](./ECONOMY_SMP_SHOP_SELL_LIVE_EXECUTION.md) — first live sell

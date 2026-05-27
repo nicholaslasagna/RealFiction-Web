@@ -392,6 +392,13 @@ SQL, drift policy, stop/rollback rules before any real source connects to the
 generic producer. No source approved by default. See
 [`ECONOMY_GENERIC_GAMEPLAY_LIVE_APPROVAL_PHASE29.md`](ECONOMY_GENERIC_GAMEPLAY_LIVE_APPROVAL_PHASE29.md).
 
+### Phase 30: DB-backed Vault provider feasibility spike
+
+Research-only study for Option A (RealCore as authoritative Vault Economy provider):
+target architecture, risks, performance, failure modes, compatibility, and staged
+migration from Option B. No provider registration in this phase. See
+[`ECONOMY_DB_BACKED_VAULT_PROVIDER_PHASE30.md`](ECONOMY_DB_BACKED_VAULT_PROVIDER_PHASE30.md).
+
 ### Phase 10: SMP shop_sell dry-run ops plan
 
 Operator rollout to install Phase 8/9 jar on SMP and verify EconomyShopGUI sell
