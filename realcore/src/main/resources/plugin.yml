@@ -11,6 +11,8 @@ description: RealFiction account linking, reward delivery, and lobby.
 softdepend:
   - LuckPerms
   - PlaceholderAPI
+  - EconomyShopGUI
+  - EconomyShopGUI-Premium
 commands:
   realfiction:
     description: RealFiction linking, rewards, and lobby commands.

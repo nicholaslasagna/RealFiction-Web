@@ -236,6 +236,20 @@ Idempotency: `gameplay:<serverId>:<category>:<source>:<uuid>:<eventId>`.
 
 Rollback: set `economy.gameplaySync.enabled=false` (and `dryRun=true`) and reload.
 
+### Phase 9: SMP gameplay earn dry-run producer
+
+First gameplay producer: **EconomyShopGUI sell** via `PostTransactionEvent` (reflection hook).
+Defaults keep `gameplaySync.enabled=false`, producer `enabled=false`, and both `dryRun=true`.
+No DB ledger writes occur unless all flags are explicitly enabled later.
+
+Dry-run log format:
+
+```text
+[GameplaySync:DRYRUN] server=smp-1 category=shop_sell player=Alex(uuid) amountMinor=2500 source=EconomyShopGUI eventId=...
+```
+
+`shop_buy` / `gameplay_spend` are intentionally not implemented in this phase.
+
 ### Phase 0: Design Only
 
 Document current behavior, risks, and rollout criteria. Do not change code,
