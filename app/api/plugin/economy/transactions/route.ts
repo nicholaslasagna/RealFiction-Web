@@ -1,5 +1,6 @@
 import { z } from "zod"
 
+import { pluginEconomyCategorySchema } from "@/lib/economy-categories"
 import { parsePluginJson, requirePluginAuth } from "@/lib/plugin-auth"
 import { describeError, safeJsonError } from "@/lib/security"
 import { callServiceRoleRpc } from "@/lib/supabase/service-role-rest"
@@ -11,13 +12,11 @@ const ID_PATTERN = /^[A-Za-z0-9_.:\-/]{2,180}$/
 const MINECRAFT_ID_PATTERN = /^[A-Za-z0-9_.:-]{8,48}$/
 const USERNAME_PATTERN = /^[A-Za-z0-9_]{1,32}$/
 
-const pluginCategorySchema = z.enum(["vote_reward", "gameplay_earn", "spend"])
-
 const transactionSchema = z.object({
   minecraftUuid: z.string().trim().regex(MINECRAFT_ID_PATTERN, "minecraftUuid shape"),
   minecraftUsername: z.string().trim().regex(USERNAME_PATTERN, "minecraftUsername shape").optional(),
   amountMinor: z.number().int().min(-1_000_000_000_000).max(1_000_000_000_000),
-  category: pluginCategorySchema,
+  category: pluginEconomyCategorySchema,
   reason: z.string().trim().min(2).max(180),
   idempotencyKey: z.string().trim().regex(ID_PATTERN, "idempotencyKey shape"),
   externalRefType: z.string().trim().regex(ID_PATTERN, "externalRefType shape").optional(),

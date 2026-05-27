@@ -22,8 +22,11 @@ shadow-only telemetry; real gameplay economy writes require a later review.
 - RealCore cannot currently observe exact Vault transactions. It can only poll
   or snapshot balances unless RealCore becomes the Vault provider or hooks
   specific gameplay producers later.
-- Current plugin economy API categories are limited to `vote_reward`,
-  `gameplay_earn`, and `spend`.
+- Plugin/API categories (Phase 6): `vote_reward`, `gameplay_earn`,
+  `gameplay_spend`, `shop_sell`, `shop_buy`, and legacy `spend`.
+- Ledger-only categories: `admin_adjustment`, `migration_import`,
+  `vault_mirror_adjustment` (manual/admin; not plugin routes).
+- See `docs/ECONOMY_TRANSACTION_CATEGORIES.md` for policy mapping.
 
 ## Problem
 
@@ -188,17 +191,12 @@ Real writes must follow the existing global economy principles:
 - No repeated historical import.
 - No blind overwrite of imported balances.
 
-The category model should be expanded safely before real gameplay sync:
+Phase 6 (migration `202605270026`) added schema/API category support. Live
+gameplay sync is still disabled by server policy defaults.
 
-- `gameplay_earn`
-- `gameplay_spend`
-- `shop_sell`
-- `shop_buy`
-- `vault_mirror_adjustment`
-
-`vault_mirror_adjustment` should be used only if a temporary delta-bridge is
-approved. It should not become the preferred long-term category for known
-gameplay actions.
+`vault_mirror_adjustment` is ledger-reserved for manual/admin reconciliation
+only. It is rejected on plugin routes and must not be used for automatic live
+sync.
 
 Server policy must be enabled explicitly for the selected backend:
 
@@ -216,13 +214,10 @@ Anarchy must stay disabled at the DB/RPC, API, RealCore, and config layers.
 
 ## Rollout Plan
 
-### Phase 7: SMP gameplay write policy preparation
+### Phase 6: Transaction category preparation
 
-Docs and manual operator SQL only. Staged enable/disable/verify snippets for a
-future capped SMP write trial. Does not change production policy rows or enable
-`can_earn` / `can_spend` automatically. See
-`docs/ECONOMY_SMP_GAMEPLAY_WRITE_POLICY_ROLLOUT.md` and
-`docs/sql/economy-smp-gameplay-write-trial.sql`.
+Schema/API category support only. No gameplay write enablement. See
+`docs/ECONOMY_TRANSACTION_CATEGORIES.md`.
 
 ### Phase 0: Design Only
 
