@@ -47,32 +47,12 @@ No DB ledger writes occur with these defaults.
 - Default TTL: 300 seconds (`dedupCacheSeconds`)
 - Default max entries: 10000
 
-## Enabling for SMP dry-run testing (later)
+## Enabling for SMP dry-run testing
 
-1. Apply Phase 6 category migration if not already applied.
-2. Keep SMP DB policy read-only (Phase 5/7).
-3. On SMP jar only:
+Use the operator checklist: **[ECONOMY_SMP_SHOP_SELL_DRY_RUN_ROLLOUT.md](ECONOMY_SMP_SHOP_SELL_DRY_RUN_ROLLOUT.md)** (Phase 10).
 
-```yaml
-economy:
-  enabled: true
-modules:
-  economy: true
-  gameplaySync:
-    enabled: true
-    dryRun: true
-    categories:
-      shopSell: true
-    producers:
-      economyShopGuiSell:
-        enabled: true
-        dryRun: true
-        logEvents: true
-```
-
-4. Reload RealCore and sell items in EconomyShopGUI.
-5. Confirm `[GameplaySync:DRYRUN]` lines in console; confirm `/rf economy gameplay producers` counters increase.
-6. Confirm no ledger rows appear for gameplay categories.
+Summary: SMP-only jar + config with `gameplaySync.enabled=true`, both `dryRun=true`,
+`shopSell` category on, producer enabled — **without** `can_earn` DB policy changes.
 
 ## Not in this phase
 
@@ -85,3 +65,9 @@ modules:
 
 Set `economy.gameplaySync.producers.economyShopGuiSell.enabled: false` (or
 `economy.gameplaySync.enabled: false`) and reload RealCore.
+
+## Related docs
+
+- [ECONOMY_SMP_SHOP_SELL_DRY_RUN_ROLLOUT.md](ECONOMY_SMP_SHOP_SELL_DRY_RUN_ROLLOUT.md) — Phase 10 SMP operator dry-run plan
+- [ECONOMY_SMP_GAMEPLAY_WRITE_POLICY_ROLLOUT.md](ECONOMY_SMP_GAMEPLAY_WRITE_POLICY_ROLLOUT.md) — future live writes (not dry-run)
+- [GAMEPLAY_ECONOMY_SYNC_DESIGN.md](GAMEPLAY_ECONOMY_SYNC_DESIGN.md) — full phase plan

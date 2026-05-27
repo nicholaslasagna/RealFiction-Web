@@ -250,6 +250,12 @@ Dry-run log format:
 
 `shop_buy` / `gameplay_spend` are intentionally not implemented in this phase.
 
+### Phase 10: SMP shop_sell dry-run ops plan
+
+Operator rollout to install Phase 8/9 jar on SMP and verify EconomyShopGUI sell
+capture with no DB writes. See
+`docs/ECONOMY_SMP_SHOP_SELL_DRY_RUN_ROLLOUT.md`.
+
 ### Phase 0: Design Only
 
 Document current behavior, risks, and rollout criteria. Do not change code,
