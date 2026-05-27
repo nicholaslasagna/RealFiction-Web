@@ -385,6 +385,12 @@ capped sell, verification and rollback. See
 [`docs/ECONOMY_SMP_SHOP_SELL_LIVE_EXECUTION.md`](ECONOMY_SMP_SHOP_SELL_LIVE_EXECUTION.md)
 (overview: [`docs/ECONOMY_SMP_SHOP_SELL_LIVE_TRIAL.md`](ECONOMY_SMP_SHOP_SELL_LIVE_TRIAL.md)).
 
+### Phase 19: SMP live monitoring
+
+Post-first-live stability window: metrics, SQL, drift samples, stop/rollback. Still
+not full rollout. See
+[`docs/ECONOMY_SMP_LIVE_MONITORING_PHASE19.md`](ECONOMY_SMP_LIVE_MONITORING_PHASE19.md).
+
 ### Phase 0: Design Only
 
 Document current behavior, risks, and rollout criteria. Do not change code,

@@ -380,8 +380,9 @@ After **one successful** sell and verification:
 - [ ] Do **not** deploy live config to Factions/Arcade/Anarchy
 - [ ] Run policy rollback SQL (§8) when observation ends unless Phase 19+ explicitly extends live earn
 - [ ] File results template; decide monitoring phase separately
+- [ ] If live window continues, begin [ECONOMY_SMP_LIVE_MONITORING_PHASE19.md](./ECONOMY_SMP_LIVE_MONITORING_PHASE19.md)
 
-Default: **return SMP to dry-run or disabled** after the single proof sell.
+Default: **return SMP to dry-run or disabled** after the single proof sell, unless Phase 19 monitoring is explicitly approved.
 
 ---
 
@@ -429,4 +430,5 @@ Copy into ticket / append under “Validation log” in Phase 16 doc.
 | [ECONOMY_DATABASE_READINESS_PHASE17.md](./ECONOMY_DATABASE_READINESS_PHASE17.md) | Phase 17 |
 | [ECONOMY_GAMEPLAY_PREFLIGHT.md](./ECONOMY_GAMEPLAY_PREFLIGHT.md) | Preflight commands |
 | [ECONOMY_GAMEPLAY_OBSERVABILITY.md](./ECONOMY_GAMEPLAY_OBSERVABILITY.md) | Metrics during live window |
+| [ECONOMY_SMP_LIVE_MONITORING_PHASE19.md](./ECONOMY_SMP_LIVE_MONITORING_PHASE19.md) | Post-live monitoring window (Phase 19) |
 | [ECONOMY_SMP_GAMEPLAY_WRITE_POLICY_ROLLOUT.md](./ECONOMY_SMP_GAMEPLAY_WRITE_POLICY_ROLLOUT.md) | Broader write policy context |
