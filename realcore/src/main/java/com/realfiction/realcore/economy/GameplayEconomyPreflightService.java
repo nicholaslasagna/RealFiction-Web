@@ -31,8 +31,42 @@ public final class GameplayEconomyPreflightService {
   private static final double DRY_RUN_SAFE_REQ_PER_MIN = 15.0;
 
   public enum Mode {
+    /** Legacy dry-run checks (expects shop_buy off — use {@link #DRYRUN_SELL} for Gate B). */
     DRYRUN,
+    /** Gate B: shop_sell producer only, both sides dry-run. */
+    DRYRUN_SELL,
+    /** Gate C: shop_sell + shop_buy producers, both sides dry-run. */
+    DRYRUN_BUY,
     LIVE
+  }
+
+  /**
+   * Parses {@code /rf economy gameplay preflight <token>}.
+   */
+  public static Mode parseMode(String token) {
+    if (token == null || token.isBlank()) {
+      return Mode.DRYRUN;
+    }
+    String normalized = token.trim().toLowerCase(Locale.ROOT).replace('_', '-');
+    return switch (normalized) {
+      case "live" -> Mode.LIVE;
+      case "dryrun-sell", "dryrunsell" -> Mode.DRYRUN_SELL;
+      case "dryrun-buy", "dryrunbuy" -> Mode.DRYRUN_BUY;
+      default -> Mode.DRYRUN;
+    };
+  }
+
+  public static boolean isDryRunFamily(Mode mode) {
+    return mode == Mode.DRYRUN || mode == Mode.DRYRUN_SELL || mode == Mode.DRYRUN_BUY;
+  }
+
+  public static String modeDisplayName(Mode mode) {
+    return switch (mode) {
+      case DRYRUN -> "dryrun (legacy)";
+      case DRYRUN_SELL -> "dryrun-sell (Gate B)";
+      case DRYRUN_BUY -> "dryrun-buy (Gate C)";
+      case LIVE -> "live";
+    };
   }
 
   public enum Status {
@@ -54,7 +88,7 @@ public final class GameplayEconomyPreflightService {
 
     public List<String> formatLines() {
       List<String> lines = new ArrayList<>();
-      lines.add("RealCore Gameplay Economy Preflight: " + (mode == Mode.DRYRUN ? "DRY-RUN" : "LIVE"));
+      lines.add("RealCore Gameplay Economy Preflight: " + modeLabel(mode));
       for (Check check : checks) {
         lines.add(check.status().name() + " " + check.id + detailSuffix(check.detail()));
       }
@@ -67,6 +101,15 @@ public final class GameplayEconomyPreflightService {
         return "";
       }
       return "=" + detail;
+    }
+
+    private static String modeLabel(Mode mode) {
+      return switch (mode) {
+        case DRYRUN -> "DRY-RUN (legacy)";
+        case DRYRUN_SELL -> "DRY-RUN Gate B (shop_sell)";
+        case DRYRUN_BUY -> "DRY-RUN Gate C (shop_sell + shop_buy)";
+        case LIVE -> "LIVE";
+      };
     }
   }
 
@@ -222,7 +265,7 @@ public final class GameplayEconomyPreflightService {
       ));
     }
 
-    if (mode == Mode.DRYRUN) {
+    if (isDryRunFamily(mode)) {
       checks.add(new Check(
           "dryRun",
           gameplay.dryRun() ? Status.PASS : Status.FAIL,
@@ -236,10 +279,14 @@ public final class GameplayEconomyPreflightService {
       ));
     }
 
-    GameplayEconomyProducerConfig producer = gameplay.producers().economyShopGuiSell();
-    if (mode == Mode.LIVE && !producer.enabled()) {
+    GameplayEconomyProducerConfig sellProducer = gameplay.producers().economyShopGuiSell();
+    GameplayEconomyProducerConfig buyProducer = gameplay.producers().economyShopGuiBuy();
+
+    if (mode == Mode.LIVE && !sellProducer.enabled()) {
       checks.add(new Check("producerDisabled", Status.FAIL, "true"));
-    } else if (producer.enabled()) {
+    } else if (mode == Mode.DRYRUN_SELL || mode == Mode.DRYRUN_BUY) {
+      checks.add(boolCheck("sellProducerEnabled", sellProducer.enabled(), "true"));
+    } else if (sellProducer.enabled()) {
       checks.add(new Check("producerDisabled", Status.PASS, "false"));
     } else {
       checks.add(new Check("producerDisabled", Status.WARN, "true"));
@@ -248,33 +295,52 @@ public final class GameplayEconomyPreflightService {
     if (mode == Mode.LIVE) {
       checks.add(boolCheck("shopSell", gameplay.shopSell(), "true"));
       addProducerDryRunChecks(checks, gameplay);
+      checks.add(boolCheck("shopBuyDisabled", !gameplay.shopBuy(), "true"));
+    } else if (mode == Mode.DRYRUN_SELL) {
+      checks.add(boolCheck("shopSell", gameplay.shopSell(), "true"));
+      checks.add(boolCheck("shopBuyDisabled", !gameplay.shopBuy(), "true"));
+      checks.add(boolCheck("buyProducerDisabled", !buyProducer.enabled(), "true"));
+    } else if (mode == Mode.DRYRUN_BUY) {
+      checks.add(boolCheck("shopSell", gameplay.shopSell(), "true"));
+      checks.add(boolCheck("shopBuy", gameplay.shopBuy(), "true"));
+      checks.add(boolCheck("buyProducerEnabled", buyProducer.enabled(), "true"));
+      checks.add(boolCheck("sellProducerDryRun", sellProducer.dryRun(), "true"));
+      checks.add(boolCheck("buyProducerDryRun", buyProducer.dryRun(), "true"));
+      checks.add(boolCheck("genericProducerDisabled", !gameplay.generic().enabled(), "true"));
     } else {
       checks.add(new Check(
           "shopSell",
           gameplay.shopSell() ? Status.PASS : Status.WARN,
           Boolean.toString(gameplay.shopSell())
       ));
+      checks.add(boolCheck("shopBuyDisabled", !gameplay.shopBuy(), "required-off"));
+      if (gameplay.shopBuy() && !buyProducer.enabled()) {
+        checks.add(new Check("shopBuyProducerDisabled", Status.WARN, "true"));
+      } else if (gameplay.shopBuy() && buyProducer.enabled()) {
+        checks.add(new Check("shopBuyProducerDisabled", Status.PASS, "false"));
+      } else {
+        checks.add(new Check("shopBuyProducerDisabled", Status.PASS, "category-off"));
+      }
     }
+
+    if (mode == Mode.LIVE && gameplay.shopBuy() && !buyProducer.enabled()) {
+      checks.add(new Check("shopBuyProducerDisabled", Status.FAIL, "true"));
+    }
+
     checks.add(boolCheck(
         "gameplaySpendDisabled",
         !gameplay.gameplaySpend(),
         mode == Mode.LIVE ? "true" : "required-off"
     ));
     checks.add(boolCheck(
-        "shopBuyDisabled",
-        !gameplay.shopBuy(),
+        "gameplayEarnDisabled",
+        !gameplay.gameplayEarn(),
         mode == Mode.LIVE ? "true" : "required-off"
     ));
 
-    GameplayEconomyProducerConfig buyProducer = gameplay.producers().economyShopGuiBuy();
-    if (mode == Mode.DRYRUN && gameplay.shopBuy() && !buyProducer.enabled()) {
-      checks.add(new Check("shopBuyProducerDisabled", Status.WARN, "true"));
-    } else if (gameplay.shopBuy() && buyProducer.enabled()) {
-      checks.add(new Check("shopBuyProducerDisabled", Status.PASS, "false"));
-    } else if (mode == Mode.LIVE && gameplay.shopBuy() && !buyProducer.enabled()) {
-      checks.add(new Check("shopBuyProducerDisabled", Status.FAIL, "true"));
-    } else {
-      checks.add(new Check("shopBuyProducerDisabled", Status.PASS, "category-off"));
+    if (mode == Mode.DRYRUN_SELL) {
+      checks.add(boolCheck("sellProducerDryRun", sellProducer.dryRun(), "true"));
+      checks.add(boolCheck("genericProducerDisabled", !gameplay.generic().enabled(), "true"));
     }
 
     checks.add(capCheck("maxCreditMinorPerTx", gameplay.maxCreditMinorPerTx(), 1, 1_000_000_000_000L));
@@ -420,18 +486,13 @@ public final class GameplayEconomyPreflightService {
       GameplayEconomyTransactionBuffer buffer,
       GameplayEconomyWriterMetrics metrics
   ) {
-    if (mode == Mode.DRYRUN) {
+    if (isDryRunFamily(mode)) {
       if (!gameplay.dryRun()) {
         checks.add(new Check("dryRunRequired", Status.FAIL, "dryRun=false"));
       } else {
         checks.add(new Check("dryRunRequired", Status.PASS, "true"));
       }
-      long accepted = buffer == null ? 0 : buffer.acceptedCount();
-      if (accepted > 0) {
-        checks.add(new Check("noWriterEnqueue", Status.FAIL, "accepted=" + accepted));
-      } else {
-        checks.add(new Check("noWriterEnqueue", Status.PASS, "ok"));
-      }
+      addNoWriterEnqueueCheck(checks, buffer, mode);
       addDryRunEstimateChecks(checks, buffer, metrics, gameplay);
       addStagingTestBypassWarning(checks, config, economy);
       return;
@@ -446,6 +507,24 @@ public final class GameplayEconomyPreflightService {
       checks.add(new Check("liveGameplaySync", Status.FAIL, "enabled=false"));
     } else {
       checks.add(new Check("liveGameplaySync", Status.PASS, "enabled=true"));
+    }
+  }
+
+  private static void addNoWriterEnqueueCheck(
+      List<Check> checks,
+      GameplayEconomyTransactionBuffer buffer,
+      Mode mode
+  ) {
+    long accepted = buffer == null ? 0 : buffer.acceptedCount();
+    int queueDepth = buffer == null ? 0 : buffer.gameplayQueueDepth();
+    if (accepted > 0) {
+      checks.add(new Check("noWriterEnqueue", Status.FAIL, "accepted=" + accepted));
+    } else if (mode == Mode.DRYRUN_BUY && queueDepth > 0) {
+      checks.add(new Check("noWriterEnqueue", Status.FAIL, "gameplayQueue=" + queueDepth));
+    } else if (queueDepth > 0) {
+      checks.add(new Check("noWriterEnqueue", Status.WARN, "gameplayQueue=" + queueDepth));
+    } else {
+      checks.add(new Check("noWriterEnqueue", Status.PASS, "ok"));
     }
   }
 

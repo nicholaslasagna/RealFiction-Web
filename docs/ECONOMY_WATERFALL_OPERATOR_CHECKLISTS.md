@@ -44,8 +44,8 @@ Related implementation docs:
 - [ ] Economy infrastructure enabled (`modules.economy`, `economy.enabled`)
 - [ ] `gameplaySync.dryRun=true` throughout
 - [ ] **Gate A:** gameplay sync disabled, preflight READY, no capture
-- [ ] **Gate B:** `shop_sell` dry-run — `[GameplaySync:DRYRUN]`, `queued=0`, no ledger rows
-- [ ] **Gate C:** `shop_buy` dry-run — same proof, no ledger rows
+- [ ] **Gate B:** `shop_sell` dry-run — `[GameplaySync:DRYRUN]`, `queued=0`, no ledger rows — preflight: `/rf economy gameplay preflight dryrun-sell` → **READY**
+- [ ] **Gate C:** `shop_buy` dry-run — same proof, no ledger rows — preflight: `/rf economy gameplay preflight dryrun-buy` → **READY**
 - [ ] Per-producer metrics distinguish sell vs buy (`/rf economy gameplay producers`)
 - [ ] Lobby1 vote rewards unchanged
 - [ ] Factions / Anarchy untouched
@@ -118,5 +118,6 @@ shasum -a 256 realcore/target/RealCore-0.1.0-SNAPSHOT.jar
 ## Dry-run soak cautions
 
 - Do **not** run `/rf economy test` during Gates B/C dry-run unless intentionally testing the global writer — it bypasses gameplay producer dry-run and can POST to the economy API.
+- Use gate-specific preflight: **Gate B** → `dryrun-sell`; **Gate C** → `dryrun-buy`. Legacy `dryrun` still expects `shopBuy=false` (Gate B shape only).
 - Do **not** enable `dryRun=false` or Supabase `can_earn`/`can_spend` during Stage 4 dry-run.
 - EconomyShopGUI must be installed before Gate B/C; absent plugin is a clean no-op at startup but capture will not occur.
