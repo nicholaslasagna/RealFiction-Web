@@ -10,6 +10,9 @@ import com.realfiction.realcore.config.GameplayEconomySyncConfig;
 import com.realfiction.realcore.economy.BufferedEconomyTransactionWriter;
 import com.realfiction.realcore.economy.EconomyBalanceSnapshot;
 import com.realfiction.realcore.economy.EconomyService;
+import com.realfiction.realcore.economy.GameplayEconomyProducer;
+import com.realfiction.realcore.economy.GameplayEconomyProducerMetrics;
+import com.realfiction.realcore.economy.GameplayEconomySyncService;
 import com.realfiction.realcore.economy.GameplayEconomyTransactionBuffer;
 import com.realfiction.realcore.economy.EconomyStagingTestTransaction;
 import com.realfiction.realcore.economy.EconomyTransaction;
@@ -424,7 +427,11 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
     }
     if (args.length >= 2 && "gameplay".equalsIgnoreCase(args[1])) {
       send(sender, ChatColor.GOLD + "RealCore Gameplay Economy Sync");
-      appendGameplayEconomyStatus(sender, true);
+      if (args.length >= 3 && "producers".equalsIgnoreCase(args[2])) {
+        appendGameplayProducerStatus(sender);
+      } else {
+        appendGameplayEconomyStatus(sender, true);
+      }
       return true;
     }
 
@@ -863,6 +870,7 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
     if (!buffer.lastRejectedMessage().isBlank()) {
       send(sender, ChatColor.YELLOW + "Last rejected: " + ChatColor.RED + buffer.lastRejectedMessage());
     }
+    appendGameplayProducerStatus(sender);
     if (detailed) {
       EconomyService economy = plugin.economyService();
       if (economy == null) {
@@ -873,8 +881,43 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
       } else {
         sendEconomyWriterStatus(sender, economy.writer());
       }
-      send(sender, ChatColor.GRAY + "Phase 8 skeleton only: no shop/Vault producers are wired.");
     }
+  }
+
+  private void appendGameplayProducerStatus(CommandSender sender) {
+    GameplayEconomySyncService sync = plugin.gameplayEconomySyncService();
+    RealCoreConfig config = plugin.realCoreConfig();
+    if (config == null) {
+      send(sender, ChatColor.YELLOW + "Gameplay producers: " + ChatColor.RED + "config not loaded");
+      return;
+    }
+    if (sync == null) {
+      send(sender, ChatColor.YELLOW + "Gameplay producers: " + ChatColor.RED + "not loaded");
+      return;
+    }
+    var producerConfig = config.economy().gameplaySync().producers().economyShopGuiSell();
+    send(sender, ChatColor.YELLOW + "Producer economyShopGuiSell: "
+        + (producerConfig.enabled() ? ChatColor.GREEN + "enabled" : ChatColor.GRAY + "disabled")
+        + ChatColor.GRAY + ", category " + producerConfig.category().ledgerCategory().apiValue()
+        + ", producer dry-run " + statusToggle(producerConfig.dryRun())
+        + ", maxEventsPerFlush " + producerConfig.maxEventsPerFlush());
+    GameplayEconomyProducer producer = sync.producer(com.realfiction.realcore.economy.EconomyShopGuiSellProducer.ID);
+    if (producer != null) {
+      send(sender, ChatColor.YELLOW + "Hook: " + ChatColor.WHITE + producer.statusSummary()
+          + ChatColor.GRAY + ", running=" + producer.running());
+    }
+    GameplayEconomyProducerMetrics metrics = sync.metrics();
+    send(sender, ChatColor.YELLOW + "Producer metrics: " + ChatColor.WHITE + metrics.captured()
+        + " captured" + ChatColor.GRAY + ", " + metrics.dryRunCaptured() + " dry-run, "
+        + metrics.queued() + " queued, dup " + metrics.duplicateRejected()
+        + ", invalid " + metrics.invalidRejected() + ", over-cap " + metrics.overCapRejected()
+        + ", disabled " + metrics.producerDisabledRejected());
+    send(sender, ChatColor.YELLOW + "Dedup cache: " + ChatColor.WHITE + sync.dedupCacheSize() + " keys"
+        + ChatColor.GRAY + " (TTL " + config.economy().gameplaySync().producers().dedupCacheTtl().toSeconds() + "s)");
+    if (!metrics.lastEventSummary().isBlank()) {
+      send(sender, ChatColor.YELLOW + "Last event: " + ChatColor.GRAY + metrics.lastEventSummary());
+    }
+    send(sender, ChatColor.GRAY + "Use /rf economy gameplay producers for producer-only status.");
   }
 
   private String categoryToggle(String label, boolean on) {
