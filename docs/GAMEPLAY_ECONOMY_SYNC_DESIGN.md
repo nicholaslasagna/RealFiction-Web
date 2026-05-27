@@ -362,6 +362,29 @@ safety limits, structured `[GameplaySync:*]` logs, and expanded `/rf economy
 gameplay` diagnostics. Defaults unchanged (`enabled=false`, `dryRun=true`). See
 [`docs/ECONOMY_GAMEPLAY_OBSERVABILITY.md`](ECONOMY_GAMEPLAY_OBSERVABILITY.md).
 
+### Phase 14: Gameplay economy preflight
+
+`/rf economy gameplay preflight` (dryrun/live) — read-only readiness gates before
+policy or `dryRun:false` changes. See
+[`docs/ECONOMY_GAMEPLAY_PREFLIGHT.md`](ECONOMY_GAMEPLAY_PREFLIGHT.md).
+
+### Phase 16: SMP dry-run deployment validation
+
+Operator checklist: RC jar on SMP, dry-run config, one sell, no ledger rows. See
+[`docs/ECONOMY_SMP_DRY_RUN_VALIDATION_RESULTS.md`](ECONOMY_SMP_DRY_RUN_VALIDATION_RESULTS.md).
+
+### Phase 17: Database readiness
+
+Migration inventory and read-only Supabase verification before live writes. See
+[`docs/ECONOMY_DATABASE_READINESS_PHASE17.md`](ECONOMY_DATABASE_READINESS_PHASE17.md).
+
+### Phase 18: SMP live shop_sell execution
+
+First **live** SMP `shop_sell` trial: manual policy SQL, `dryRun:false`, one
+capped sell, verification and rollback. See
+[`docs/ECONOMY_SMP_SHOP_SELL_LIVE_EXECUTION.md`](ECONOMY_SMP_SHOP_SELL_LIVE_EXECUTION.md)
+(overview: [`docs/ECONOMY_SMP_SHOP_SELL_LIVE_TRIAL.md`](ECONOMY_SMP_SHOP_SELL_LIVE_TRIAL.md)).
+
 ### Phase 0: Design Only
 
 Document current behavior, risks, and rollout criteria. Do not change code,
