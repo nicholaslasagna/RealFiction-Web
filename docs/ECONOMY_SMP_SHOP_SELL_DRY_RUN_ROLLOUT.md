@@ -7,6 +7,11 @@ writes**.
 This is **SMP dry-run only**. It does not enable `can_earn`, `can_spend`, or any
 Supabase gameplay write policy.
 
+**Before SMP deploy:** confirm the full gameplay economy stack is on `main` and
+follow the RC checklist in
+[`REALCORE_GAMEPLAY_ECONOMY_RELEASE_PLAN.md`](REALCORE_GAMEPLAY_ECONOMY_RELEASE_PLAN.md)
+(merge order, `mvn package`, SMP-only jar, no Factions/Arcade/Anarchy).
+
 ## Preconditions
 
 Before changing SMP config or installing a jar:
@@ -307,6 +312,7 @@ No compensating ledger entries are required for dry-run-only testing unless acci
 
 ## Related docs
 
+- [REALCORE_GAMEPLAY_ECONOMY_RELEASE_PLAN.md](REALCORE_GAMEPLAY_ECONOMY_RELEASE_PLAN.md) — merge order, RC build, SMP deploy/rollback
 - [ECONOMY_GAMEPLAY_PRODUCER_ROLLOUT.md](ECONOMY_GAMEPLAY_PRODUCER_ROLLOUT.md) — producer design
 - [ECONOMY_SMP_GAMEPLAY_WRITE_POLICY_ROLLOUT.md](ECONOMY_SMP_GAMEPLAY_WRITE_POLICY_ROLLOUT.md) — future live writes (not this rollout)
 - [GAMEPLAY_ECONOMY_SYNC_DESIGN.md](GAMEPLAY_ECONOMY_SYNC_DESIGN.md) — full phase plan

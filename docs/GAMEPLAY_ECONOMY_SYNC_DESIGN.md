@@ -4,6 +4,10 @@ This document defines the safe path for moving non-vote gameplay economy
 changes toward the DB-backed RealFiction global economy. Phase 1 is
 shadow-only telemetry; real gameplay economy writes require a later review.
 
+**Release coordination (Phase 11):** merge order, RC build checklist, SMP
+dry-run deploy, rollback, and stop conditions are in
+[`docs/REALCORE_GAMEPLAY_ECONOMY_RELEASE_PLAN.md`](REALCORE_GAMEPLAY_ECONOMY_RELEASE_PLAN.md).
+
 ## Current State
 
 - Vote rewards are DB-ledger-backed and live through Lobby1.
@@ -255,6 +259,14 @@ Dry-run log format:
 Operator rollout to install Phase 8/9 jar on SMP and verify EconomyShopGUI sell
 capture with no DB writes. See
 `docs/ECONOMY_SMP_SHOP_SELL_DRY_RUN_ROLLOUT.md`.
+
+### Phase 11: Merge order and release-candidate plan
+
+Docs-only consolidation: PR dependency graph, safe merge sequence (#49/#50 then
+RealCore stack #44–#53), final RC checklist (`npm` + `mvn`), SMP dry-run deploy
+steps, rollback, stop conditions, and explicit non-goals. **No deploy in the
+Phase 11 PR.** See
+[`docs/REALCORE_GAMEPLAY_ECONOMY_RELEASE_PLAN.md`](REALCORE_GAMEPLAY_ECONOMY_RELEASE_PLAN.md).
 
 ### Phase 0: Design Only
 
