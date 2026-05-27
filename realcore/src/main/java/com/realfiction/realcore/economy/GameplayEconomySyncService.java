@@ -23,6 +23,7 @@ public final class GameplayEconomySyncService {
   private final GameplayEconomyProducerMetrics metrics = new GameplayEconomyProducerMetrics();
   private final GameplayEconomyIdempotencyDedupCache dedupCache;
   private final GameplayEconomyCaptureService captureService;
+  private final GenericGameplayEconomyProducerService genericProducer;
   private final List<GameplayEconomyProducer> producers;
   private ScheduledTaskHandle flushWindowTask;
   private ScheduledTaskHandle summaryTask;
@@ -48,7 +49,9 @@ public final class GameplayEconomySyncService {
     );
     this.captureService = new GameplayEconomyCaptureService(config, buffer, dedupCache, metrics, gameplayMetrics, syncLogger, logger);
     EconomyShopGuiSellProducer economyShopGuiSell = new EconomyShopGuiSellProducer(plugin, config, captureService, logger);
-    this.producers = List.of(economyShopGuiSell);
+    this.genericProducer = new GenericGameplayEconomyProducerService(
+        config, buffer, dedupCache, gameplayMetrics, syncLogger, logger);
+    this.producers = List.of(economyShopGuiSell, genericProducer);
     long flushSeconds = Math.max(5, config.economy().gameplaySync().flushInterval().toSeconds());
     if (scheduler != null) {
       this.flushWindowTask = scheduler.runAsyncRepeating(this::onFlushWindowTick, flushSeconds, flushSeconds);
@@ -137,5 +140,9 @@ public final class GameplayEconomySyncService {
       }
     }
     return null;
+  }
+
+  public GenericGameplayEconomyProducerService genericProducer() {
+    return genericProducer;
   }
 }

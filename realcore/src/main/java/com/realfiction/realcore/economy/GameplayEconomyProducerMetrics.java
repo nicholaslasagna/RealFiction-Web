@@ -10,7 +10,9 @@ public final class GameplayEconomyProducerMetrics {
   private final AtomicLong invalidRejected = new AtomicLong();
   private final AtomicLong overCapRejected = new AtomicLong();
   private final AtomicLong producerDisabledRejected = new AtomicLong();
+  private final AtomicLong rejected = new AtomicLong();
   private volatile String lastEventSummary = "";
+  private volatile String lastRejectionReason = "";
 
   public void recordCaptured() {
     captured.incrementAndGet();
@@ -38,6 +40,14 @@ public final class GameplayEconomyProducerMetrics {
 
   public void recordProducerDisabledRejected() {
     producerDisabledRejected.incrementAndGet();
+  }
+
+  public void recordRejected() {
+    rejected.incrementAndGet();
+  }
+
+  public void setLastRejectionReason(String reason) {
+    lastRejectionReason = reason == null ? "" : reason;
   }
 
   public void setLastEventSummary(String summary) {
@@ -70,6 +80,14 @@ public final class GameplayEconomyProducerMetrics {
 
   public long producerDisabledRejected() {
     return producerDisabledRejected.get();
+  }
+
+  public long rejected() {
+    return rejected.get();
+  }
+
+  public String lastRejectionReason() {
+    return lastRejectionReason;
   }
 
   public String lastEventSummary() {

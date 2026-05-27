@@ -22,6 +22,7 @@ public record GameplayEconomySyncConfig(
     boolean dryRun,
     boolean logTransactions,
     GameplayEconomyProducersConfig producers,
+    GameplayEconomyGenericConfig generic,
     GameplayEconomyObservabilityConfig observability
 ) {
   public static GameplayEconomySyncConfig disabledDefaults() {
@@ -40,6 +41,7 @@ public record GameplayEconomySyncConfig(
         true,
         true,
         GameplayEconomyProducersConfig.disabledDefaults(),
+        GameplayEconomyGenericConfig.disabledDefaults(),
         GameplayEconomyObservabilityConfig.defaults()
     );
   }
@@ -67,6 +69,7 @@ public record GameplayEconomySyncConfig(
         section.getBoolean("dryRun", defaults.dryRun()),
         section.getBoolean("logTransactions", defaults.logTransactions()),
         GameplayEconomyProducersConfig.from(section),
+        GameplayEconomyGenericConfig.from(section.getConfigurationSection("generic")),
         GameplayEconomyObservabilityConfig.from(section.getConfigurationSection("observability"))
     );
   }

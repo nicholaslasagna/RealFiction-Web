@@ -10,6 +10,7 @@ import com.realfiction.realcore.config.GameplayEconomySyncConfig;
 import com.realfiction.realcore.economy.BufferedEconomyTransactionWriter;
 import com.realfiction.realcore.economy.EconomyBalanceSnapshot;
 import com.realfiction.realcore.economy.EconomyService;
+import com.realfiction.realcore.economy.GenericGameplayEconomyProducerService;
 import com.realfiction.realcore.economy.GameplayEconomyProducer;
 import com.realfiction.realcore.economy.GameplayEconomyProducerMetrics;
 import com.realfiction.realcore.economy.GameplayEconomySyncService;
@@ -1078,8 +1079,38 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
     if (economy != null && economy.writerRunning()) {
       sendGameplayWriterDiagnostics(sender, economy.writer(), config.economy().gameplaySync());
     }
+    appendGenericGameplayProducerStatus(sender, sync);
     if (!metrics.lastEventSummary().isBlank()) {
-      send(sender, ChatColor.YELLOW + "Last event: " + ChatColor.GRAY + metrics.lastEventSummary());
+      send(sender, ChatColor.YELLOW + "Last event (shop): " + ChatColor.GRAY + metrics.lastEventSummary());
+    }
+  }
+
+  private void appendGenericGameplayProducerStatus(CommandSender sender, GameplayEconomySyncService sync) {
+    GenericGameplayEconomyProducerService generic = sync.genericProducer();
+    if (generic == null) {
+      return;
+    }
+    var genericConfig = generic.genericConfig();
+    GameplayEconomyProducerMetrics genericMetrics = generic.metrics();
+    send(sender, ChatColor.YELLOW + "Producer genericGameplay: "
+        + (genericConfig.enabled() ? ChatColor.GREEN + "enabled" : ChatColor.GRAY + "disabled")
+        + ChatColor.GRAY + ", dry-run " + statusToggle(genericConfig.dryRun())
+        + ", allowed sources " + genericConfig.allowedSources().size()
+        + ", allowEarn " + genericConfig.allowGameplayEarn()
+        + ", allowSpend " + genericConfig.allowGameplaySpend());
+    send(sender, ChatColor.YELLOW + "Hook (genericGameplay): " + ChatColor.WHITE + generic.statusSummary());
+    send(sender, ChatColor.YELLOW + "Metrics (genericGameplay): " + ChatColor.WHITE + genericMetrics.captured()
+        + " captured" + ChatColor.GRAY + ", " + genericMetrics.dryRunCaptured() + " dry-run, "
+        + genericMetrics.queued() + " queued, rejected " + genericMetrics.rejected()
+        + ", dup " + genericMetrics.duplicateRejected()
+        + ", invalid " + genericMetrics.invalidRejected()
+        + ", over-cap " + genericMetrics.overCapRejected()
+        + ", disabled " + genericMetrics.producerDisabledRejected());
+    if (!genericMetrics.lastRejectionReason().isBlank()) {
+      send(sender, ChatColor.YELLOW + "Last rejection (generic): " + ChatColor.GRAY + genericMetrics.lastRejectionReason());
+    }
+    if (!genericMetrics.lastEventSummary().isBlank()) {
+      send(sender, ChatColor.YELLOW + "Last event (generic): " + ChatColor.GRAY + genericMetrics.lastEventSummary());
     }
   }
 

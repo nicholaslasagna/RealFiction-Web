@@ -371,6 +371,13 @@ Non-shop categories for quests, events, minigames, staff grants, and gameplay fe
 Design only — no producers, policy changes, or category enablement. See
 [`ECONOMY_GENERIC_GAMEPLAY_EARN_SPEND_DESIGN_PHASE26.md`](ECONOMY_GENERIC_GAMEPLAY_EARN_SPEND_DESIGN_PHASE26.md).
 
+### Phase 27: Generic gameplay producer interface (disabled)
+
+`GameplayEconomyEvent` + `GenericGameplayEconomyProducerService` for
+`gameplay_earn` / `gameplay_spend` only. Config `economy.gameplaySync.generic` defaults
+`enabled: false`, `dryRun: true`, empty `allowedSources`. No gameplay features wired.
+See Phase 26 design doc §8 phase B.
+
 ### Phase 10: SMP shop_sell dry-run ops plan
 
 Operator rollout to install Phase 8/9 jar on SMP and verify EconomyShopGUI sell

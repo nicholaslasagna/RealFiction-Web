@@ -186,7 +186,7 @@ generic traffic even if shop flags are true during shop monitoring.
 | Phase | Name | Deliverable | Live writes |
 |-------|------|-------------|-------------|
 | **A** | Design | This document + staff sign-off | No |
-| **B** | Disabled producer interface | Config blocks, no-op producers, category guards off | No |
+| **B** | Disabled producer interface | **`GenericGameplayEconomyProducerService`** + `GameplayEconomyEvent` (Phase 27); `economy.gameplaySync.generic.enabled: false` | No |
 | **C** | Dry-run simulator / test command | Staff-triggered sample events; `[GameplaySync:DRYRUN]` only | No |
 | **D** | One controlled live **reward** | Single `gameplay_earn`, tiny amount, one source | One event |
 | **E** | One controlled live **spend** | Single `gameplay_spend`, tiny amount, one source | One event |
@@ -333,7 +333,10 @@ Stop generic rollout immediately if:
 
 ## 13. Default config posture (unchanged)
 
-Generic categories remain **off** until a future code + ops phase:
+Generic categories remain **off** until a future code + ops phase.
+
+Phase 27 adds the internal API only (`GenericGameplayEconomyProducerService`); no
+quests, commands, or minigames call it yet.
 
 ```yaml
 economy:
@@ -341,9 +344,15 @@ economy:
     categories:
       gameplayEarn: false
       gameplaySpend: false
-    producers:
-      # future: realCoreQuests, realCoreEvents, etc. — all enabled: false
+    generic:
+      enabled: false
+      dryRun: true
+      allowedSources: []
+      allowGameplayEarn: false
+      allowGameplaySpend: false
 ```
+
+Inspect via `/rf economy gameplay producers` → **genericGameplay** (disabled, dry-run).
 
 ---
 

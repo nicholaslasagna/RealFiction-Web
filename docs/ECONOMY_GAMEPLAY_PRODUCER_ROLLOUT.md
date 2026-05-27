@@ -73,6 +73,19 @@ Operator rollout to test buy capture on SMP with **no DB writes**: see
 
 Requires Phase 22 jar on SMP; keeps `dryRun=true` and `can_spend=false`.
 
+## Phase 27: Generic gameplay producer (internal API, disabled)
+
+| Item | Value |
+|------|--------|
+| Service | `GenericGameplayEconomyProducerService` (`genericGameplay`) |
+| Event model | `GameplayEconomyEvent` — `gameplay_earn` / `gameplay_spend` only |
+| Config | `economy.gameplaySync.generic` — `enabled: false`, `dryRun: true`, `allowedSources: []` |
+| Hooks | **None** (no quests, commands, shops, Vault) |
+| Observability | `/rf economy gameplay producers` → generic metrics + last rejection |
+
+Future systems call `submit(GameplayEconomyEvent)` after source allowlist + category flags
+are enabled per [ECONOMY_GENERIC_GAMEPLAY_EARN_SPEND_DESIGN_PHASE26.md](ECONOMY_GENERIC_GAMEPLAY_EARN_SPEND_DESIGN_PHASE26.md).
+
 ## Rollback
 
 Set `economy.gameplaySync.producers.economyShopGuiSell.enabled: false` (or

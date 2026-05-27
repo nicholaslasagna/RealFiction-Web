@@ -149,6 +149,15 @@ economy:
         dryRun: true
         logEvents: true
         maxEventsPerFlush: 250
+    generic:
+      enabled: false
+      dryRun: true
+      allowedSources: []
+      allowGameplayEarn: false
+      allowGameplaySpend: false
+      maxCreditMinorPerEvent: 50000
+      maxDebitMinorPerEvent: 50000
+      logEvents: true
 
 # Network playtime tracking (feeds the "Top Players" leaderboard/holograms).
 # Each backend records its own sessions; the website sums them per player.
