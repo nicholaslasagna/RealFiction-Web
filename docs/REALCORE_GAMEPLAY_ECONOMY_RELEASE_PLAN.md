@@ -191,6 +191,11 @@ Stop SMP test and roll back immediately if:
 | SMP TPS/MSPT sustained drop | Operational risk |
 | Anarchy shows gameplay economy enabled | Policy/config leak |
 
+## After dry-run succeeds
+
+Follow [ECONOMY_SMP_SHOP_SELL_LIVE_TRIAL.md](ECONOMY_SMP_SHOP_SELL_LIVE_TRIAL.md) for
+the capped SMP `shop_sell` live trial (manual SQL + config only; not part of RC jar deploy).
+
 ## Explicit non-goals (this RC)
 
 - No real SMP gameplay ledger writes (`dryRun=false`, `can_earn=true`)
@@ -210,4 +215,5 @@ Stop SMP test and roll back immediately if:
 | [ECONOMY_SMP_GAMEPLAY_WRITE_POLICY_ROLLOUT.md](ECONOMY_SMP_GAMEPLAY_WRITE_POLICY_ROLLOUT.md) | Future live SMP policy (#50) |
 | [ECONOMY_GAMEPLAY_PRODUCER_ROLLOUT.md](ECONOMY_GAMEPLAY_PRODUCER_ROLLOUT.md) | Producer (#52) |
 | [ECONOMY_SMP_SHOP_SELL_DRY_RUN_ROLLOUT.md](ECONOMY_SMP_SHOP_SELL_DRY_RUN_ROLLOUT.md) | SMP dry-run ops (#53) |
+| [ECONOMY_SMP_SHOP_SELL_LIVE_TRIAL.md](ECONOMY_SMP_SHOP_SELL_LIVE_TRIAL.md) | SMP live `shop_sell` trial after dry-run (#12) |
 | [ECONOMY_VOTE_REWARD_LEDGER_ROLLOUT.md](ECONOMY_VOTE_REWARD_LEDGER_ROLLOUT.md) | Lobby1 vote rewards (separate) |

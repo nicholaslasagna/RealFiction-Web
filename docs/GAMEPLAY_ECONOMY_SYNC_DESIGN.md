@@ -355,6 +355,13 @@ steps, rollback, stop conditions, and explicit non-goals. **No deploy in the
 Phase 11 PR.** See
 [`docs/REALCORE_GAMEPLAY_ECONOMY_RELEASE_PLAN.md`](REALCORE_GAMEPLAY_ECONOMY_RELEASE_PLAN.md).
 
+### Phase 12: SMP shop_sell live ledger trial (ops plan)
+
+After Phase 10 dry-run passes: manual Supabase earn-only policy for `smp-1`,
+SMP config with `dryRun: false`, one capped `shop_sell` write trial, verification
+SQL, double-credit warning, and rollback. **No automatic enablement.** See
+[`docs/ECONOMY_SMP_SHOP_SELL_LIVE_TRIAL.md`](ECONOMY_SMP_SHOP_SELL_LIVE_TRIAL.md).
+
 ### Phase 0: Design Only
 
 Document current behavior, risks, and rollout criteria. Do not change code,
