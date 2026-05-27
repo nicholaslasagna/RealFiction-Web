@@ -358,6 +358,13 @@ Operator plan for **manual** policy SQL + `dryRun=false` single-buy trial after
 Phase 23 passes. Docs only — no automatic `can_spend` or config changes in repo.
 See [`ECONOMY_SMP_SHOP_BUY_LIVE_TRIAL.md`](ECONOMY_SMP_SHOP_BUY_LIVE_TRIAL.md).
 
+### Phase 25: SMP combined shop_sell + shop_buy monitoring
+
+After separate single-event live trials pass, run capped **combined** earn/spend
+monitoring on `smp-1` only (`shop_sell` + `shop_buy`, no generic gameplay categories).
+Docs/ops only. See
+[`ECONOMY_SMP_EARN_SPEND_MONITORING_PHASE25.md`](ECONOMY_SMP_EARN_SPEND_MONITORING_PHASE25.md).
+
 ### Phase 10: SMP shop_sell dry-run ops plan
 
 Operator rollout to install Phase 8/9 jar on SMP and verify EconomyShopGUI sell

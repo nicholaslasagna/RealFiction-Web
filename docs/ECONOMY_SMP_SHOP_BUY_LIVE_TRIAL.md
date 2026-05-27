@@ -440,7 +440,7 @@ Stop immediately and roll back (§9) if **any** occur:
 - **Writer counters:** queued / ok / fail (from `/rf economy gameplay`)
 - **Phase 23 dry-run reference:** (link or date)
 - **Rollback needed:** yes / no
-- **Approved for ongoing monitoring:** yes / no
+- **Approved for ongoing monitoring:** yes / no → if yes with sell trial done, use [ECONOMY_SMP_EARN_SPEND_MONITORING_PHASE25.md](ECONOMY_SMP_EARN_SPEND_MONITORING_PHASE25.md)
 ```
 
 ---
@@ -459,7 +459,9 @@ Stop immediately and roll back (§9) if **any** occur:
 
 ## Related docs
 
+- [ECONOMY_SMP_EARN_SPEND_MONITORING_PHASE25.md](ECONOMY_SMP_EARN_SPEND_MONITORING_PHASE25.md) — combined sell+buy monitoring (after both single trials)
 - [ECONOMY_SMP_SHOP_BUY_DRY_RUN_ROLLOUT.md](ECONOMY_SMP_SHOP_BUY_DRY_RUN_ROLLOUT.md) — Phase 23 prerequisite
+- [ECONOMY_SMP_SHOP_SELL_LIVE_TRIAL.md](ECONOMY_SMP_SHOP_SELL_LIVE_TRIAL.md) — sell single-event trial prerequisite
 - [ECONOMY_SHOP_BUY_SPEND_DESIGN_PHASE21.md](ECONOMY_SHOP_BUY_SPEND_DESIGN_PHASE21.md) — debit design
 - [ECONOMY_GAMEPLAY_PREFLIGHT.md](ECONOMY_GAMEPLAY_PREFLIGHT.md) — preflight modes
 - [ECONOMY_SMP_GAMEPLAY_WRITE_POLICY_ROLLOUT.md](ECONOMY_SMP_GAMEPLAY_WRITE_POLICY_ROLLOUT.md) — policy rollback
