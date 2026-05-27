@@ -22,7 +22,21 @@ Related implementation docs:
 
 ---
 
-## Stage 2 — SMP dry-run (user testing gate)
+## Stage 3 — Production candidate (repo gate)
+
+**Status:** Phase 19 audit — verify on `main` before first deploy.
+
+- [ ] `mvn -q -f realcore/pom.xml test` passes
+- [ ] Jar built and SHA256 recorded (see [ECONOMY_PRODUCTION_CANDIDATE_READINESS.md](./ECONOMY_PRODUCTION_CANDIDATE_READINESS.md))
+- [ ] Bundled defaults verified safe (`modules.economy=false`, gameplay sync off/dry-run)
+- [ ] Startup `[EconomyProduction]` log reviewed after reload (no unexpected live-arm warnings)
+- [ ] Operator runbooks match current commands/config keys
+
+**Not required for this stage:** SMP deploy, SQL, live writes.
+
+---
+
+## Stage 4 — SMP dry-run (user testing gate)
 
 **Definition of done:**
 
@@ -42,9 +56,9 @@ Related implementation docs:
 
 ---
 
-## Stage 3 — SMP live write trial
+## Stage 5 — SMP live write trial
 
-**Not approved until Stage 2 complete.**
+**Not approved until Stage 4 (SMP dry-run) complete.**
 
 - [ ] Dry-run soak signed off
 - [ ] Apply SMP write policy SQL (`can_earn`/`can_spend`, caps) — see policy rollout doc
@@ -55,7 +69,7 @@ Related implementation docs:
 
 ---
 
-## Stage 4 — Factions dry-run
+## Stage 6 — Factions dry-run
 
 **Later — same architecture, separate policy.**
 
@@ -65,7 +79,7 @@ Related implementation docs:
 
 ---
 
-## Stage 5 — Factions live
+## Stage 7 — Factions live
 
 **After SMP stable + Factions dry-run clean.**
 
@@ -74,7 +88,7 @@ Related implementation docs:
 
 ---
 
-## Stage 6 — DB-backed Vault provider (future)
+## Stage 8 — DB-backed Vault provider (future)
 
 Long-term: RealCore registers Vault provider backed by canonical DB; eliminates drift/mirroring. Design-only until Stages 2–5 complete.
 
@@ -99,10 +113,10 @@ git rev-parse HEAD
 shasum -a 256 realcore/target/RealCore-0.1.0-SNAPSHOT.jar
 ```
 
-Example after Phase 18 merge (`80e04ed`): SHA256 `735a0eee6a80cf4a29312c21b3aff5e503875a744e88cbc3019e03d5f4e32af2`. **Always re-record after rebuilding from main** — do not reuse an old hash in operator logs.
+**Always re-record after rebuilding from main** — do not reuse an old hash in operator logs. Record commit + SHA in your deploy log when completing Stage 3.
 
 ## Dry-run soak cautions
 
 - Do **not** run `/rf economy test` during Gates B/C dry-run unless intentionally testing the global writer — it bypasses gameplay producer dry-run and can POST to the economy API.
-- Do **not** enable `dryRun=false` or Supabase `can_earn`/`can_spend` during Stage 2.
+- Do **not** enable `dryRun=false` or Supabase `can_earn`/`can_spend` during Stage 4 dry-run.
 - EconomyShopGUI must be installed before Gate B/C; absent plugin is a clean no-op at startup but capture will not occur.

@@ -8,6 +8,7 @@ import com.realfiction.realcore.config.RealCoreConfig;
 import com.realfiction.realcore.cosmetics.CosmeticsConfig;
 import com.realfiction.realcore.cosmetics.CosmeticsListener;
 import com.realfiction.realcore.cosmetics.CosmeticsManager;
+import com.realfiction.realcore.economy.EconomyProductionStartupAudit;
 import com.realfiction.realcore.economy.EconomyService;
 import com.realfiction.realcore.economy.GameplayEconomySyncService;
 import com.realfiction.realcore.economy.GameplayEconomyTransactionBuffer;
@@ -166,6 +167,7 @@ public final class RealCorePlugin extends JavaPlugin {
       reloadConfig();
       mergeBundledConfigDefaults();
       realCoreConfig = RealCoreConfig.from(getConfig());
+      EconomyProductionStartupAudit.log(getLogger(), realCoreConfig);
       if (scheduler == null) {
         scheduler = SchedulerFactory.create(this);
       }
@@ -679,7 +681,11 @@ public final class RealCorePlugin extends JavaPlugin {
         || !getConfig().contains("economy.shadow.observationCacheSize")
         || !getConfig().isConfigurationSection("economy.gameplaySync")
         || !getConfig().isConfigurationSection("economy.gameplaySync.producers")
-        || !getConfig().isConfigurationSection("economy.gameplaySync.observability");
+        || !getConfig().isConfigurationSection("economy.gameplaySync.observability")
+        || !getConfig().contains("economy.gameplaySync.producers.economyShopGuiBuy")
+        || !getConfig().isConfigurationSection("economy.gameplaySync.generic")
+        || !getConfig().contains("economy.gameplaySync.dedupCacheSeconds")
+        || !getConfig().contains("economy.gameplaySync.dedupCacheMaxEntries");
     if (!missingLobbyDefaults) {
       return;
     }
