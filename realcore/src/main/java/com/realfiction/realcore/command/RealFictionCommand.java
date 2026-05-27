@@ -7,6 +7,8 @@ import com.realfiction.realcore.playtime.PlaytimeTracker;
 import com.realfiction.realcore.scheduler.RealCoreScheduler;
 import com.realfiction.realcore.config.StatsConfig;
 import com.realfiction.realcore.config.GameplayEconomySyncConfig;
+import com.realfiction.realcore.economy.EconomyShopGuiBuyProducer;
+import com.realfiction.realcore.economy.EconomyShopGuiSellProducer;
 import com.realfiction.realcore.economy.BufferedEconomyTransactionWriter;
 import com.realfiction.realcore.economy.EconomyBalanceSnapshot;
 import com.realfiction.realcore.economy.EconomyService;
@@ -1047,6 +1049,7 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
     if (producer != null) {
       send(sender, ChatColor.YELLOW + "Hook: " + ChatColor.WHITE + producer.statusSummary()
           + ChatColor.GRAY + ", running=" + producer.running());
+      appendProducerMetricsLine(sender, EconomyShopGuiSellProducer.ID, producer.metrics());
     }
     var buyProducerConfig = config.economy().gameplaySync().producers().economyShopGuiBuy();
     send(sender, ChatColor.YELLOW + "Producer economyShopGuiBuy: "
@@ -1058,18 +1061,19 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
     if (buyProducer != null) {
       send(sender, ChatColor.YELLOW + "Hook: " + ChatColor.WHITE + buyProducer.statusSummary()
           + ChatColor.GRAY + ", running=" + buyProducer.running());
+      appendProducerMetricsLine(sender, EconomyShopGuiBuyProducer.ID, buyProducer.metrics());
     }
-    GameplayEconomyProducerMetrics metrics = sync.metrics();
-    long captured = metrics.captured();
-    send(sender, ChatColor.YELLOW + "Producer metrics: " + ChatColor.WHITE + captured
-        + " captured" + ChatColor.GRAY + ", " + metrics.dryRunCaptured() + " dry-run, "
-        + metrics.queued() + " queued, dup " + metrics.duplicateRejected()
-        + ", invalid " + metrics.invalidRejected() + ", over-cap " + metrics.overCapRejected()
-        + ", disabled " + metrics.producerDisabledRejected());
+    GameplayEconomyProducerMetrics aggregate = sync.metrics();
+    long captured = aggregate.captured();
+    send(sender, ChatColor.YELLOW + "Producer metrics (aggregate): " + ChatColor.WHITE + captured
+        + " captured" + ChatColor.GRAY + ", " + aggregate.dryRunCaptured() + " dry-run, "
+        + aggregate.queued() + " queued, dup " + aggregate.duplicateRejected()
+        + ", invalid " + aggregate.invalidRejected() + ", over-cap " + aggregate.overCapRejected()
+        + ", disabled " + aggregate.producerDisabledRejected());
     if (captured > 0) {
-      double dryRunRate = metrics.dryRunCaptured() * 100.0 / captured;
-      double queueRate = metrics.queued() * 100.0 / captured;
-      send(sender, ChatColor.YELLOW + "Capture rates: " + ChatColor.WHITE
+      double dryRunRate = aggregate.dryRunCaptured() * 100.0 / captured;
+      double queueRate = aggregate.queued() * 100.0 / captured;
+      send(sender, ChatColor.YELLOW + "Capture rates (aggregate): " + ChatColor.WHITE
           + String.format(java.util.Locale.US, "%.1f", dryRunRate) + "% dry-run"
           + ChatColor.GRAY + ", "
           + String.format(java.util.Locale.US, "%.1f", queueRate) + "% queued");
@@ -1089,8 +1093,19 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
     if (economy != null && economy.writerRunning()) {
       sendGameplayWriterDiagnostics(sender, economy.writer(), config.economy().gameplaySync());
     }
+    if (!aggregate.lastEventSummary().isBlank()) {
+      send(sender, ChatColor.YELLOW + "Last event: " + ChatColor.GRAY + aggregate.lastEventSummary());
+    }
+  }
+
+  private void appendProducerMetricsLine(CommandSender sender, String producerId, GameplayEconomyProducerMetrics metrics) {
+    send(sender, ChatColor.YELLOW + "Metrics " + producerId + ": " + ChatColor.WHITE + metrics.captured()
+        + " captured" + ChatColor.GRAY + ", " + metrics.dryRunCaptured() + " dry-run, "
+        + metrics.queued() + " queued, dup " + metrics.duplicateRejected()
+        + ", invalid " + metrics.invalidRejected() + ", over-cap " + metrics.overCapRejected()
+        + ", disabled " + metrics.producerDisabledRejected());
     if (!metrics.lastEventSummary().isBlank()) {
-      send(sender, ChatColor.YELLOW + "Last event: " + ChatColor.GRAY + metrics.lastEventSummary());
+      send(sender, ChatColor.GRAY + "Last " + producerId + ": " + metrics.lastEventSummary());
     }
   }
 
