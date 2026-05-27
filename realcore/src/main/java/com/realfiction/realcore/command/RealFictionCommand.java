@@ -8,6 +8,7 @@ import com.realfiction.realcore.scheduler.RealCoreScheduler;
 import com.realfiction.realcore.config.StatsConfig;
 import com.realfiction.realcore.config.GameplayEconomySyncConfig;
 import com.realfiction.realcore.economy.BufferedEconomyTransactionWriter;
+import com.realfiction.realcore.economy.EconomyBalanceSnapshot;
 import com.realfiction.realcore.economy.EconomyService;
 import com.realfiction.realcore.economy.GameplayEconomyTransactionBuffer;
 import com.realfiction.realcore.economy.EconomyStagingTestTransaction;
@@ -20,15 +21,22 @@ import com.realfiction.realcore.economy.VoteRewardLedgerWriteService;
 import com.realfiction.realcore.stats.BufferedNetworkStatWriter;
 import com.realfiction.realcore.stats.EconomyMirrorService;
 import com.realfiction.realcore.stats.NetworkStatService;
+import java.lang.reflect.Method;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
+import org.bukkit.OfflinePlayer;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.TabCompleter;
 import org.bukkit.entity.Player;
+import org.bukkit.plugin.RegisteredServiceProvider;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -219,7 +227,7 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
     }
     if (sender.hasPermission("realcore.admin")) {
       send(sender, ChatColor.YELLOW + "Admin: " + ChatColor.WHITE + "/" + label
-          + " status|stats|stats flush|economy|economy audit|economy sync-vault|economy flush|economy test|rewards|reload|setspawn");
+          + " status|stats|stats flush|economy|economy audit|economy balance|economy shadow|economy syncfromdb|economy flush|economy test|rewards|reload|setspawn");
     }
     return true;
   }
@@ -400,8 +408,19 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
     if (args.length >= 2 && "audit".equalsIgnoreCase(args[1])) {
       return handleEconomyAudit(sender, args);
     }
+    if (args.length >= 2 && "syncfromdb".equalsIgnoreCase(args[1])) {
+      return handleEconomySyncFromDb(sender, args);
+    }
     if (args.length >= 2 && "sync-vault".equalsIgnoreCase(args[1])) {
       return handleEconomyVaultSync(sender, args);
+    }
+    if (args.length >= 2 && "balance".equalsIgnoreCase(args[1])) {
+      return handleEconomyBalance(sender, args);
+    }
+    if (args.length >= 2 && "shadow".equalsIgnoreCase(args[1])) {
+      send(sender, ChatColor.GOLD + "RealCore Vault Delta Shadow");
+      appendVaultDeltaShadowStatus(sender, true);
+      return true;
     }
     if (args.length >= 2 && "gameplay".equalsIgnoreCase(args[1])) {
       send(sender, ChatColor.GOLD + "RealCore Gameplay Economy Sync");
@@ -485,63 +504,212 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
     send(sender, ChatColor.GRAY + "Audit only: no Vault, EssentialsX, website, or global economy writes were made.");
   }
 
-  private boolean handleEconomyVaultSync(CommandSender sender, String[] args) {
-    if (args.length != 4) {
-      send(sender, ChatColor.YELLOW + "Usage: /rf economy sync-vault <uuid> <username>");
-      send(sender, ChatColor.GRAY + "Reads the DB balance and applies it to local Vault for one staging player only.");
+  private boolean handleEconomyBalance(CommandSender sender, String[] args) {
+    if (args.length != 3) {
+      send(sender, ChatColor.YELLOW + "Usage: /rf economy balance <online-player|uuid>");
+      send(sender, ChatColor.GRAY + "Read-only: shows cached DB economy balance and local Vault delta when available.");
       return true;
     }
 
+    EconomyService economy = plugin.economyService();
+    if (economy == null) {
+      send(sender, ChatColor.RED + "Global economy is not loaded.");
+      return true;
+    }
+    String guard = economy.dbBalanceReadGuardReason();
+    if (!guard.isBlank()) {
+      send(sender, ChatColor.RED + "DB balance reads are disabled: " + guard);
+      return true;
+    }
+
+    Player online = Bukkit.getPlayerExact(args[2]);
+    UUID uuid;
+    String displayName;
+    if (online != null) {
+      uuid = online.getUniqueId();
+      displayName = online.getName();
+    } else {
+      try {
+        uuid = UUID.fromString(args[2]);
+        displayName = args[2];
+      } catch (IllegalArgumentException error) {
+        send(sender, ChatColor.RED + "Use an online player name or a valid player UUID.");
+        return true;
+      }
+    }
+
+    EconomyBalanceSnapshot cached = economy.cachedBalance(uuid);
+    if (cached != null) {
+      send(sender, ChatColor.YELLOW + "Cached DB balance for " + displayName + ": "
+          + ChatColor.WHITE + cached.formattedDollars()
+          + ChatColor.GRAY + " (" + cached.balanceMinor() + " minor, age " + cacheAgeSeconds(cached) + "s)");
+    }
+
+    send(sender, ChatColor.YELLOW + "Loading DB balance for " + displayName + "...");
+    economy.fetchBalanceReadOnly(uuid).thenCompose(snapshot ->
+        readVaultBalance(uuid, snapshot.scale()).thenApply(vault -> new BalanceView(snapshot, vault))
+    ).whenComplete((view, error) -> {
+      if (error != null) {
+        send(sender, ChatColor.RED + "DB balance read failed: " + rootMessage(error));
+        return;
+      }
+      send(sender, ChatColor.GREEN + "DB balance: " + ChatColor.WHITE + view.snapshot().formattedDollars()
+          + ChatColor.GRAY + " (" + view.snapshot().balanceMinor() + " minor)");
+      if (view.vault().available()) {
+        long delta = view.vault().balanceMinor() - view.snapshot().balanceMinor();
+        send(sender, ChatColor.YELLOW + "Vault balance: " + ChatColor.WHITE + view.vault().formatted()
+            + ChatColor.GRAY + " (deltaMinor=" + delta + ", provider=" + view.vault().providerName() + ")");
+      } else {
+        send(sender, ChatColor.GRAY + "Vault balance: unavailable (" + view.vault().reason() + ")");
+      }
+      send(sender, ChatColor.GRAY + "Read-only: no DB, Vault, reward, or ledger writes were made.");
+    });
+    return true;
+  }
+
+  private boolean handleEconomyVaultSync(CommandSender sender, String[] args) {
+    send(sender, ChatColor.YELLOW + "Use /rf economy syncfromdb <player> --dry-run or --apply.");
+    send(sender, ChatColor.GRAY + "The old sync-vault command is disabled so DB-to-Vault alignment uses the stricter Phase 4 gates.");
+    return true;
+  }
+
+  private boolean handleEconomySyncFromDb(CommandSender sender, String[] args) {
     EconomyService economy = plugin.economyService();
     RealCoreConfig config = plugin.realCoreConfig();
     if (economy == null || config == null) {
       send(sender, ChatColor.RED + "Global economy is not loaded.");
       return true;
     }
-    if (!economy.configuredEnabled()) {
-      send(sender, ChatColor.RED + "Global economy is disabled by economy.enabled=false.");
-      return true;
-    }
-    if (!config.modules().economy()) {
-      send(sender, ChatColor.RED + "Global economy is disabled by modules.economy=false.");
-      return true;
-    }
-    if (!economy.syncVaultAfterDb()) {
-      send(sender, ChatColor.RED + "Vault sync is disabled by economy.syncVaultAfterDb=false.");
-      return true;
-    }
-    if ("anarchy".equalsIgnoreCase(config.serverGroup())) {
-      send(sender, ChatColor.RED + "Anarchy may not sync the global economy into Vault.");
+    String guard = VaultBalanceSyncService.guardReason(config, economy);
+    if (!guard.isBlank()) {
+      send(sender, ChatColor.RED + "DB-to-Vault sync is disabled: " + guard);
       return true;
     }
 
-    UUID uuid;
+    SyncMode mode;
     try {
-      uuid = UUID.fromString(args[2]);
+      mode = parseSyncMode(args, config.economy().syncVaultFromDbDryRunDefault());
     } catch (IllegalArgumentException error) {
-      send(sender, ChatColor.RED + "Use a valid player UUID.");
+      sendSyncFromDbUsage(sender, error.getMessage());
       return true;
     }
 
-    String username = args[3];
-    String actor = sender.getName();
-    send(sender, ChatColor.YELLOW + "Starting one-player DB-to-Vault sync for " + username + "..."
-        + ChatColor.GRAY + " This is async and bounded by config.");
+    List<VaultBalanceSyncService.Target> targets = resolveSyncFromDbTargets(sender, args, config);
+    if (targets.isEmpty()) {
+      return true;
+    }
+
+    send(sender, ChatColor.YELLOW + "Starting DB-to-Vault alignment "
+        + (mode.dryRun() ? ChatColor.GRAY + "(dry-run)" : ChatColor.RED + "(apply)")
+        + ChatColor.GRAY + " for " + targets.size() + " requested player(s).");
     VaultBalanceSyncService service = new VaultBalanceSyncService(plugin, config, economy);
-    service.syncOne(uuid, username, actor).whenComplete((result, error) -> {
+    service.syncTargets(targets, mode.dryRun(), sender.getName()).whenComplete((report, error) -> {
       if (error != null) {
-        send(sender, ChatColor.RED + "Vault sync failed: " + rootMessage(error));
+        send(sender, ChatColor.RED + "DB-to-Vault sync failed: " + rootMessage(error));
         return;
       }
-      send(sender, ChatColor.GREEN + "Vault sync complete for " + result.username() + ".");
-      send(sender, ChatColor.YELLOW + "DB target: " + ChatColor.WHITE + result.targetDollars()
-          + ChatColor.GRAY + " (" + result.targetMinor() + " minor)");
-      send(sender, ChatColor.YELLOW + "Vault before: " + ChatColor.WHITE + result.beforeDollars()
-          + ChatColor.GRAY + ", after: " + result.afterDollars()
-          + ", deltaMinor=" + result.deltaMinor());
-      send(sender, ChatColor.GRAY + "Audit log written locally under plugins/RealCore/audits.");
+      sendSyncFromDbReport(sender, report);
     });
     return true;
+  }
+
+  private void sendSyncFromDbUsage(CommandSender sender, String reason) {
+    if (reason != null && !reason.isBlank()) {
+      send(sender, ChatColor.RED + reason);
+    }
+    send(sender, ChatColor.YELLOW + "Usage: /rf economy syncfromdb <player|uuid> [--dry-run|--apply]");
+    send(sender, ChatColor.YELLOW + "Usage: /rf economy syncfromdb --online [--dry-run|--apply]");
+    send(sender, ChatColor.GRAY + "Manual only: reads DB balance, then optionally aligns local Vault. No DB writes.");
+  }
+
+  private SyncMode parseSyncMode(String[] args, boolean dryRunDefault) {
+    boolean dryRun = false;
+    boolean apply = false;
+    for (String arg : args) {
+      if ("--dry-run".equalsIgnoreCase(arg)) {
+        dryRun = true;
+      } else if ("--apply".equalsIgnoreCase(arg)) {
+        apply = true;
+      }
+    }
+    if (dryRun && apply) {
+      throw new IllegalArgumentException("Choose either --dry-run or --apply, not both.");
+    }
+    return new SyncMode(!apply && (dryRun || dryRunDefault));
+  }
+
+  private List<VaultBalanceSyncService.Target> resolveSyncFromDbTargets(
+      CommandSender sender,
+      String[] args,
+      RealCoreConfig config
+  ) {
+    if (args.length < 3) {
+      sendSyncFromDbUsage(sender, "");
+      return List.of();
+    }
+    if ("--online".equalsIgnoreCase(args[2])) {
+      List<VaultBalanceSyncService.Target> targets = Bukkit.getOnlinePlayers().stream()
+          .map(player -> new VaultBalanceSyncService.Target(player.getUniqueId(), player.getName(), true))
+          .toList();
+      if (targets.isEmpty()) {
+        send(sender, ChatColor.YELLOW + "No online players are available to scan.");
+      } else if (targets.size() > config.economy().syncVaultFromDbMaxPlayersPerRun()) {
+        send(sender, ChatColor.YELLOW + "Online scan will be limited to "
+            + config.economy().syncVaultFromDbMaxPlayersPerRun()
+            + ChatColor.GRAY + " player(s) by economy.syncVaultFromDbMaxPlayersPerRun.");
+      }
+      return targets;
+    }
+
+    Player online = Bukkit.getPlayerExact(args[2]);
+    if (online != null) {
+      return List.of(new VaultBalanceSyncService.Target(online.getUniqueId(), online.getName(), true));
+    }
+    if (config.economy().syncVaultFromDbRequireOnline()) {
+      send(sender, ChatColor.RED + "Player must be online because economy.syncVaultFromDbRequireOnline=true.");
+      return List.of();
+    }
+    try {
+      UUID uuid = UUID.fromString(args[2]);
+      return List.of(new VaultBalanceSyncService.Target(uuid, args[2], false));
+    } catch (IllegalArgumentException error) {
+      send(sender, ChatColor.RED + "Use an online player name or a valid player UUID.");
+      return List.of();
+    }
+  }
+
+  private void sendSyncFromDbReport(CommandSender sender, VaultBalanceSyncService.SyncReport report) {
+    send(sender, ChatColor.GOLD + "DB-to-Vault alignment summary");
+    send(sender, ChatColor.YELLOW + "Mode: "
+        + (report.dryRun() ? ChatColor.GRAY + "dry-run" : ChatColor.RED + "apply")
+        + ChatColor.GRAY + " (DB remains canonical; no DB writes were made)");
+    send(sender, ChatColor.YELLOW + "Scanned: " + ChatColor.WHITE + report.scanned()
+        + ChatColor.GRAY + ", would update " + report.wouldUpdate()
+        + ", applied " + report.applied()
+        + ", skipped " + report.skipped()
+        + ", failed " + report.failed());
+    send(sender, ChatColor.YELLOW + "Deltas: " + ChatColor.WHITE
+        + "largest=" + report.largestDeltaMinor()
+        + ChatColor.GRAY + ", positive=" + report.totalPositiveDeltaMinor()
+        + ", negative=" + report.totalNegativeDeltaMinor());
+    if (report.notScannedDueToLimit() > 0) {
+      send(sender, ChatColor.YELLOW + "Not scanned due to run limit: " + ChatColor.WHITE + report.notScannedDueToLimit());
+    }
+    int shown = Math.min(8, report.results().size());
+    for (int i = 0; i < shown; i++) {
+      VaultBalanceSyncService.SyncResult result = report.results().get(i);
+      send(sender, ChatColor.GRAY + " - " + result.username()
+          + " " + result.action().name().toLowerCase(java.util.Locale.ROOT)
+          + " db=" + result.targetMinor()
+          + " vault=" + result.beforeMinor()
+          + " delta=" + result.deltaMinor()
+          + (result.reason().isBlank() ? "" : " reason=" + result.reason()));
+    }
+    if (report.results().size() > shown) {
+      send(sender, ChatColor.GRAY + "And " + (report.results().size() - shown)
+          + " more result(s) in the local audit log.");
+    }
+    send(sender, ChatColor.GRAY + "Audit log written locally under plugins/RealCore/audits.");
   }
 
   private boolean handleEconomyTest(CommandSender sender, String[] args) {
@@ -614,9 +782,11 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
     if (!economy.configuredEnabled()) {
       send(sender, ChatColor.YELLOW + "Global economy: " + ChatColor.GRAY + "disabled (economy.enabled=false)");
       send(sender, ChatColor.YELLOW + "Economy currency: " + ChatColor.WHITE + economy.currencyKey());
+      appendDbBalanceReadStatus(sender, economy);
       appendVoteRewardLedgerShadowStatus(sender);
       appendVoteRewardLedgerWriteStatus(sender);
-      appendVaultDeltaShadowStatus(sender);
+      appendVaultDeltaShadowStatus(sender, false);
+      appendGameplayEconomyStatus(sender, false);
       return;
     }
     String state = economy.writerRunning() ? ChatColor.GREEN + "ready" : ChatColor.RED + "not ready";
@@ -635,9 +805,18 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
     send(sender, ChatColor.YELLOW + "Vault sync after DB: "
         + (economy.syncVaultAfterDb() ? ChatColor.GREEN + "enabled" : ChatColor.GRAY + "disabled")
         + ChatColor.GRAY + ", max delta " + economy.syncVaultMaxDeltaMinor() + " minor units");
+    send(sender, ChatColor.YELLOW + "Manual DB-to-Vault sync: "
+        + (economy.syncVaultFromDbEnabled() ? ChatColor.GREEN + "enabled" : ChatColor.GRAY + "disabled")
+        + ChatColor.GRAY + ", dry-run default " + economy.syncVaultFromDbDryRunDefault()
+        + ", max players " + economy.syncVaultFromDbMaxPlayersPerRun()
+        + ", max delta " + economy.syncVaultFromDbMaxDeltaMinor()
+        + ", require online " + economy.syncVaultFromDbRequireOnline());
+    send(sender, ChatColor.YELLOW + "Manual DB-to-Vault allowlist: " + ChatColor.WHITE
+        + economy.syncVaultFromDbAllowlistSummary());
+    appendDbBalanceReadStatus(sender, economy);
     appendVoteRewardLedgerShadowStatus(sender);
     appendVoteRewardLedgerWriteStatus(sender);
-    appendVaultDeltaShadowStatus(sender);
+    appendVaultDeltaShadowStatus(sender, false);
     appendGameplayEconomyStatus(sender, false);
     sendEconomyWriterStatus(sender, economy.writer());
   }
@@ -702,7 +881,24 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
     return label + "=" + (on ? "on" : "off");
   }
 
-  private void appendVaultDeltaShadowStatus(CommandSender sender) {
+  private void appendDbBalanceReadStatus(CommandSender sender, EconomyService economy) {
+    String guard = economy.dbBalanceReadGuardReason();
+    long ago = economy.lastBalanceReadAgoSeconds();
+    send(sender, ChatColor.YELLOW + "DB balance reads: "
+        + (guard.isBlank() ? ChatColor.GREEN + "enabled" : ChatColor.GRAY + "disabled")
+        + ChatColor.GRAY + (guard.isBlank() ? "" : " (" + guard + ")"));
+    send(sender, ChatColor.YELLOW + "DB read cache: " + ChatColor.WHITE + economy.cachedBalanceCount()
+        + " cached" + ChatColor.GRAY + ", ttl " + economy.dbBalanceReadCacheSeconds()
+        + "s, max players/batch " + economy.dbBalanceReadMaxPlayersPerBatch());
+    send(sender, ChatColor.YELLOW + "DB read results: " + ChatColor.WHITE + economy.balanceReadSuccessCount()
+        + " ok / " + economy.balanceReadFailureCount() + " failed"
+        + ChatColor.GRAY + ", avg " + economy.averageBalanceReadLatencyMillis()
+        + "ms, last latency " + economy.lastBalanceReadLatencyMillis() + "ms"
+        + (ago >= 0 ? ", last " + ago + "s ago" : ", never read"));
+    send(sender, ChatColor.YELLOW + "DB read allowlist: " + ChatColor.WHITE + economy.dbBalanceReadAllowlistSummary());
+  }
+
+  private void appendVaultDeltaShadowStatus(CommandSender sender, boolean detailed) {
     VaultDeltaShadowService shadow = plugin.vaultDeltaShadowService();
     RealCoreConfig config = plugin.realCoreConfig();
     if (config == null) {
@@ -713,6 +909,8 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
     if (shadow == null) {
       send(sender, ChatColor.YELLOW + "Vault delta shadow: " + ChatColor.GRAY + "disabled"
           + ChatColor.GRAY + (guard.isBlank() ? "" : " (" + guard + ")"));
+      send(sender, ChatColor.YELLOW + "Shadow allowlist: " + ChatColor.WHITE
+          + String.join(", ", config.economy().vaultDeltaShadowBackendAllowlist()));
       return;
     }
     long ago = shadow.lastRunAgoSeconds();
@@ -721,11 +919,44 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
         + ChatColor.GRAY + ", sampled " + shadow.sampledCount()
         + ", matched " + shadow.matchedCount()
         + ", deltas " + shadow.deltaCount()
+        + ", severe " + shadow.severeDeltaCount()
         + ", skipped " + shadow.skippedCount()
         + ", failures " + shadow.failureCount()
         + (ago >= 0 ? ", last " + ago + "s ago" : ", never run"));
+    send(sender, ChatColor.YELLOW + "Shadow health: " + ChatColor.WHITE + shadow.estimatedSyncHealth()
+        + ChatColor.GRAY + ", avg abs delta " + shadow.averageAbsDeltaMinor()
+        + ", largest abs " + shadow.largestAbsDeltaMinor());
     if (shadow.lastFailure() != null && !shadow.lastFailure().isBlank()) {
       send(sender, ChatColor.YELLOW + "Last shadow error: " + ChatColor.RED + shadow.lastFailure());
+    }
+    if (!detailed) {
+      return;
+    }
+    send(sender, ChatColor.YELLOW + "Shadow allowlist: " + ChatColor.WHITE
+        + String.join(", ", config.economy().vaultDeltaShadowBackendAllowlist()));
+    send(sender, ChatColor.YELLOW + "Delta counts: " + ChatColor.WHITE + shadow.exactMatchCount()
+        + " exact" + ChatColor.GRAY + ", " + shadow.positiveDeltaCount() + " positive, "
+        + shadow.negativeDeltaCount() + " negative, " + shadow.ignoredDeltaCount() + " ignored, "
+        + shadow.cappedDeltaCount() + " capped");
+    send(sender, ChatColor.YELLOW + "Latency: " + ChatColor.WHITE + shadow.averageDbReadLatencyMillis()
+        + "ms avg DB" + ChatColor.GRAY + " (last " + shadow.lastDbReadLatencyMillis() + "ms), "
+        + shadow.averageVaultReadLatencyMillis() + "ms avg Vault"
+        + " (last " + shadow.lastVaultReadLatencyMillis() + "ms)");
+    send(sender, ChatColor.YELLOW + "Last run duration: " + ChatColor.WHITE
+        + shadow.lastRunDurationMillis() + "ms" + ChatColor.GRAY
+        + ", recent observations " + shadow.recentObservationCount());
+    send(sender, ChatColor.YELLOW + "Repeated offender threshold: " + ChatColor.WHITE
+        + config.economy().shadow().repeatedOffenderThreshold() + ChatColor.GRAY + " divergent samples");
+    List<VaultDeltaShadowService.OffenderSummary> offenders = shadow.topOffenders(5);
+    if (offenders.isEmpty()) {
+      send(sender, ChatColor.GRAY + "Top offenders: none");
+      return;
+    }
+    send(sender, ChatColor.YELLOW + "Top offenders:");
+    for (VaultDeltaShadowService.OffenderSummary offender : offenders) {
+      send(sender, ChatColor.GRAY + " - " + offender.username() + " "
+          + ChatColor.DARK_GRAY + "(" + offender.uuid() + ") "
+          + ChatColor.WHITE + offender.count() + " divergent samples");
     }
   }
 
@@ -792,6 +1023,78 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
     return true;
   }
 
+  private CompletableFuture<VaultReadResult> readVaultBalance(UUID uuid, int scale) {
+    CompletableFuture<VaultReadResult> future = new CompletableFuture<>();
+    Runnable task = () -> {
+      try {
+        future.complete(readVaultBalanceOnServerThread(uuid, scale));
+      } catch (Throwable error) {
+        future.complete(new VaultReadResult(false, 0, "", "", rootMessage(error)));
+      }
+    };
+    RealCoreScheduler scheduler = plugin.scheduler();
+    if (scheduler == null) {
+      task.run();
+    } else {
+      scheduler.runGlobal(task);
+    }
+    return future;
+  }
+
+  private VaultReadResult readVaultBalanceOnServerThread(UUID uuid, int scale) throws Exception {
+    Class<?> economyClass;
+    try {
+      economyClass = Class.forName("net.milkbowl.vault.economy.Economy");
+    } catch (ClassNotFoundException missing) {
+      return new VaultReadResult(false, 0, "", "", "Vault is not installed");
+    }
+    RegisteredServiceProvider<?> registration = Bukkit.getServicesManager().getRegistration(economyClass);
+    if (registration == null || registration.getProvider() == null) {
+      return new VaultReadResult(false, 0, "", "", "Vault Economy provider is not registered");
+    }
+    Object provider = registration.getProvider();
+    Method getBalance = provider.getClass().getMethod("getBalance", OfflinePlayer.class);
+    OfflinePlayer player = Bukkit.getOfflinePlayer(uuid);
+    Object result = getBalance.invoke(provider, player);
+    if (!(result instanceof Number number) || !Double.isFinite(number.doubleValue())) {
+      return new VaultReadResult(false, 0, "", providerName(provider), "Vault provider returned a non-numeric balance");
+    }
+    long minor = toMinorUnits(number.doubleValue(), scale);
+    return new VaultReadResult(true, minor, formatMinor(minor, scale), providerName(provider), "");
+  }
+
+  private String providerName(Object provider) {
+    try {
+      Method getName = provider.getClass().getMethod("getName");
+      Object name = getName.invoke(provider);
+      if (name instanceof String string && !string.isBlank()) {
+        return string;
+      }
+    } catch (Throwable ignored) {
+      // Provider class name is enough for staff-only read diagnostics.
+    }
+    return provider.getClass().getName();
+  }
+
+  private static long toMinorUnits(double vaultBalance, int scale) {
+    return BigDecimal.valueOf(vaultBalance)
+        .multiply(BigDecimal.valueOf(Math.max(1, scale)))
+        .setScale(0, RoundingMode.HALF_UP)
+        .longValue();
+  }
+
+  private static String formatMinor(long amountMinor, int scale) {
+    int safeScale = Math.max(1, scale);
+    long absolute = Math.abs(amountMinor);
+    long whole = absolute / safeScale;
+    long fractional = absolute % safeScale;
+    return "$" + (amountMinor < 0 ? "-" : "") + whole + "." + String.format("%02d", fractional);
+  }
+
+  private static long cacheAgeSeconds(EconomyBalanceSnapshot snapshot) {
+    return Math.max(0, (System.currentTimeMillis() - snapshot.cachedAt().toEpochMilli()) / 1000);
+  }
+
   private String statusText(boolean ok) {
     return (ok ? ChatColor.GREEN + "ready" : ChatColor.RED + "not ready");
   }
@@ -816,6 +1119,12 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
     }
     sender.sendMessage(message);
   }
+
+  private record BalanceView(EconomyBalanceSnapshot snapshot, VaultReadResult vault) {}
+
+  private record SyncMode(boolean dryRun) {}
+
+  private record VaultReadResult(boolean available, long balanceMinor, String formatted, String providerName, String reason) {}
 
   @Override
   public @Nullable List<String> onTabComplete(@NotNull CommandSender sender, @NotNull Command command, @NotNull String label, String[] args) {
@@ -844,7 +1153,17 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
       return List.of("flush");
     }
     if (args.length == 2 && "economy".equalsIgnoreCase(args[0]) && sender.hasPermission("realcore.admin")) {
-      return List.of("audit", "flush", "sync-vault", "test");
+      return List.of("audit", "balance", "flush", "shadow", "syncfromdb", "test");
+    }
+    if (args.length == 3 && "economy".equalsIgnoreCase(args[0])
+        && "syncfromdb".equalsIgnoreCase(args[1])
+        && sender.hasPermission("realcore.admin")) {
+      return List.of("--online");
+    }
+    if (args.length >= 3 && "economy".equalsIgnoreCase(args[0])
+        && "syncfromdb".equalsIgnoreCase(args[1])
+        && sender.hasPermission("realcore.admin")) {
+      return List.of("--dry-run", "--apply");
     }
     if (args.length == 3 && "economy".equalsIgnoreCase(args[0])
         && "audit".equalsIgnoreCase(args[1])

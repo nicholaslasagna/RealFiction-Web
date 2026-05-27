@@ -57,6 +57,26 @@ economy:
   bufferSize: 5000
   maxBatchSize: 100
   balanceCacheSeconds: 30
+  # Phase 3 gameplay-server DB balance read path. Read-only: signed backend
+  # requests can fetch canonical DB balances for online player checks without
+  # starting the economy writer. Requires the DB policy row to have enabled=true
+  # and can_read=true for this server. Keep off until staging verification.
+  dbBalanceReadEnabled: false
+  dbBalanceReadBackendAllowlist:
+    - smp-1
+  dbBalanceReadCacheSeconds: 30
+  dbBalanceReadMaxPlayersPerBatch: 100
+  # Phase 4 manual DB-to-Vault alignment. This reads canonical DB balances and,
+  # only from an explicit admin command, can align local Vault/Essentials balance
+  # for online SMP players. It never writes DB ledger entries and never runs
+  # automatically. Keep dry-run default on until staging proves the path.
+  syncVaultFromDbEnabled: false
+  syncVaultFromDbBackendAllowlist:
+    - smp-1
+  syncVaultFromDbMaxPlayersPerRun: 25
+  syncVaultFromDbMaxDeltaMinor: 250000
+  syncVaultFromDbRequireOnline: true
+  syncVaultFromDbDryRunDefault: true
   # Maximum amount for the admin-only /rf economy test command. Minor units:
   # $1.00 = 100, so the default is a tiny $1.00 staging credit.
   stagingTestMaxCreditMinor: 100
@@ -87,6 +107,12 @@ economy:
   vaultDeltaShadowMaxLoggedDeltaMinor: 250000
   vaultDeltaShadowBackendAllowlist:
     - smp-1
+  shadow:
+    warningDeltaMinor: 5000
+    severeDeltaMinor: 50000
+    ignoreNegativeOneMinorNoise: true
+    repeatedOffenderThreshold: 5
+    observationCacheSize: 500
   # Phase 8 gameplay economy sync buffer (no producers wired in this phase).
   # Validates future gameplay deltas and optionally enqueues to the global writer.
   # Default: disabled with dryRun=true so nothing is sent to the ledger API.

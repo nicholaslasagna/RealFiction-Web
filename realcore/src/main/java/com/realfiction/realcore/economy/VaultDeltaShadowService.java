@@ -10,8 +10,10 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -33,6 +35,11 @@ import org.bukkit.plugin.RegisteredServiceProvider;
  * players only, reads local Vault balances, reads DB balances through the
  * existing HMAC economy balance API, and logs observed deltas for rollout
  * analysis.
+ *
+ * <p>Important future note: polling local balance snapshots is temporary
+ * telemetry. The production gameplay economy sync path should become
+ * transaction/event driven, or eventually a DB-backed Vault provider, so exact
+ * causes and idempotency keys are known at the moment money changes.
  */
 public final class VaultDeltaShadowService {
   private static final String ECONOMY_CLASS = "net.milkbowl.vault.economy.Economy";
@@ -48,10 +55,27 @@ public final class VaultDeltaShadowService {
   private final AtomicBoolean warnedMissingVault = new AtomicBoolean(false);
   private final AtomicInteger sampled = new AtomicInteger();
   private final AtomicInteger matched = new AtomicInteger();
-  private final AtomicInteger deltaCount = new AtomicInteger();
+  private final AtomicInteger exactMatches = new AtomicInteger();
+  private final AtomicInteger positiveDeltas = new AtomicInteger();
+  private final AtomicInteger negativeDeltas = new AtomicInteger();
+  private final AtomicInteger ignoredDeltas = new AtomicInteger();
+  private final AtomicInteger cappedDeltas = new AtomicInteger();
+  private final AtomicInteger severeDeltas = new AtomicInteger();
   private final AtomicInteger skipped = new AtomicInteger();
   private final AtomicInteger failures = new AtomicInteger();
+  private final AtomicLong totalAbsDelta = new AtomicLong();
+  private final AtomicLong largestAbsDelta = new AtomicLong();
+  private final AtomicLong largestPositiveDelta = new AtomicLong();
+  private final AtomicLong largestNegativeDelta = new AtomicLong();
   private final AtomicLong lastRunAtMillis = new AtomicLong();
+  private final AtomicLong lastRunDurationMillis = new AtomicLong();
+  private final AtomicLong totalDbLatencyMillis = new AtomicLong();
+  private final AtomicLong dbReadCount = new AtomicLong();
+  private final AtomicLong lastDbLatencyMillis = new AtomicLong();
+  private final AtomicLong totalVaultLatencyMillis = new AtomicLong();
+  private final AtomicLong vaultReadCount = new AtomicLong();
+  private final AtomicLong lastVaultLatencyMillis = new AtomicLong();
+  private final VaultDeltaShadowAnalytics analytics = new VaultDeltaShadowAnalytics();
   private volatile String lastFailure = "";
   private ScheduledTaskHandle handle;
 
@@ -97,9 +121,6 @@ public final class VaultDeltaShadowService {
     if (!config.modules().economy()) {
       return "modules.economy is false";
     }
-    if (!economy.enabled()) {
-      return "economy.enabled is false";
-    }
     if (!economy.vaultDeltaShadowEnabled()) {
       return "economy.vaultDeltaShadowEnabled is false";
     }
@@ -110,6 +131,10 @@ public final class VaultDeltaShadowService {
     if (!economy.vaultDeltaShadowBackendAllowlist().contains(serverId)) {
       return "server.id is not in economy.vaultDeltaShadowBackendAllowlist";
     }
+    String readGuard = EconomyService.dbBalanceReadGuardReason(config);
+    if (!readGuard.isBlank()) {
+      return "DB balance read is unavailable: " + readGuard;
+    }
     return "";
   }
 
@@ -119,6 +144,37 @@ public final class VaultDeltaShadowService {
 
   public static boolean shouldLogDelta(long deltaMinor, long minDeltaMinor) {
     return Math.abs(deltaMinor) >= Math.max(0, minDeltaMinor);
+  }
+
+  public static boolean ignoredNoise(long deltaMinor, long minDeltaMinor, boolean ignoreNegativeOneMinorNoise) {
+    return (ignoreNegativeOneMinorNoise && deltaMinor == -1L) || !shouldLogDelta(deltaMinor, minDeltaMinor);
+  }
+
+  public static DeltaSeverity classifyDelta(long deltaMinor, long warningDeltaMinor, long severeDeltaMinor) {
+    long abs = Math.abs(deltaMinor);
+    if (abs == 0) {
+      return DeltaSeverity.MATCH;
+    }
+    if (abs >= Math.max(1, severeDeltaMinor)) {
+      return DeltaSeverity.SEVERE;
+    }
+    if (abs >= Math.max(1, warningDeltaMinor)) {
+      return DeltaSeverity.WARNING;
+    }
+    return DeltaSeverity.SMALL;
+  }
+
+  public static String estimatedSyncHealth(long matched, long severe, long warningOrSmall) {
+    if (matched <= 0) {
+      return "unknown";
+    }
+    if (severe > 0) {
+      return "needs_review";
+    }
+    if (warningOrSmall > 0) {
+      return "watch";
+    }
+    return "healthy";
   }
 
   public static <T> List<T> limitSamples(List<T> samples, int limit) {
@@ -139,46 +195,67 @@ public final class VaultDeltaShadowService {
     }
 
     try {
-      runShadowSample();
+      scheduleShadowSample();
     } catch (Throwable error) {
-      failures.incrementAndGet();
-      lastFailure = safeMessage(error);
+      recordFailure(error);
       runInProgress.set(false);
-      if (config.debug()) {
-        logger.log(Level.WARNING, "Vault delta shadow run crashed", error);
-      } else {
-        logger.warning("Vault delta shadow run failed: " + safeMessage(error));
-      }
     }
   }
 
-  private void runShadowSample() {
+  private void scheduleShadowSample() {
+    long runStarted = System.nanoTime();
+    scheduler.runGlobal(() -> {
+      try {
+        if (!running.get()) {
+          finishRun(runStarted);
+          return;
+        }
+        int maxPlayers = Math.min(
+            config.economy().vaultDeltaShadowMaxPlayersPerRun(),
+            config.economy().dbBalanceReadMaxPlayersPerBatch()
+        );
+        List<PlayerSample> players = onlinePlayerSamples(maxPlayers);
+        scheduler.runAsync(() -> runShadowSample(runStarted, players));
+      } catch (Throwable error) {
+        recordFailure(error);
+        finishRun(runStarted);
+      }
+    });
+  }
+
+  private void runShadowSample(long runStarted, List<PlayerSample> players) {
+    if (!running.get()) {
+      finishRun(runStarted);
+      return;
+    }
     ProviderBinding binding = bindEconomyProvider();
     if (binding == null) {
-      runInProgress.set(false);
+      finishRun(runStarted);
       return;
     }
 
-    List<PlayerSample> players = onlinePlayerSamples(config.economy().vaultDeltaShadowMaxPlayersPerRun());
     if (players.isEmpty()) {
-      lastRunAtMillis.set(System.currentTimeMillis());
-      runInProgress.set(false);
+      finishRun(runStarted);
       return;
     }
 
     List<CompletableFuture<Void>> futures = new ArrayList<>();
     for (PlayerSample player : players) {
       sampled.incrementAndGet();
-      Long vaultMinor = readVaultBalanceMinor(binding, player);
-      if (vaultMinor == null) {
+      TimedBalance vaultBalance = readVaultBalanceMinor(binding, player);
+      if (vaultBalance == null) {
         skipped.incrementAndGet();
         continue;
       }
-      futures.add(economy.fetchBalance(player.uuid())
-          .thenAccept(snapshot -> observeDelta(player, binding.name(), vaultMinor, snapshot.balanceMinor()))
+      long dbStarted = System.nanoTime();
+      futures.add(economy.fetchBalanceReadOnly(player.uuid())
+          .thenAccept(snapshot -> {
+            recordDbLatency(dbStarted);
+            observeDelta(player, binding.name(), vaultBalance.balanceMinor(), snapshot.balanceMinor());
+          })
           .exceptionally(error -> {
-            failures.incrementAndGet();
-            lastFailure = safeMessage(error);
+            recordDbLatency(dbStarted);
+            recordFailure(error);
             if (config.debug()) {
               logger.log(Level.WARNING, "Vault delta shadow DB balance read failed for " + player.uuid(), error);
             }
@@ -187,34 +264,37 @@ public final class VaultDeltaShadowService {
     }
 
     if (futures.isEmpty()) {
-      lastRunAtMillis.set(System.currentTimeMillis());
-      runInProgress.set(false);
+      finishRun(runStarted);
       return;
     }
 
     CompletableFuture.allOf(futures.toArray(CompletableFuture[]::new))
         .whenComplete((ignored, error) -> {
           if (error != null) {
-            failures.incrementAndGet();
-            lastFailure = safeMessage(error);
+            recordFailure(error);
           }
-          lastRunAtMillis.set(System.currentTimeMillis());
-          runInProgress.set(false);
+          finishRun(runStarted);
         });
   }
 
+  private void finishRun(long runStartedNanos) {
+    lastRunDurationMillis.set(elapsedMillis(runStartedNanos));
+    lastRunAtMillis.set(System.currentTimeMillis());
+    runInProgress.set(false);
+  }
+
   private List<PlayerSample> onlinePlayerSamples(int limit) {
-    List<PlayerSample> players = new ArrayList<>();
+    Map<UUID, PlayerSample> unique = new LinkedHashMap<>();
     for (Player player : Bukkit.getOnlinePlayers()) {
       if (player == null || player.getUniqueId() == null) {
         continue;
       }
-      players.add(new PlayerSample(player.getUniqueId(), safeUsername(player.getName())));
-      if (players.size() >= limit) {
+      unique.putIfAbsent(player.getUniqueId(), new PlayerSample(player.getUniqueId(), safeUsername(player.getName())));
+      if (unique.size() >= limit) {
         break;
       }
     }
-    return limitSamples(players, limit);
+    return limitSamples(new ArrayList<>(unique.values()), limit);
   }
 
   private ProviderBinding bindEconomyProvider() {
@@ -248,17 +328,19 @@ public final class VaultDeltaShadowService {
     }
   }
 
-  private Long readVaultBalanceMinor(ProviderBinding binding, PlayerSample player) {
+  private TimedBalance readVaultBalanceMinor(ProviderBinding binding, PlayerSample player) {
+    long started = System.nanoTime();
     try {
       OfflinePlayer offlinePlayer = Bukkit.getOfflinePlayer(player.uuid());
       Object result = binding.getBalance().invoke(binding.provider(), offlinePlayer);
+      long latency = recordVaultLatency(started);
       if (result instanceof Number number && Double.isFinite(number.doubleValue())) {
-        return toMinorUnits(number.doubleValue(), 100);
+        return new TimedBalance(toMinorUnits(number.doubleValue(), 100), latency);
       }
       return null;
     } catch (Throwable error) {
-      failures.incrementAndGet();
-      lastFailure = safeMessage(error);
+      recordVaultLatency(started);
+      recordFailure(error);
       if (config.debug()) {
         logger.log(Level.WARNING, "Vault delta shadow Vault read failed for " + player.uuid(), error);
       }
@@ -269,25 +351,72 @@ public final class VaultDeltaShadowService {
   private void observeDelta(PlayerSample player, String providerName, long vaultMinor, long dbMinor) {
     matched.incrementAndGet();
     long delta = deltaMinor(vaultMinor, dbMinor);
-    long min = config.economy().vaultDeltaShadowMinDeltaMinor();
-    if (!shouldLogDelta(delta, min)) {
+    long abs = Math.abs(delta);
+    totalAbsDelta.addAndGet(abs);
+    updateMax(largestAbsDelta, abs);
+    if (delta > 0) {
+      positiveDeltas.incrementAndGet();
+      updateMax(largestPositiveDelta, delta);
+    } else if (delta < 0) {
+      negativeDeltas.incrementAndGet();
+      updateMin(largestNegativeDelta, delta);
+    } else {
+      exactMatches.incrementAndGet();
+    }
+
+    EconomyConfig.ShadowConfig shadow = config.economy().shadow();
+    DeltaSeverity severity = classifyDelta(delta, shadow.warningDeltaMinor(), shadow.severeDeltaMinor());
+    boolean ignored = severity != DeltaSeverity.MATCH
+        && ignoredNoise(delta, config.economy().vaultDeltaShadowMinDeltaMinor(), shadow.ignoreNegativeOneMinorNoise());
+    if (ignored) {
+      ignoredDeltas.incrementAndGet();
+    }
+    if (severity == DeltaSeverity.SEVERE) {
+      severeDeltas.incrementAndGet();
+    }
+    if (abs > config.economy().vaultDeltaShadowMaxLoggedDeltaMinor()) {
+      cappedDeltas.incrementAndGet();
+    }
+
+    Observation observation = new Observation(
+        player.uuid(),
+        player.username(),
+        dbMinor,
+        vaultMinor,
+        delta,
+        Instant.now(),
+        config.serverId(),
+        config.serverGroup(),
+        severity,
+        ignored
+    );
+    analytics.record(observation, shadow.observationCacheSize());
+
+    if (ignored || severity == DeltaSeverity.MATCH) {
       return;
     }
 
-    deltaCount.incrementAndGet();
-    long max = config.economy().vaultDeltaShadowMaxLoggedDeltaMinor();
-    String flag = Math.abs(delta) > max ? " over_cap=true" : "";
-    logger.info("Vault delta shadow: serverId=" + config.serverId()
-        + " serverGroup=" + config.serverGroup()
-        + " uuid=" + player.uuid()
-        + " username=" + player.username()
-        + " vaultMinor=" + vaultMinor
-        + " dbMinor=" + dbMinor
-        + " deltaMinor=" + delta
+    String logLine = structuredLogLine(observation, providerName);
+    if (severity == DeltaSeverity.SEVERE) {
+      logger.warning("Vault delta shadow severe " + logLine);
+    } else {
+      logger.info("Vault delta shadow " + logLine);
+    }
+  }
+
+  private String structuredLogLine(Observation observation, String providerName) {
+    return "timestamp=" + observation.timestamp()
+        + " backend=" + observation.backendId()
+        + " serverGroup=" + observation.serverGroup()
+        + " uuid=" + observation.uuid()
+        + " username=" + observation.username()
+        + " dbBalanceMinor=" + observation.dbBalanceMinor()
+        + " vaultBalanceMinor=" + observation.vaultBalanceMinor()
+        + " deltaMinor=" + observation.deltaMinor()
+        + " severity=" + observation.severity()
+        + " sampleSource=online"
         + " provider=" + providerName
-        + " observedAt=" + Instant.now()
-        + flag
-        + " shadowOnly=true");
+        + " shadowOnly=true";
   }
 
   private static long toMinorUnits(double vaultBalance, int scale) {
@@ -310,6 +439,45 @@ public final class VaultDeltaShadowService {
     return provider.getClass().getName();
   }
 
+  private long recordVaultLatency(long startedNanos) {
+    long elapsed = elapsedMillis(startedNanos);
+    lastVaultLatencyMillis.set(elapsed);
+    totalVaultLatencyMillis.addAndGet(elapsed);
+    vaultReadCount.incrementAndGet();
+    return elapsed;
+  }
+
+  private void recordDbLatency(long startedNanos) {
+    long elapsed = elapsedMillis(startedNanos);
+    lastDbLatencyMillis.set(elapsed);
+    totalDbLatencyMillis.addAndGet(elapsed);
+    dbReadCount.incrementAndGet();
+  }
+
+  private static long elapsedMillis(long startedNanos) {
+    return Math.max(0, (System.nanoTime() - startedNanos) / 1_000_000L);
+  }
+
+  private static void updateMax(AtomicLong target, long value) {
+    long current;
+    do {
+      current = target.get();
+      if (value <= current) {
+        return;
+      }
+    } while (!target.compareAndSet(current, value));
+  }
+
+  private static void updateMin(AtomicLong target, long value) {
+    long current;
+    do {
+      current = target.get();
+      if (current != 0 && value >= current) {
+        return;
+      }
+    } while (!target.compareAndSet(current, value));
+  }
+
   private static String safeUsername(String username) {
     return username == null || username.isBlank() ? "unknown" : username.replaceAll("[^A-Za-z0-9_]", "_");
   }
@@ -319,6 +487,14 @@ public final class VaultDeltaShadowService {
       return error == null ? "unknown" : error.getClass().getSimpleName();
     }
     return error.getMessage();
+  }
+
+  private void recordFailure(Throwable error) {
+    failures.incrementAndGet();
+    lastFailure = safeMessage(error);
+    if (config.debug()) {
+      logger.log(Level.WARNING, "Vault delta shadow run failed", error);
+    }
   }
 
   public boolean running() {
@@ -333,8 +509,49 @@ public final class VaultDeltaShadowService {
     return matched.get();
   }
 
+  public int exactMatchCount() {
+    return exactMatches.get();
+  }
+
   public int deltaCount() {
-    return deltaCount.get();
+    return positiveDeltas.get() + negativeDeltas.get();
+  }
+
+  public int positiveDeltaCount() {
+    return positiveDeltas.get();
+  }
+
+  public int negativeDeltaCount() {
+    return negativeDeltas.get();
+  }
+
+  public int ignoredDeltaCount() {
+    return ignoredDeltas.get();
+  }
+
+  public int cappedDeltaCount() {
+    return cappedDeltas.get();
+  }
+
+  public int severeDeltaCount() {
+    return severeDeltas.get();
+  }
+
+  public long averageAbsDeltaMinor() {
+    long count = matched.get();
+    return count <= 0 ? 0 : totalAbsDelta.get() / count;
+  }
+
+  public long largestAbsDeltaMinor() {
+    return largestAbsDelta.get();
+  }
+
+  public long largestPositiveDeltaMinor() {
+    return largestPositiveDelta.get();
+  }
+
+  public long largestNegativeDeltaMinor() {
+    return largestNegativeDelta.get();
   }
 
   public int skippedCount() {
@@ -350,11 +567,69 @@ public final class VaultDeltaShadowService {
     return at <= 0 ? -1 : Math.max(0, (System.currentTimeMillis() - at) / 1000);
   }
 
+  public long lastRunDurationMillis() {
+    return lastRunDurationMillis.get();
+  }
+
+  public long averageDbReadLatencyMillis() {
+    long count = dbReadCount.get();
+    return count <= 0 ? 0 : totalDbLatencyMillis.get() / count;
+  }
+
+  public long averageVaultReadLatencyMillis() {
+    long count = vaultReadCount.get();
+    return count <= 0 ? 0 : totalVaultLatencyMillis.get() / count;
+  }
+
+  public long lastDbReadLatencyMillis() {
+    return lastDbLatencyMillis.get();
+  }
+
+  public long lastVaultReadLatencyMillis() {
+    return lastVaultLatencyMillis.get();
+  }
+
+  public int recentObservationCount() {
+    return analytics.size();
+  }
+
+  public List<OffenderSummary> topOffenders(int limit) {
+    return analytics.topOffenders(limit, config.economy().shadow().repeatedOffenderThreshold());
+  }
+
+  public String estimatedSyncHealth() {
+    return estimatedSyncHealth(matched.get(), severeDeltas.get(), deltaCount());
+  }
+
   public String lastFailure() {
     return lastFailure;
   }
 
   private record ProviderBinding(Object provider, String name, Method getBalance) {}
 
+  private record TimedBalance(long balanceMinor, long latencyMillis) {}
+
   public record PlayerSample(UUID uuid, String username) {}
+
+  public enum DeltaSeverity {
+    MATCH,
+    SMALL,
+    WARNING,
+    SEVERE
+  }
+
+  public record Observation(
+      UUID uuid,
+      String username,
+      long dbBalanceMinor,
+      long vaultBalanceMinor,
+      long deltaMinor,
+      Instant timestamp,
+      String backendId,
+      String serverGroup,
+      DeltaSeverity severity,
+      boolean ignored
+  ) {}
+
+  public record OffenderSummary(UUID uuid, int count, String username) {}
 }

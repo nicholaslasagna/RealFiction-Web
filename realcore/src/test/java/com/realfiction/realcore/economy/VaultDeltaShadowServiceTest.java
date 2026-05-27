@@ -14,7 +14,7 @@ import org.junit.jupiter.api.Test;
 final class VaultDeltaShadowServiceTest {
   @Test
   void guardRequiresExplicitEnablementAndAllowlist() throws InvalidConfigurationException {
-    assertEquals("economy.enabled is false",
+    assertEquals("DB balance read is unavailable: economy.dbBalanceReadEnabled is false",
         VaultDeltaShadowService.guardReason(config("smp-1", "smp", true, false, true, List.of("smp-1"))));
     assertEquals("economy.vaultDeltaShadowEnabled is false",
         VaultDeltaShadowService.guardReason(config("smp-1", "smp", true, true, false, List.of("smp-1"))));
@@ -61,6 +61,34 @@ final class VaultDeltaShadowServiceTest {
     assertTrue(VaultDeltaShadowService.shouldLogDelta(-100, 100));
   }
 
+  @Test
+  void classifiesDeltasByConfiguredThresholds() {
+    assertEquals(VaultDeltaShadowService.DeltaSeverity.MATCH,
+        VaultDeltaShadowService.classifyDelta(0, 5_000, 50_000));
+    assertEquals(VaultDeltaShadowService.DeltaSeverity.SMALL,
+        VaultDeltaShadowService.classifyDelta(4_999, 5_000, 50_000));
+    assertEquals(VaultDeltaShadowService.DeltaSeverity.WARNING,
+        VaultDeltaShadowService.classifyDelta(5_000, 5_000, 50_000));
+    assertEquals(VaultDeltaShadowService.DeltaSeverity.SEVERE,
+        VaultDeltaShadowService.classifyDelta(-50_000, 5_000, 50_000));
+  }
+
+  @Test
+  void ignoresTinyConfiguredNoiseOnly() {
+    assertTrue(VaultDeltaShadowService.ignoredNoise(-1, 1, true));
+    assertFalse(VaultDeltaShadowService.ignoredNoise(-1, 1, false));
+    assertTrue(VaultDeltaShadowService.ignoredNoise(99, 100, false));
+    assertFalse(VaultDeltaShadowService.ignoredNoise(100, 100, false));
+  }
+
+  @Test
+  void estimatesSyncHealthFromAggregateCounts() {
+    assertEquals("unknown", VaultDeltaShadowService.estimatedSyncHealth(0, 0, 0));
+    assertEquals("healthy", VaultDeltaShadowService.estimatedSyncHealth(10, 0, 0));
+    assertEquals("watch", VaultDeltaShadowService.estimatedSyncHealth(10, 0, 1));
+    assertEquals("needs_review", VaultDeltaShadowService.estimatedSyncHealth(10, 1, 0));
+  }
+
   private static VaultDeltaShadowService.PlayerSample sample(int index) {
     return new VaultDeltaShadowService.PlayerSample(
         UUID.fromString("00000000-0000-0000-0000-%012d".formatted(index)),
@@ -86,10 +114,13 @@ final class VaultDeltaShadowServiceTest {
           economy: %s
         economy:
           enabled: %s
+          dbBalanceReadEnabled: %s
+          dbBalanceReadBackendAllowlist:
+        %s
           vaultDeltaShadowEnabled: %s
           vaultDeltaShadowBackendAllowlist:
         %s
-        """.formatted(serverId, serverGroup, moduleEnabled, economyEnabled, shadowEnabled, allowlistYaml));
+        """.formatted(serverId, serverGroup, moduleEnabled, economyEnabled, economyEnabled, allowlistYaml, shadowEnabled, allowlistYaml));
     return RealCoreConfig.from(yaml);
   }
 }

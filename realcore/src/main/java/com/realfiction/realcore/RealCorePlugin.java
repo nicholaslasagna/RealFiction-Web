@@ -432,9 +432,19 @@ public final class RealCorePlugin extends JavaPlugin {
           + " (sampled=" + vaultDeltaShadowService.sampledCount()
           + ", matched=" + vaultDeltaShadowService.matchedCount()
           + ", deltas=" + vaultDeltaShadowService.deltaCount()
+          + ", severe=" + vaultDeltaShadowService.severeDeltaCount()
           + ", skipped=" + vaultDeltaShadowService.skippedCount()
           + ", failures=" + vaultDeltaShadowService.failureCount()
           + (ago >= 0 ? ", last " + ago + "s ago" : ", never run") + ")");
+    }
+    if (economyService != null) {
+      long ago = economyService.lastBalanceReadAgoSeconds();
+      getLogger().info("| DB balance reads: "
+          + (economyService.dbBalanceReadAllowed() ? "enabled" : "disabled")
+          + " (cache=" + economyService.cachedBalanceCount()
+          + ", ok=" + economyService.balanceReadSuccessCount()
+          + ", failures=" + economyService.balanceReadFailureCount()
+          + (ago >= 0 ? ", last " + ago + "s ago" : ", never read") + ")");
     }
     getLogger().info("| Commands: " + commands);
     getLogger().info("| Menus: " + (menus.isBlank() ? "none" : menus));
@@ -620,6 +630,16 @@ public final class RealCorePlugin extends JavaPlugin {
         || !getConfig().isConfigurationSection("rewards.messages")
         || !getConfig().isConfigurationSection("rewards.economy")
         || !getConfig().isConfigurationSection("economy")
+        || !getConfig().contains("economy.dbBalanceReadEnabled")
+        || !getConfig().contains("economy.dbBalanceReadBackendAllowlist")
+        || !getConfig().contains("economy.dbBalanceReadCacheSeconds")
+        || !getConfig().contains("economy.dbBalanceReadMaxPlayersPerBatch")
+        || !getConfig().contains("economy.syncVaultFromDbEnabled")
+        || !getConfig().contains("economy.syncVaultFromDbBackendAllowlist")
+        || !getConfig().contains("economy.syncVaultFromDbMaxPlayersPerRun")
+        || !getConfig().contains("economy.syncVaultFromDbMaxDeltaMinor")
+        || !getConfig().contains("economy.syncVaultFromDbRequireOnline")
+        || !getConfig().contains("economy.syncVaultFromDbDryRunDefault")
         || !getConfig().contains("economy.voteRewardsToLedger")
         || !getConfig().contains("economy.voteRewardsLedgerDryRun")
         || !getConfig().contains("economy.voteRewardsLedgerWritesEnabled")
@@ -630,6 +650,11 @@ public final class RealCorePlugin extends JavaPlugin {
         || !getConfig().contains("economy.vaultDeltaShadowMinDeltaMinor")
         || !getConfig().contains("economy.vaultDeltaShadowMaxLoggedDeltaMinor")
         || !getConfig().contains("economy.vaultDeltaShadowBackendAllowlist")
+        || !getConfig().contains("economy.shadow.warningDeltaMinor")
+        || !getConfig().contains("economy.shadow.severeDeltaMinor")
+        || !getConfig().contains("economy.shadow.ignoreNegativeOneMinorNoise")
+        || !getConfig().contains("economy.shadow.repeatedOffenderThreshold")
+        || !getConfig().contains("economy.shadow.observationCacheSize")
         || !getConfig().isConfigurationSection("economy.gameplaySync");
     if (!missingLobbyDefaults) {
       return;
