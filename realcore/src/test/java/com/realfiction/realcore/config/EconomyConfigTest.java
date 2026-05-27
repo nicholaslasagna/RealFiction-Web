@@ -33,6 +33,8 @@ final class EconomyConfigTest {
     assertEquals(1, config.vaultDeltaShadowMinDeltaMinor());
     assertEquals(250000, config.vaultDeltaShadowMaxLoggedDeltaMinor());
     assertEquals(List.of("smp-1"), config.vaultDeltaShadowBackendAllowlist());
+    assertFalse(config.gameplaySync().enabled());
+    assertTrue(config.gameplaySync().dryRun());
   }
 
   @Test

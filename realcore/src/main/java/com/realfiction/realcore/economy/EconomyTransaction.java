@@ -49,8 +49,19 @@ public final class EconomyTransaction {
   public static EconomyTransaction spend(UUID minecraftUuid, String minecraftUsername, long amountMinor,
                                          String reason, String idempotencyKey, String externalRefType,
                                          String externalRefId, Map<String, Object> metadata) {
-    return new EconomyTransaction(minecraftUuid, minecraftUsername, -Math.abs(amountMinor), EconomyCategory.SPEND,
-        reason, idempotencyKey, externalRefType, externalRefId, metadata);
+    return debit(minecraftUuid, minecraftUsername, amountMinor, EconomyCategory.SPEND, reason, idempotencyKey,
+        externalRefType, externalRefId, metadata);
+  }
+
+  public static EconomyTransaction debit(UUID minecraftUuid, String minecraftUsername, long amountMinor,
+                                         EconomyCategory category, String reason, String idempotencyKey,
+                                         String externalRefType, String externalRefId,
+                                         Map<String, Object> metadata) {
+    if (!category.debit()) {
+      throw new IllegalArgumentException("debit transactions must use a spend category");
+    }
+    return new EconomyTransaction(minecraftUuid, minecraftUsername, -Math.abs(amountMinor), category, reason,
+        idempotencyKey, externalRefType, externalRefId, metadata);
   }
 
   public static String stableIdempotencyKey(String serverId, EconomyCategory category, UUID minecraftUuid,
@@ -111,8 +122,8 @@ public final class EconomyTransaction {
     if (category.credit() && amountMinor < 0) {
       throw new IllegalArgumentException(category.apiValue() + " must be a positive credit");
     }
-    if (category == EconomyCategory.SPEND && amountMinor > 0) {
-      throw new IllegalArgumentException("spend must be a negative debit");
+    if (category.debit() && amountMinor > 0) {
+      throw new IllegalArgumentException(category.apiValue() + " must be a negative debit");
     }
   }
 
