@@ -6,9 +6,6 @@ import org.bukkit.configuration.ConfigurationSection;
 
 /**
  * Disabled-by-default gameplay economy sync buffer settings.
- *
- * <p>Phase 8 only prepares validation and enqueue plumbing. No gameplay producers
- * are wired in this phase.
  */
 public record GameplayEconomySyncConfig(
     boolean enabled,
@@ -24,7 +21,8 @@ public record GameplayEconomySyncConfig(
     long maxDebitMinorPerTx,
     boolean dryRun,
     boolean logTransactions,
-    GameplayEconomyProducersConfig producers
+    GameplayEconomyProducersConfig producers,
+    GameplayEconomyObservabilityConfig observability
 ) {
   public static GameplayEconomySyncConfig disabledDefaults() {
     return new GameplayEconomySyncConfig(
@@ -41,7 +39,8 @@ public record GameplayEconomySyncConfig(
         50_000,
         true,
         true,
-        GameplayEconomyProducersConfig.disabledDefaults()
+        GameplayEconomyProducersConfig.disabledDefaults(),
+        GameplayEconomyObservabilityConfig.defaults()
     );
   }
 
@@ -67,7 +66,8 @@ public record GameplayEconomySyncConfig(
         Math.max(1, Math.min(1_000_000_000_000L, section.getLong("maxDebitMinorPerTx", defaults.maxDebitMinorPerTx()))),
         section.getBoolean("dryRun", defaults.dryRun()),
         section.getBoolean("logTransactions", defaults.logTransactions()),
-        GameplayEconomyProducersConfig.from(section)
+        GameplayEconomyProducersConfig.from(section),
+        GameplayEconomyObservabilityConfig.from(section.getConfigurationSection("observability"))
     );
   }
 

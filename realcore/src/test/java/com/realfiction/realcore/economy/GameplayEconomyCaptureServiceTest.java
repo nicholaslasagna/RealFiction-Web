@@ -49,9 +49,11 @@ final class GameplayEconomyCaptureServiceTest {
     economyService.start();
     capture = new GameplayEconomyCaptureService(
         config,
-        new GameplayEconomyTransactionBuffer(config, economyService, Logger.getLogger("test")),
+        new GameplayEconomyTransactionBuffer(config, economyService, null, null, Logger.getLogger("test")),
         new GameplayEconomyIdempotencyDedupCache(Duration.ofMinutes(5), 1000),
         new GameplayEconomyProducerMetrics(),
+        null,
+        null,
         Logger.getLogger("test"));
     producerConfig = config.economy().gameplaySync().producers().economyShopGuiSell();
   }
@@ -243,9 +245,11 @@ final class GameplayEconomyCaptureServiceTest {
     economy.start();
     GameplayEconomyCaptureService service = new GameplayEconomyCaptureService(
         config,
-        new GameplayEconomyTransactionBuffer(config, economy, Logger.getLogger("test")),
+        new GameplayEconomyTransactionBuffer(config, economy, null, null, Logger.getLogger("test")),
         new GameplayEconomyIdempotencyDedupCache(Duration.ofMinutes(5), 1000),
         new GameplayEconomyProducerMetrics(),
+        null,
+        null,
         Logger.getLogger("test"));
     service.capture(request(config, 100));
     assertEquals(1, service.metrics().queued());
@@ -258,9 +262,11 @@ final class GameplayEconomyCaptureServiceTest {
     economy.start();
     return new GameplayEconomyCaptureService(
         config,
-        new GameplayEconomyTransactionBuffer(config, economy, Logger.getLogger("test")),
+        new GameplayEconomyTransactionBuffer(config, economy, null, null, Logger.getLogger("test")),
         new GameplayEconomyIdempotencyDedupCache(Duration.ofMinutes(5), 1000),
         new GameplayEconomyProducerMetrics(),
+        null,
+        null,
         Logger.getLogger("test"));
   }
 

@@ -14,6 +14,8 @@ import com.realfiction.realcore.economy.GameplayEconomyProducer;
 import com.realfiction.realcore.economy.GameplayEconomyProducerMetrics;
 import com.realfiction.realcore.economy.GameplayEconomySyncService;
 import com.realfiction.realcore.economy.GameplayEconomyTransactionBuffer;
+import com.realfiction.realcore.economy.GameplayEconomyWriterMetrics;
+import com.realfiction.realcore.config.GameplayEconomySyncConfig;
 import com.realfiction.realcore.economy.EconomyStagingTestTransaction;
 import com.realfiction.realcore.economy.EconomyTransaction;
 import com.realfiction.realcore.economy.VaultBalanceAuditService;
@@ -863,15 +865,21 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
     send(sender, ChatColor.YELLOW + "Gameplay buffer: " + ChatColor.WHITE + buffer.acceptedCount()
         + " accepted" + ChatColor.GRAY + ", " + buffer.dryRunCount() + " dry-run, "
         + buffer.rejectedCount() + " rejected"
-        + ChatColor.GRAY + ", writer queued " + buffer.writerQueuedCount());
+        + ChatColor.GRAY + ", gameplay queue " + buffer.gameplayQueueDepth()
+        + ", writer queued " + buffer.writerQueuedCount());
+    long oldestQueued = buffer.oldestQueuedAgeSeconds();
+    if (oldestQueued >= 0) {
+      send(sender, ChatColor.YELLOW + "Oldest gameplay queue entry: " + ChatColor.WHITE + oldestQueued + "s");
+    }
+    appendGameplayWriterMetrics(sender, buffer);
     if (!buffer.lastAcceptedMessage().isBlank()) {
       send(sender, ChatColor.YELLOW + "Last accepted: " + ChatColor.GRAY + buffer.lastAcceptedMessage());
     }
     if (!buffer.lastRejectedMessage().isBlank()) {
       send(sender, ChatColor.YELLOW + "Last rejected: " + ChatColor.RED + buffer.lastRejectedMessage());
     }
-    appendGameplayProducerStatus(sender);
     if (detailed) {
+      appendGameplayProducerStatus(sender);
       EconomyService economy = plugin.economyService();
       if (economy == null) {
         send(sender, ChatColor.YELLOW + "Global writer: " + ChatColor.RED + "not loaded");
@@ -880,7 +888,10 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
             + ChatColor.GRAY + (economy.disabledReason().isBlank() ? "" : " (" + economy.disabledReason() + ")"));
       } else {
         sendEconomyWriterStatus(sender, economy.writer());
+        sendGameplayWriterDiagnostics(sender, economy.writer(), gameplay);
       }
+    } else {
+      send(sender, ChatColor.GRAY + "Use /rf economy gameplay producers for producer-only status.");
     }
   }
 
@@ -907,17 +918,102 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
           + ChatColor.GRAY + ", running=" + producer.running());
     }
     GameplayEconomyProducerMetrics metrics = sync.metrics();
-    send(sender, ChatColor.YELLOW + "Producer metrics: " + ChatColor.WHITE + metrics.captured()
+    long captured = metrics.captured();
+    send(sender, ChatColor.YELLOW + "Producer metrics: " + ChatColor.WHITE + captured
         + " captured" + ChatColor.GRAY + ", " + metrics.dryRunCaptured() + " dry-run, "
         + metrics.queued() + " queued, dup " + metrics.duplicateRejected()
         + ", invalid " + metrics.invalidRejected() + ", over-cap " + metrics.overCapRejected()
         + ", disabled " + metrics.producerDisabledRejected());
-    send(sender, ChatColor.YELLOW + "Dedup cache: " + ChatColor.WHITE + sync.dedupCacheSize() + " keys"
+    if (captured > 0) {
+      double dryRunRate = metrics.dryRunCaptured() * 100.0 / captured;
+      double queueRate = metrics.queued() * 100.0 / captured;
+      send(sender, ChatColor.YELLOW + "Capture rates: " + ChatColor.WHITE
+          + String.format(java.util.Locale.US, "%.1f", dryRunRate) + "% dry-run"
+          + ChatColor.GRAY + ", "
+          + String.format(java.util.Locale.US, "%.1f", queueRate) + "% queued");
+    }
+    send(sender, ChatColor.YELLOW + "Dedup cache: " + ChatColor.WHITE + sync.dedupCacheSize()
+        + "/" + sync.dedupCacheMaxEntries() + " keys"
         + ChatColor.GRAY + " (TTL " + config.economy().gameplaySync().producers().dedupCacheTtl().toSeconds() + "s)");
+    GameplayEconomyTransactionBuffer buffer = plugin.gameplayEconomyTransactionBuffer();
+    if (buffer != null) {
+      appendGameplayWriterMetrics(sender, buffer);
+      send(sender, ChatColor.YELLOW + "Gameplay queue: " + ChatColor.WHITE + buffer.gameplayQueueDepth()
+          + ChatColor.GRAY + " / " + config.economy().gameplaySync().observability().maxQueueEntries()
+          + ", retry depth " + buffer.writerRetryDepth()
+          + " (" + buffer.writerRetryBatches() + " batches)");
+    }
+    EconomyService economy = plugin.economyService();
+    if (economy != null && economy.writerRunning()) {
+      sendGameplayWriterDiagnostics(sender, economy.writer(), config.economy().gameplaySync());
+    }
     if (!metrics.lastEventSummary().isBlank()) {
       send(sender, ChatColor.YELLOW + "Last event: " + ChatColor.GRAY + metrics.lastEventSummary());
     }
-    send(sender, ChatColor.GRAY + "Use /rf economy gameplay producers for producer-only status.");
+  }
+
+  private void appendGameplayWriterMetrics(CommandSender sender, GameplayEconomyTransactionBuffer buffer) {
+    GameplayEconomyWriterMetrics gameplay = buffer.gameplayMetrics();
+    if (gameplay == null) {
+      return;
+    }
+    send(sender, ChatColor.YELLOW + "Gameplay writer (isolated): " + ChatColor.WHITE + gameplay.gameplayQueued()
+        + " queued" + ChatColor.GRAY + ", " + gameplay.gameplaySucceeded() + " ok, "
+        + gameplay.gameplayDuplicates() + " dup, " + gameplay.gameplayFailures() + " fail, "
+        + gameplay.gameplayDropped() + " dropped");
+    if (buffer.configuredDryRun()) {
+      send(sender, ChatColor.YELLOW + "Dry-run simulation: " + ChatColor.WHITE
+          + gameplay.dryRunSimulatedTransactions() + " txs"
+          + ChatColor.GRAY + ", " + gameplay.dryRunSimulatedBatches() + " batches, volume "
+          + gameplay.dryRunEstimatedVolumeMinor() + " minor");
+      send(sender, ChatColor.YELLOW + "Dry-run estimates: " + ChatColor.WHITE
+          + String.format(java.util.Locale.US, "%.2f", gameplay.dryRunEstimatedTransactionsPerMinute()) + " tx/min"
+          + ChatColor.GRAY + ", ~"
+          + String.format(java.util.Locale.US, "%.2f", gameplay.dryRunEstimatedRequestsPerMinute(
+              (int) buffer.gameplayConfig().flushInterval().toSeconds())) + " req/min");
+    }
+  }
+
+  private void sendGameplayWriterDiagnostics(CommandSender sender, BufferedEconomyTransactionWriter writer,
+                                             GameplayEconomySyncConfig gameplay) {
+    send(sender, ChatColor.YELLOW + "Writer queue: " + ChatColor.WHITE + writer.workingTransactionCount()
+        + " working" + ChatColor.GRAY + ", " + writer.pendingTransactionCount() + " retry txs ("
+        + writer.pendingBatchCount() + " batches)");
+    send(sender, ChatColor.YELLOW + "Batch telemetry: " + ChatColor.WHITE + writer.batchesCreated()
+        + " created" + ChatColor.GRAY + ", " + writer.batchesSent() + " sent, "
+        + writer.batchesSucceeded() + " ok, " + writer.batchesFailed() + " failed, "
+        + writer.batchesRetried() + " retried");
+    send(sender, ChatColor.YELLOW + "Transaction telemetry: " + ChatColor.WHITE + writer.transactionsQueued()
+        + " queued" + ChatColor.GRAY + ", " + writer.transactionsSucceeded() + " ok, "
+        + writer.transactionsFailed() + " failed, dup " + writer.duplicateTransactions()
+        + ", permanent " + writer.permanentRejectTransactions()
+        + ", transient " + writer.transientFailureTransactions()
+        + ", overflow " + writer.queueOverflowDrops());
+    send(sender, ChatColor.YELLOW + "Batch sizes: " + ChatColor.WHITE + "avg " + writer.averageBatchSizeMetric()
+        + ChatColor.GRAY + ", max " + writer.largestBatchSize());
+    long flushMs = writer.lastFlushDurationMillis();
+    long httpMs = writer.lastHttpMillis();
+    long serializeMs = writer.lastSerializationMillis();
+    if (flushMs > 0 || httpMs > 0 || serializeMs > 0) {
+      send(sender, ChatColor.YELLOW + "Last flush timing: " + ChatColor.WHITE + flushMs + "ms total"
+          + ChatColor.GRAY + ", HTTP " + httpMs + "ms, serialize " + serializeMs + "ms");
+    }
+    send(sender, ChatColor.YELLOW + "Last batch: " + ChatColor.WHITE + writer.lastBatchStatus()
+        + ChatColor.GRAY + ", HTTP " + writer.lastHttpStatus()
+        + ", ~" + String.format(java.util.Locale.US, "%.2f", writer.batchesPerMinuteEstimate()) + " batches/min");
+    long successAgo = writer.lastFlushAgoSeconds();
+    if (successAgo >= 0) {
+      send(sender, ChatColor.YELLOW + "Last successful flush: " + ChatColor.WHITE + successAgo + "s ago");
+    }
+    long failureAt = writer.lastFailureAtMillis();
+    if (failureAt > 0) {
+      long failureAgo = Math.max(0, (System.currentTimeMillis() - failureAt) / 1000);
+      send(sender, ChatColor.YELLOW + "Last failure: " + ChatColor.RED + writer.lastFailureReason()
+          + ChatColor.GRAY + " (" + failureAgo + "s ago)");
+    }
+    if (gameplay.dryRun()) {
+      send(sender, ChatColor.GRAY + "Dry-run active: HTTP sends disabled for gameplay path.");
+    }
   }
 
   private String categoryToggle(String label, boolean on) {
@@ -1040,13 +1136,13 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
         + " queued" + ChatColor.GRAY + " (working " + writer.workingTransactionCount()
         + ", pending " + writer.pendingTransactionCount()
         + ", retry batches " + writer.pendingBatchCount() + ")");
-    send(sender, ChatColor.YELLOW + "Economy batches: " + ChatColor.WHITE + writer.sentBatchCount()
-        + " sent / " + writer.failedBatchCount() + " failed"
+    send(sender, ChatColor.YELLOW + "Economy batches: " + ChatColor.WHITE + writer.batchesSucceeded()
+        + " ok / " + writer.batchesFailed() + " failed"
         + ChatColor.GRAY + ", " + writer.appliedTransactionCount() + " applied tx, "
         + writer.duplicateBatchCount() + " duplicate batches, "
         + writer.duplicateTransactionCount() + " duplicate tx, dropped "
         + writer.droppedBatchCount() + " batches / " + writer.droppedTransactionCount() + " tx"
-        + (ago >= 0 ? ", last " + ago + "s ago" : ", never flushed"));
+        + (ago >= 0 ? ", last success " + ago + "s ago" : ", never flushed"));
     String failure = writer.lastFailureMessage();
     if (failure != null && !failure.isBlank()) {
       send(sender, ChatColor.YELLOW + "Last economy error: " + ChatColor.RED + failure);

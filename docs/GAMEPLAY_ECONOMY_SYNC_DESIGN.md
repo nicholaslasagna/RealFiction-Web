@@ -355,6 +355,13 @@ steps, rollback, stop conditions, and explicit non-goals. **No deploy in the
 Phase 11 PR.** See
 [`docs/REALCORE_GAMEPLAY_ECONOMY_RELEASE_PLAN.md`](REALCORE_GAMEPLAY_ECONOMY_RELEASE_PLAN.md).
 
+### Phase 13: Gameplay economy observability
+
+Batch/retry/duplicate/failure telemetry, gameplay-isolated writer metrics, queue
+safety limits, structured `[GameplaySync:*]` logs, and expanded `/rf economy
+gameplay` diagnostics. Defaults unchanged (`enabled=false`, `dryRun=true`). See
+[`docs/ECONOMY_GAMEPLAY_OBSERVABILITY.md`](ECONOMY_GAMEPLAY_OBSERVABILITY.md).
+
 ### Phase 0: Design Only
 
 Document current behavior, risks, and rollout criteria. Do not change code,
