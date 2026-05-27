@@ -33,7 +33,7 @@ No DB ledger writes occur with these defaults.
 ## Dry-run log format
 
 ```text
-[GameplaySync:DRYRUN] server=smp-1 category=shop_sell player=Alex(00000000-0000-0000-0000-000000000123) amountMinor=2500 source=EconomyShopGUI eventId=SELL_SCREEN:blocks.stone:64:2500:00000000-0000-0000-0000-000000000123
+[GameplaySync:DRYRUN] dryRun=true serverId=smp-1 producerId=economyShopGuiSell category=shop_sell player=Alex(00000000-0000-0000-0000-000000000123) amountMinor=2500 source=EconomyShopGUI eventId=SELL_SCREEN:blocks.stone:64:2500:00000000-0000-0000-0000-000000000123
 ```
 
 ## Observability
