@@ -216,6 +216,14 @@ Anarchy must stay disabled at the DB/RPC, API, RealCore, and config layers.
 
 ## Rollout Plan
 
+### Phase 7: SMP gameplay write policy preparation
+
+Docs and manual operator SQL only. Staged enable/disable/verify snippets for a
+future capped SMP write trial. Does not change production policy rows or enable
+`can_earn` / `can_spend` automatically. See
+`docs/ECONOMY_SMP_GAMEPLAY_WRITE_POLICY_ROLLOUT.md` and
+`docs/sql/economy-smp-gameplay-write-trial.sql`.
+
 ### Phase 0: Design Only
 
 Document current behavior, risks, and rollout criteria. Do not change code,
