@@ -278,7 +278,7 @@ Copy for each test session:
 - **economyShopGuiBuy captured / dryRunCaptured after:**
 - **Vault deduction normal:** yes / no
 - **Rollback needed:** yes / no
-- **Approved for live buy trial:** yes / no (requires separate phase; NOT this rollout)
+- **Approved for live buy trial:** yes / no → if yes, use [ECONOMY_SMP_SHOP_BUY_LIVE_TRIAL.md](ECONOMY_SMP_SHOP_BUY_LIVE_TRIAL.md) (Phase 24)
 ```
 
 ---
@@ -296,6 +296,7 @@ Copy for each test session:
 
 ## Related docs
 
+- [ECONOMY_SMP_SHOP_BUY_LIVE_TRIAL.md](ECONOMY_SMP_SHOP_BUY_LIVE_TRIAL.md) — Phase 24 live trial (after dry-run pass)
 - [ECONOMY_SHOP_BUY_SPEND_DESIGN_PHASE21.md](ECONOMY_SHOP_BUY_SPEND_DESIGN_PHASE21.md) — debit design and Phase 22 skeleton
 - [ECONOMY_GAMEPLAY_PRODUCER_ROLLOUT.md](ECONOMY_GAMEPLAY_PRODUCER_ROLLOUT.md) — producer defaults and hooks
 - [ECONOMY_SMP_SHOP_SELL_DRY_RUN_ROLLOUT.md](ECONOMY_SMP_SHOP_SELL_DRY_RUN_ROLLOUT.md) — sell-side dry-run (Phase 10)

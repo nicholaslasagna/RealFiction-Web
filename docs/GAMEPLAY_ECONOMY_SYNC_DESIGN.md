@@ -352,6 +352,12 @@ Operator checklist for SMP-only EconomyShopGUI **buy** capture validation: no DB
 rows, `dryRun=true`, `can_spend` unchanged. Requires Phase 22 jar. See
 [`ECONOMY_SMP_SHOP_BUY_DRY_RUN_ROLLOUT.md`](ECONOMY_SMP_SHOP_BUY_DRY_RUN_ROLLOUT.md).
 
+### Phase 24: SMP shop_buy live ledger trial plan
+
+Operator plan for **manual** policy SQL + `dryRun=false` single-buy trial after
+Phase 23 passes. Docs only — no automatic `can_spend` or config changes in repo.
+See [`ECONOMY_SMP_SHOP_BUY_LIVE_TRIAL.md`](ECONOMY_SMP_SHOP_BUY_LIVE_TRIAL.md).
+
 ### Phase 10: SMP shop_sell dry-run ops plan
 
 Operator rollout to install Phase 8/9 jar on SMP and verify EconomyShopGUI sell
