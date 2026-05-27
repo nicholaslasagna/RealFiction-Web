@@ -77,11 +77,18 @@ final class EconomyShopGuiPostTransactionSupport {
     return (Player) invoke(event, "getPlayer");
   }
 
+  /** Upper bound aligned with {@code economy.gameplaySync.maxCreditMinorPerTx} default cap. */
+  static final long MAX_VAULT_AMOUNT_MINOR = 1_000_000_000_000L;
+
   static long dollarsToMinor(double dollars) {
     if (Double.isNaN(dollars) || Double.isInfinite(dollars) || dollars <= 0) {
       return 0;
     }
-    return Math.round(dollars * 100.0);
+    double minor = dollars * 100.0;
+    if (minor >= MAX_VAULT_AMOUNT_MINOR) {
+      return MAX_VAULT_AMOUNT_MINOR;
+    }
+    return Math.round(minor);
   }
 
   static double toDouble(Object value) {

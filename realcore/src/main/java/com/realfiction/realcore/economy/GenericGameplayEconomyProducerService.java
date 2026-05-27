@@ -260,7 +260,9 @@ public final class GenericGameplayEconomyProducerService implements GameplayEcon
 
   private String formatDryRunLog(GameplayEconomyEvent event) {
     return "[GameplaySync:DRYRUN]"
-        + " server=" + config.serverId()
+        + " dryRun=true"
+        + " serverId=" + config.serverId()
+        + " producerId=" + ID
         + " category=" + event.category().ledgerCategory().apiValue()
         + " player=" + event.playerName() + "(" + event.playerUuid() + ")"
         + " amountMinor=" + event.amountMinor()

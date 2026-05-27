@@ -120,7 +120,7 @@ public final class GameplayEconomyPreflightService {
     addModuleConfigChecks(checks, config, economy, gameplay, observability, mode);
     addDependencyChecks(checks, config, gameplay, snapshot.runtime);
     addWriterStateChecks(checks, mode, gameplay, buffer, writer, metrics);
-    addModeSpecificChecks(checks, mode, gameplay, buffer, metrics);
+    addModeSpecificChecks(checks, mode, config, economy, gameplay, buffer, metrics);
 
     if (mode == Mode.LIVE) {
       addLiveTrialCapChecks(checks, gameplay);
@@ -247,6 +247,7 @@ public final class GameplayEconomyPreflightService {
 
     if (mode == Mode.LIVE) {
       checks.add(boolCheck("shopSell", gameplay.shopSell(), "true"));
+      addProducerDryRunChecks(checks, gameplay);
     } else {
       checks.add(new Check(
           "shopSell",
@@ -413,6 +414,8 @@ public final class GameplayEconomyPreflightService {
   private static void addModeSpecificChecks(
       List<Check> checks,
       Mode mode,
+      RealCoreConfig config,
+      EconomyConfig economy,
       GameplayEconomySyncConfig gameplay,
       GameplayEconomyTransactionBuffer buffer,
       GameplayEconomyWriterMetrics metrics
@@ -430,6 +433,7 @@ public final class GameplayEconomyPreflightService {
         checks.add(new Check("noWriterEnqueue", Status.PASS, "ok"));
       }
       addDryRunEstimateChecks(checks, buffer, metrics, gameplay);
+      addStagingTestBypassWarning(checks, config, economy);
       return;
     }
 
@@ -442,6 +446,42 @@ public final class GameplayEconomyPreflightService {
       checks.add(new Check("liveGameplaySync", Status.FAIL, "enabled=false"));
     } else {
       checks.add(new Check("liveGameplaySync", Status.PASS, "enabled=true"));
+    }
+  }
+
+  private static void addProducerDryRunChecks(List<Check> checks, GameplayEconomySyncConfig gameplay) {
+    GameplayEconomyProducerConfig sell = gameplay.producers().economyShopGuiSell();
+    if (sell.enabled() && sell.dryRun()) {
+      checks.add(new Check("sellProducerDryRunOff", Status.FAIL, "producer dryRun=true"));
+    } else if (sell.enabled()) {
+      checks.add(new Check("sellProducerDryRunOff", Status.PASS, "producer dryRun=false"));
+    } else {
+      checks.add(new Check("sellProducerDryRunOff", Status.PASS, "producer-disabled"));
+    }
+
+    GameplayEconomyProducerConfig buy = gameplay.producers().economyShopGuiBuy();
+    if (gameplay.shopBuy() && buy.enabled() && buy.dryRun()) {
+      checks.add(new Check("buyProducerDryRunOff", Status.FAIL, "producer dryRun=true"));
+    } else if (gameplay.shopBuy() && buy.enabled()) {
+      checks.add(new Check("buyProducerDryRunOff", Status.PASS, "producer dryRun=false"));
+    } else {
+      checks.add(new Check("buyProducerDryRunOff", Status.PASS, "category-off"));
+    }
+  }
+
+  private static void addStagingTestBypassWarning(
+      List<Check> checks,
+      RealCoreConfig config,
+      EconomyConfig economy
+  ) {
+    if (config.modules().economy() && economy.enabled() && !"anarchy".equalsIgnoreCase(config.serverGroup())) {
+      checks.add(new Check(
+          "stagingEconomyTestBypass",
+          Status.WARN,
+          "/rf economy test uses global writer, not gameplay dry-run"
+      ));
+    } else {
+      checks.add(new Check("stagingEconomyTestBypass", Status.PASS, "writer-disabled"));
     }
   }
 

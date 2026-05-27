@@ -862,6 +862,8 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
     if (args.length != 6) {
       send(sender, ChatColor.YELLOW + "Usage: /rf economy test <uuid> <username> <amountMinor> <testId>");
       send(sender, ChatColor.GRAY + "Example: /rf economy test 00000000-0000-0000-0000-000000000123 Alex 100 smoke-test-1");
+      send(sender, ChatColor.RED + "Warning: this command uses the global economy writer, NOT gameplay producer dry-run.");
+      send(sender, ChatColor.GRAY + "Do not use during SMP Gates B/C dry-run soak. Use /rf economy gameplay simulate for generic dry-run.");
       return true;
     }
 
@@ -907,6 +909,7 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
       send(sender, ChatColor.GREEN + "Queued staging economy test for " + args[3] + "."
           + ChatColor.GRAY + " amountMinor=" + amountMinor
           + ", idempotency=" + transaction.idempotencyKey().substring(0, Math.min(24, transaction.idempotencyKey().length())) + "...");
+      send(sender, ChatColor.RED + "This bypasses gameplay sync dry-run. Not for SMP shop dry-run soak.");
       send(sender, ChatColor.GRAY + "It will send on the next writer flush, or use /rf economy flush.");
     } catch (IllegalArgumentException | IllegalStateException error) {
       send(sender, ChatColor.RED + error.getMessage());
