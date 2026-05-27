@@ -336,7 +336,7 @@ No DB ledger writes occur unless all flags are explicitly enabled later.
 Dry-run log format:
 
 ```text
-[GameplaySync:DRYRUN] server=smp-1 category=shop_sell player=Alex(uuid) amountMinor=2500 source=EconomyShopGUI eventId=...
+[GameplaySync:DRYRUN] dryRun=true serverId=smp-1 producerId=economyShopGuiSell category=shop_sell player=Alex(uuid) amountMinor=2500 source=EconomyShopGUI eventId=...
 ```
 
 `shop_buy` / `gameplay_spend` are intentionally not implemented in this phase.
@@ -406,6 +406,47 @@ safety limits, structured `[GameplaySync:*]` logs, and expanded `/rf economy
 gameplay` diagnostics. Defaults unchanged (`enabled=false`, `dryRun=true`). See
 [`docs/ECONOMY_GAMEPLAY_OBSERVABILITY.md`](ECONOMY_GAMEPLAY_OBSERVABILITY.md).
 
+### Phase 14: Gameplay economy preflight
+
+`/rf economy gameplay preflight` (dryrun/live) — read-only readiness gates before
+policy or `dryRun:false` changes. See
+[`docs/ECONOMY_GAMEPLAY_PREFLIGHT.md`](ECONOMY_GAMEPLAY_PREFLIGHT.md).
+
+### Phase 16: SMP dry-run deployment validation
+
+Operator checklist: RC jar on SMP, dry-run config, one sell, no ledger rows. See
+[`docs/ECONOMY_SMP_DRY_RUN_VALIDATION_RESULTS.md`](ECONOMY_SMP_DRY_RUN_VALIDATION_RESULTS.md).
+
+### Phase 17: Database readiness
+
+Migration inventory and read-only Supabase verification before live writes. See
+[`docs/ECONOMY_DATABASE_READINESS_PHASE17.md`](ECONOMY_DATABASE_READINESS_PHASE17.md).
+
+### Phase 18: SMP live shop_sell execution
+
+First **live** SMP `shop_sell` trial: manual policy SQL, `dryRun:false`, one
+capped sell, verification and rollback. See
+[`docs/ECONOMY_SMP_SHOP_SELL_LIVE_EXECUTION.md`](ECONOMY_SMP_SHOP_SELL_LIVE_EXECUTION.md)
+(overview: [`docs/ECONOMY_SMP_SHOP_SELL_LIVE_TRIAL.md`](ECONOMY_SMP_SHOP_SELL_LIVE_TRIAL.md)).
+
+### Phase 19: SMP live monitoring
+
+Post-first-live stability window: metrics, SQL, drift samples, stop/rollback. Still
+not full rollout. See
+[`docs/ECONOMY_SMP_LIVE_MONITORING_PHASE19.md`](ECONOMY_SMP_LIVE_MONITORING_PHASE19.md).
+
+### Phase 20: DB / Vault authority model (ADR)
+
+Short term **Option B** (plugin hooks), long term **Option A** (DB-backed Vault provider),
+**reject Option C** for production live sync. See
+[`docs/ECONOMY_AUTHORITY_MODEL_PHASE20.md`](ECONOMY_AUTHORITY_MODEL_PHASE20.md).
+
+### Phase 21: Shop buy and spend design
+
+Debit-side categories (`shop_buy`, `gameplay_spend`, legacy `spend`): semantics,
+idempotency, rollout phases B–G, policy/SQL templates — **not enabled** in this phase.
+See [`docs/ECONOMY_SHOP_BUY_SPEND_DESIGN_PHASE21.md`](ECONOMY_SHOP_BUY_SPEND_DESIGN_PHASE21.md).
+
 ### Phase 0: Design Only
 
 Document current behavior, risks, and rollout criteria. Do not change code,
@@ -425,14 +466,11 @@ ledger entries.
 
 ### Phase 3: Choose The Real Sync Strategy
 
-Choose between:
+**Resolved in Phase 20:** see [`docs/ECONOMY_AUTHORITY_MODEL_PHASE20.md`](ECONOMY_AUTHORITY_MODEL_PHASE20.md).
 
-- DB-backed Vault provider,
-- plugin-specific integrations,
-- a temporary, capped `vault_mirror_adjustment` delta bridge.
-
-The DB-backed Vault provider remains the clean long-term target, but it should
-not be the first live change.
+- **Short term:** plugin hook integration (Option B) — current `shop_sell` path.
+- **Long term:** DB-backed Vault provider (Option A).
+- **Rejected for production:** Vault polling / delta mirror (Option C) — shadow only.
 
 ### Phase 4: One-Server Real Write Trial
 

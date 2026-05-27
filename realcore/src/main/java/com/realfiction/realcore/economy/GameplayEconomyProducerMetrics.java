@@ -93,4 +93,20 @@ public final class GameplayEconomyProducerMetrics {
   public String lastEventSummary() {
     return lastEventSummary;
   }
+
+  void mergeFrom(GameplayEconomyProducerMetrics other) {
+    if (other == null) {
+      return;
+    }
+    captured.addAndGet(other.captured());
+    dryRunCaptured.addAndGet(other.dryRunCaptured());
+    queued.addAndGet(other.queued());
+    duplicateRejected.addAndGet(other.duplicateRejected());
+    invalidRejected.addAndGet(other.invalidRejected());
+    overCapRejected.addAndGet(other.overCapRejected());
+    producerDisabledRejected.addAndGet(other.producerDisabledRejected());
+    if (!other.lastEventSummary().isBlank()) {
+      lastEventSummary = other.lastEventSummary();
+    }
+  }
 }

@@ -33,7 +33,7 @@ No DB ledger writes occur with these defaults.
 ## Dry-run log format
 
 ```text
-[GameplaySync:DRYRUN] server=smp-1 category=shop_sell player=Alex(00000000-0000-0000-0000-000000000123) amountMinor=2500 source=EconomyShopGUI eventId=SELL_SCREEN:blocks.stone:64:2500:00000000-0000-0000-0000-000000000123
+[GameplaySync:DRYRUN] dryRun=true serverId=smp-1 producerId=economyShopGuiSell category=shop_sell player=Alex(00000000-0000-0000-0000-000000000123) amountMinor=2500 source=EconomyShopGUI eventId=SELL_SCREEN:blocks.stone:64:2500:00000000-0000-0000-0000-000000000123
 ```
 
 ## Observability
@@ -56,7 +56,7 @@ Summary: SMP-only jar + config with `gameplaySync.enabled=true`, both `dryRun=tr
 
 ## Not in Phase 9
 
-- `shop_buy` / `gameplay_spend` (buy skeleton: Phase 22; SMP buy dry-run ops: Phase 23)
+- `shop_buy` / `gameplay_spend` — see [`ECONOMY_SHOP_BUY_SPEND_DESIGN_PHASE21.md`](ECONOMY_SHOP_BUY_SPEND_DESIGN_PHASE21.md) (buy skeleton: Phase 22; SMP buy dry-run ops: Phase 23)
 - Vault balance mutation
 - Automatic DB policy enablement
 - Factions / Arcade producers
