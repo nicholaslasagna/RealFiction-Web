@@ -9,6 +9,7 @@ import com.realfiction.realcore.cosmetics.CosmeticsConfig;
 import com.realfiction.realcore.cosmetics.CosmeticsListener;
 import com.realfiction.realcore.cosmetics.CosmeticsManager;
 import com.realfiction.realcore.economy.EconomyService;
+import com.realfiction.realcore.economy.GameplayEconomySyncService;
 import com.realfiction.realcore.economy.GameplayEconomyTransactionBuffer;
 import com.realfiction.realcore.economy.VaultDeltaShadowService;
 import com.realfiction.realcore.linking.AccountLinkService;
@@ -67,6 +68,7 @@ public final class RealCorePlugin extends JavaPlugin {
   private EconomyMirrorService economyMirrorService;
   private EconomyService economyService;
   private GameplayEconomyTransactionBuffer gameplayEconomyTransactionBuffer;
+  private GameplayEconomySyncService gameplayEconomySyncService;
   private VaultDeltaShadowService vaultDeltaShadowService;
   private VoteRewardLedgerShadowService voteRewardLedgerShadowService;
   private VoteRewardLedgerWriteService voteRewardLedgerWriteService;
@@ -175,6 +177,9 @@ public final class RealCorePlugin extends JavaPlugin {
       economyService = new EconomyService(realCoreConfig, scheduler, apiClient, getLogger());
       gameplayEconomyTransactionBuffer = new GameplayEconomyTransactionBuffer(
           realCoreConfig, economyService, getLogger());
+      gameplayEconomySyncService = new GameplayEconomySyncService(
+          this, realCoreConfig, gameplayEconomyTransactionBuffer, scheduler, getLogger());
+      gameplayEconomySyncService.start();
       servicesLoaded = true;
 
       if (lobbyManager != null) {
@@ -306,6 +311,10 @@ public final class RealCorePlugin extends JavaPlugin {
 
   public GameplayEconomyTransactionBuffer gameplayEconomyTransactionBuffer() {
     return gameplayEconomyTransactionBuffer;
+  }
+
+  public GameplayEconomySyncService gameplayEconomySyncService() {
+    return gameplayEconomySyncService;
   }
 
   public VaultDeltaShadowService vaultDeltaShadowService() {
@@ -630,7 +639,8 @@ public final class RealCorePlugin extends JavaPlugin {
         || !getConfig().contains("economy.vaultDeltaShadowMinDeltaMinor")
         || !getConfig().contains("economy.vaultDeltaShadowMaxLoggedDeltaMinor")
         || !getConfig().contains("economy.vaultDeltaShadowBackendAllowlist")
-        || !getConfig().isConfigurationSection("economy.gameplaySync");
+        || !getConfig().isConfigurationSection("economy.gameplaySync")
+        || !getConfig().isConfigurationSection("economy.gameplaySync.producers");
     if (!missingLobbyDefaults) {
       return;
     }
@@ -648,6 +658,10 @@ public final class RealCorePlugin extends JavaPlugin {
     if (economyService != null) {
       economyService.stop();
       economyService = null;
+    }
+    if (gameplayEconomySyncService != null) {
+      gameplayEconomySyncService.stop();
+      gameplayEconomySyncService = null;
     }
     gameplayEconomyTransactionBuffer = null;
     voteRewardLedgerShadowService = null;

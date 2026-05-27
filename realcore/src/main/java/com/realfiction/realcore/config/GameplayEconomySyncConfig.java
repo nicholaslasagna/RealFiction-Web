@@ -23,7 +23,8 @@ public record GameplayEconomySyncConfig(
     long maxCreditMinorPerTx,
     long maxDebitMinorPerTx,
     boolean dryRun,
-    boolean logTransactions
+    boolean logTransactions,
+    GameplayEconomyProducersConfig producers
 ) {
   public static GameplayEconomySyncConfig disabledDefaults() {
     return new GameplayEconomySyncConfig(
@@ -39,7 +40,8 @@ public record GameplayEconomySyncConfig(
         50_000,
         50_000,
         true,
-        true
+        true,
+        GameplayEconomyProducersConfig.disabledDefaults()
     );
   }
 
@@ -64,7 +66,8 @@ public record GameplayEconomySyncConfig(
         Math.max(1, Math.min(1_000_000_000_000L, section.getLong("maxCreditMinorPerTx", defaults.maxCreditMinorPerTx()))),
         Math.max(1, Math.min(1_000_000_000_000L, section.getLong("maxDebitMinorPerTx", defaults.maxDebitMinorPerTx()))),
         section.getBoolean("dryRun", defaults.dryRun()),
-        section.getBoolean("logTransactions", defaults.logTransactions())
+        section.getBoolean("logTransactions", defaults.logTransactions()),
+        GameplayEconomyProducersConfig.from(section)
     );
   }
 

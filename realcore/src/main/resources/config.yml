@@ -106,6 +106,15 @@ economy:
     maxDebitMinorPerTx: 50000
     dryRun: true
     logTransactions: true
+    dedupCacheSeconds: 300
+    dedupCacheMaxEntries: 10000
+    producers:
+      economyShopGuiSell:
+        enabled: false
+        category: shop_sell
+        dryRun: true
+        logEvents: true
+        maxEventsPerFlush: 250
 
 # Network playtime tracking (feeds the "Top Players" leaderboard/holograms).
 # Each backend records its own sessions; the website sums them per player.
