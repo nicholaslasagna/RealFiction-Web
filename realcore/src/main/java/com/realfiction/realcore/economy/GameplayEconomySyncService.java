@@ -48,7 +48,8 @@ public final class GameplayEconomySyncService {
     );
     this.captureService = new GameplayEconomyCaptureService(config, buffer, dedupCache, metrics, gameplayMetrics, syncLogger, logger);
     EconomyShopGuiSellProducer economyShopGuiSell = new EconomyShopGuiSellProducer(plugin, config, captureService, logger);
-    this.producers = List.of(economyShopGuiSell);
+    EconomyShopGuiBuyProducer economyShopGuiBuy = new EconomyShopGuiBuyProducer(plugin, config, captureService, logger);
+    this.producers = List.of(economyShopGuiSell, economyShopGuiBuy);
     long flushSeconds = Math.max(5, config.economy().gameplaySync().flushInterval().toSeconds());
     if (scheduler != null) {
       this.flushWindowTask = scheduler.runAsyncRepeating(this::onFlushWindowTick, flushSeconds, flushSeconds);

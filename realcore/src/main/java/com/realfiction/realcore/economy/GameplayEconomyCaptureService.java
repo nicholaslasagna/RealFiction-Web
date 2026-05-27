@@ -99,12 +99,13 @@ public final class GameplayEconomyCaptureService {
     }
 
     GameplayEconomyCategory category = request.producerConfig().category();
-    if (!category.credit()) {
-      metrics.recordInvalidRejected();
-      return;
-    }
-
-    if (category.credit() && request.amountMinor() > gameplayConfig.maxCreditMinorPerTx()) {
+    // Direction-aware per-transaction cap. Credit categories use
+    // maxCreditMinorPerTx, debit categories use maxDebitMinorPerTx. Both caps
+    // default to small, conservative values in config; debit can never bypass
+    // its cap by claiming to be a credit because the category is set by the
+    // producer config and validated here.
+    long cap = category.credit() ? gameplayConfig.maxCreditMinorPerTx() : gameplayConfig.maxDebitMinorPerTx();
+    if (request.amountMinor() > cap) {
       metrics.recordOverCapRejected();
       return;
     }

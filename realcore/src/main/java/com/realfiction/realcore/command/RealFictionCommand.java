@@ -1048,6 +1048,17 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
       send(sender, ChatColor.YELLOW + "Hook: " + ChatColor.WHITE + producer.statusSummary()
           + ChatColor.GRAY + ", running=" + producer.running());
     }
+    var buyProducerConfig = config.economy().gameplaySync().producers().economyShopGuiBuy();
+    send(sender, ChatColor.YELLOW + "Producer economyShopGuiBuy: "
+        + (buyProducerConfig.enabled() ? ChatColor.GREEN + "enabled" : ChatColor.GRAY + "disabled")
+        + ChatColor.GRAY + ", category " + buyProducerConfig.category().ledgerCategory().apiValue()
+        + ", producer dry-run " + statusToggle(buyProducerConfig.dryRun())
+        + ", maxEventsPerFlush " + buyProducerConfig.maxEventsPerFlush());
+    GameplayEconomyProducer buyProducer = sync.producer(com.realfiction.realcore.economy.EconomyShopGuiBuyProducer.ID);
+    if (buyProducer != null) {
+      send(sender, ChatColor.YELLOW + "Hook: " + ChatColor.WHITE + buyProducer.statusSummary()
+          + ChatColor.GRAY + ", running=" + buyProducer.running());
+    }
     GameplayEconomyProducerMetrics metrics = sync.metrics();
     long captured = metrics.captured();
     send(sender, ChatColor.YELLOW + "Producer metrics: " + ChatColor.WHITE + captured
