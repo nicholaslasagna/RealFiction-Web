@@ -86,6 +86,18 @@ Requires Phase 22 jar on SMP; keeps `dryRun=true` and `can_spend=false`.
 Future systems call `submit(GameplayEconomyEvent)` after source allowlist + category flags
 are enabled per [ECONOMY_GENERIC_GAMEPLAY_EARN_SPEND_DESIGN_PHASE26.md](ECONOMY_GENERIC_GAMEPLAY_EARN_SPEND_DESIGN_PHASE26.md).
 
+## Phase 28: Generic gameplay dry-run simulator
+
+| Item | Value |
+|------|--------|
+| Command | `/rf economy gameplay simulate <earn\|spend> <player\|uuid> <amountMinor> <source> <eventId>` |
+| Permission | `realcore.admin` |
+| Service | `GameplayEconomySimulatorService` → `GenericGameplayEconomyProducerService.submit()` |
+| Recommended source | `manual_simulator` (allowlisted in test config only) |
+| Default | Rejects until `generic.enabled: true`; dry-run only |
+
+Ops guide: [ECONOMY_GENERIC_GAMEPLAY_SIMULATOR_PHASE28.md](ECONOMY_GENERIC_GAMEPLAY_SIMULATOR_PHASE28.md).
+
 ## Rollback
 
 Set `economy.gameplaySync.producers.economyShopGuiSell.enabled: false` (or

@@ -354,6 +354,9 @@ economy:
 
 Inspect via `/rf economy gameplay producers` → **genericGameplay** (disabled, dry-run).
 
+Phase 28 adds an admin dry-run simulator command (no real gameplay wiring). See
+[ECONOMY_GENERIC_GAMEPLAY_SIMULATOR_PHASE28.md](ECONOMY_GENERIC_GAMEPLAY_SIMULATOR_PHASE28.md).
+
 ---
 
 ## Related docs
@@ -364,3 +367,4 @@ Inspect via `/rf economy gameplay producers` → **genericGameplay** (disabled, 
 - [ECONOMY_SHOP_BUY_SPEND_DESIGN_PHASE21.md](ECONOMY_SHOP_BUY_SPEND_DESIGN_PHASE21.md)
 - [ECONOMY_TRANSACTION_CATEGORIES.md](ECONOMY_TRANSACTION_CATEGORIES.md)
 - [ECONOMY_GAMEPLAY_PRODUCER_ROLLOUT.md](ECONOMY_GAMEPLAY_PRODUCER_ROLLOUT.md)
+- [ECONOMY_GENERIC_GAMEPLAY_SIMULATOR_PHASE28.md](ECONOMY_GENERIC_GAMEPLAY_SIMULATOR_PHASE28.md)

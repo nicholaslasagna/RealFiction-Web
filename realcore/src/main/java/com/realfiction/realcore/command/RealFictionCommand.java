@@ -431,6 +431,9 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
       return true;
     }
     if (args.length >= 2 && "gameplay".equalsIgnoreCase(args[1])) {
+      if (args.length >= 3 && "simulate".equalsIgnoreCase(args[2])) {
+        return GameplayEconomySimulateCommand.handle(plugin, sender, args);
+      }
       if (args.length >= 3 && "preflight".equalsIgnoreCase(args[2])) {
         return handleEconomyGameplayPreflight(sender, args);
       }
@@ -1112,6 +1115,7 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
     if (!genericMetrics.lastEventSummary().isBlank()) {
       send(sender, ChatColor.YELLOW + "Last event (generic): " + ChatColor.GRAY + genericMetrics.lastEventSummary());
     }
+    send(sender, ChatColor.GRAY + "Simulator: /rf economy gameplay simulate <earn|spend> <player|uuid> <amountMinor> <source> <eventId>");
   }
 
   private void appendGameplayWriterMetrics(CommandSender sender, GameplayEconomyTransactionBuffer buffer) {
@@ -1459,7 +1463,13 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
     if (args.length == 3 && "economy".equalsIgnoreCase(args[0])
         && "gameplay".equalsIgnoreCase(args[1])
         && sender.hasPermission("realcore.admin")) {
-      return List.of("preflight", "producers");
+      return List.of("preflight", "producers", "simulate");
+    }
+    if (args.length == 4 && "economy".equalsIgnoreCase(args[0])
+        && "gameplay".equalsIgnoreCase(args[1])
+        && "simulate".equalsIgnoreCase(args[2])
+        && sender.hasPermission("realcore.admin")) {
+      return List.of("earn", "spend");
     }
     if (args.length == 4 && "economy".equalsIgnoreCase(args[0])
         && "gameplay".equalsIgnoreCase(args[1])

@@ -378,6 +378,13 @@ Design only — no producers, policy changes, or category enablement. See
 `enabled: false`, `dryRun: true`, empty `allowedSources`. No gameplay features wired.
 See Phase 26 design doc §8 phase B.
 
+### Phase 28: Generic gameplay dry-run simulator command
+
+Admin-only `/rf economy gameplay simulate <earn|spend> ...` routes synthetic events
+through the generic producer for dry-run observability testing. No gameplay hooks,
+Vault mutation, or live writes by default. See
+[`ECONOMY_GENERIC_GAMEPLAY_SIMULATOR_PHASE28.md`](ECONOMY_GENERIC_GAMEPLAY_SIMULATOR_PHASE28.md).
+
 ### Phase 10: SMP shop_sell dry-run ops plan
 
 Operator rollout to install Phase 8/9 jar on SMP and verify EconomyShopGUI sell
