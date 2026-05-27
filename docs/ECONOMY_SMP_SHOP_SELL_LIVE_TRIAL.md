@@ -58,6 +58,9 @@ Use Phase 18 §8–9: revert plugin `dryRun`, disable sync if needed, run SMP re
 policy SQL, restart SMP. Never delete ledger rows; use compensating entries only
 after review.
 
+After the one-event sell trial passes, proceed to combined earn/spend monitoring:
+**[ECONOMY_SMP_EARN_SPEND_MONITORING_PHASE25.md](ECONOMY_SMP_EARN_SPEND_MONITORING_PHASE25.md)**.
+
 ---
 
 ## Related docs

@@ -149,6 +149,16 @@ economy:
         dryRun: true
         logEvents: true
         maxEventsPerFlush: 250
+      # EconomyShopGUI buy (debit) producer. Same safety as the sell producer:
+      # shares all guards (gameplaySync.enabled, modules.economy, Anarchy block,
+      # backendAllowlist, categories.shopBuy), the dedup cache, and the per-tx
+      # cap (maxDebitMinorPerTx for debits). Disabled and dry-run by default.
+      economyShopGuiBuy:
+        enabled: false
+        category: shop_buy
+        dryRun: true
+        logEvents: true
+        maxEventsPerFlush: 250
 
 # Network playtime tracking (feeds the "Top Players" leaderboard/holograms).
 # Each backend records its own sessions; the website sums them per player.

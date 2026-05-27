@@ -99,6 +99,9 @@ rollback;
 
 ## Next phase
 
+Verify production migration/policy state before any live trial:
+[`ECONOMY_DATABASE_READINESS_PHASE17.md`](ECONOMY_DATABASE_READINESS_PHASE17.md).
+
 Phase 7 documents staged SQL to enable a **future** capped SMP gameplay write
 trial. That phase does not change policy automatically. See
 [`ECONOMY_SMP_GAMEPLAY_WRITE_POLICY_ROLLOUT.md`](ECONOMY_SMP_GAMEPLAY_WRITE_POLICY_ROLLOUT.md).
