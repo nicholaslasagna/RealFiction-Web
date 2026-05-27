@@ -38,7 +38,7 @@ public final class GameplayEconomyCaptureService {
   private final GameplayEconomyProducersConfig producersConfig;
   private final GameplayEconomyTransactionBuffer buffer;
   private final GameplayEconomyIdempotencyDedupCache dedupCache;
-  private final GameplayEconomyProducerMetrics metrics;
+  private final GameplayEconomyProducerMetricsRegistry metricsRegistry;
   private final GameplayEconomyWriterMetrics gameplayMetrics;
   private final GameplaySyncLogger syncLogger;
   private final Logger logger;
@@ -48,7 +48,7 @@ public final class GameplayEconomyCaptureService {
       RealCoreConfig config,
       GameplayEconomyTransactionBuffer buffer,
       GameplayEconomyIdempotencyDedupCache dedupCache,
-      GameplayEconomyProducerMetrics metrics,
+      GameplayEconomyProducerMetricsRegistry metricsRegistry,
       GameplayEconomyWriterMetrics gameplayMetrics,
       GameplaySyncLogger syncLogger,
       Logger logger
@@ -58,7 +58,9 @@ public final class GameplayEconomyCaptureService {
     this.producersConfig = gameplayConfig.producers();
     this.buffer = buffer;
     this.dedupCache = dedupCache;
-    this.metrics = metrics;
+    this.metricsRegistry = metricsRegistry == null
+        ? new GameplayEconomyProducerMetricsRegistry()
+        : metricsRegistry;
     this.gameplayMetrics = gameplayMetrics;
     this.syncLogger = syncLogger == null ? new GameplaySyncLogger(logger) : syncLogger;
     this.logger = logger == null ? Logger.getLogger("RealCore") : logger;
@@ -73,10 +75,19 @@ public final class GameplayEconomyCaptureService {
   }
 
   public GameplayEconomyProducerMetrics metrics() {
-    return metrics;
+    return metricsRegistry.aggregate();
+  }
+
+  public GameplayEconomyProducerMetrics metricsForProducer(String producerId) {
+    return metricsRegistry.forProducer(producerId);
+  }
+
+  public GameplayEconomyProducerMetricsRegistry metricsRegistry() {
+    return metricsRegistry;
   }
 
   public void capture(CaptureRequest request) {
+    GameplayEconomyProducerMetrics metrics = metricsRegistry.forProducer(request.producerId());
     String guard = guardReason(request.producerConfig());
     if (guard != null) {
       if (guard.contains("producer") && guard.contains("disabled")) {
@@ -198,7 +209,9 @@ public final class GameplayEconomyCaptureService {
 
   private String formatDryRunLog(CaptureRequest request, GameplayEconomyCategory category) {
     return "[GameplaySync:DRYRUN]"
-        + " server=" + config.serverId()
+        + " dryRun=true"
+        + " serverId=" + config.serverId()
+        + " producerId=" + request.producerId()
         + " category=" + category.ledgerCategory().apiValue()
         + " player=" + request.minecraftUsername() + "(" + request.minecraftUuid() + ")"
         + " amountMinor=" + request.amountMinor()

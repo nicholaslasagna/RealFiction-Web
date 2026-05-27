@@ -51,7 +51,7 @@ final class GameplayEconomyCaptureServiceTest {
         config,
         new GameplayEconomyTransactionBuffer(config, economyService, null, null, Logger.getLogger("test")),
         new GameplayEconomyIdempotencyDedupCache(Duration.ofMinutes(5), 1000),
-        new GameplayEconomyProducerMetrics(),
+        new GameplayEconomyProducerMetricsRegistry(),
         null,
         null,
         Logger.getLogger("test"));
@@ -247,7 +247,7 @@ final class GameplayEconomyCaptureServiceTest {
         config,
         new GameplayEconomyTransactionBuffer(config, economy, null, null, Logger.getLogger("test")),
         new GameplayEconomyIdempotencyDedupCache(Duration.ofMinutes(5), 1000),
-        new GameplayEconomyProducerMetrics(),
+        new GameplayEconomyProducerMetricsRegistry(),
         null,
         null,
         Logger.getLogger("test"));
@@ -289,7 +289,7 @@ final class GameplayEconomyCaptureServiceTest {
         config,
         new GameplayEconomyTransactionBuffer(config, economy, null, null, Logger.getLogger("test")),
         new GameplayEconomyIdempotencyDedupCache(Duration.ofMinutes(5), 1000),
-        new GameplayEconomyProducerMetrics(),
+        new GameplayEconomyProducerMetricsRegistry(),
         null,
         null,
         Logger.getLogger("test"));
@@ -324,7 +324,7 @@ final class GameplayEconomyCaptureServiceTest {
         config,
         new GameplayEconomyTransactionBuffer(config, economy, null, null, Logger.getLogger("test")),
         new GameplayEconomyIdempotencyDedupCache(Duration.ofMinutes(5), 1000),
-        new GameplayEconomyProducerMetrics(),
+        new GameplayEconomyProducerMetricsRegistry(),
         null,
         null,
         Logger.getLogger("test"));
@@ -507,6 +507,86 @@ final class GameplayEconomyCaptureServiceTest {
     );
   }
 
+  @Test
+  void perProducerMetricsAreIsolated() throws InvalidConfigurationException {
+    RealCoreConfig bothConfig = loadConfig("""
+        modules:
+          economy: true
+        economy:
+          enabled: true
+          gameplaySync:
+            enabled: true
+            dryRun: true
+            categories:
+              shopSell: true
+              shopBuy: true
+            producers:
+              economyShopGuiSell:
+                enabled: true
+                category: shop_sell
+                dryRun: true
+              economyShopGuiBuy:
+                enabled: true
+                category: shop_buy
+                dryRun: true
+        """);
+    GameplayEconomyCaptureService service = newCapture(bothConfig);
+    service.capture(request(bothConfig, 100));
+    service.capture(buyRequest(bothConfig, 50));
+    assertEquals(1, service.metricsForProducer(EconomyShopGuiSellProducer.ID).captured());
+    assertEquals(1, service.metricsForProducer(EconomyShopGuiBuyProducer.ID).captured());
+    assertEquals(2, service.metrics().captured());
+  }
+
+  @Test
+  void dryRunLogIncludesProducerIdAndDryRunFlag() throws InvalidConfigurationException {
+    RealCoreConfig config = loadConfig("""
+        modules:
+          economy: true
+        economy:
+          enabled: true
+          gameplaySync:
+            enabled: true
+            dryRun: true
+            categories:
+              shopSell: true
+            producers:
+              economyShopGuiSell:
+                enabled: true
+                category: shop_sell
+                dryRun: true
+                logEvents: true
+        """);
+    java.util.logging.Logger logger = java.util.logging.Logger.getLogger("dry-run-log-test");
+    java.util.concurrent.atomic.AtomicReference<String> lastLog = new java.util.concurrent.atomic.AtomicReference<>("");
+    logger.setUseParentHandlers(false);
+    logger.addHandler(new java.util.logging.Handler() {
+      @Override
+      public void publish(java.util.logging.LogRecord record) {
+        lastLog.set(record.getMessage());
+      }
+      @Override public void flush() {}
+      @Override public void close() {}
+    });
+    EconomyService economy = new EconomyService(
+        config, new NoopScheduler(), new PlatformApiClient(config, Logger.getLogger("test")), Logger.getLogger("test"));
+    economy.start();
+    GameplayEconomyCaptureService service = new GameplayEconomyCaptureService(
+        config,
+        new GameplayEconomyTransactionBuffer(config, economy, null, null, Logger.getLogger("test")),
+        new GameplayEconomyIdempotencyDedupCache(Duration.ofMinutes(5), 1000),
+        new GameplayEconomyProducerMetricsRegistry(),
+        null,
+        null,
+        logger);
+    service.capture(request(config, 250));
+    String logLine = lastLog.get();
+    assertTrue(logLine.contains("dryRun=true"));
+    assertTrue(logLine.contains("producerId=economyShopGuiSell"));
+    assertTrue(logLine.contains("serverId=smp-1"));
+    assertTrue(logLine.contains("category=shop_sell"));
+  }
+
   private GameplayEconomyCaptureService newCapture(RealCoreConfig config) {
     EconomyService economy = new EconomyService(
         config, new NoopScheduler(), new PlatformApiClient(config, Logger.getLogger("test")), Logger.getLogger("test"));
@@ -515,7 +595,7 @@ final class GameplayEconomyCaptureServiceTest {
         config,
         new GameplayEconomyTransactionBuffer(config, economy, null, null, Logger.getLogger("test")),
         new GameplayEconomyIdempotencyDedupCache(Duration.ofMinutes(5), 1000),
-        new GameplayEconomyProducerMetrics(),
+        new GameplayEconomyProducerMetricsRegistry(),
         null,
         null,
         Logger.getLogger("test"));

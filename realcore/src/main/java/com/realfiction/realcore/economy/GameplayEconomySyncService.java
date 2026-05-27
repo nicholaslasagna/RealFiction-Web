@@ -20,7 +20,7 @@ public final class GameplayEconomySyncService {
   private final GameplaySyncLogger syncLogger;
   private final Logger logger;
 
-  private final GameplayEconomyProducerMetrics metrics = new GameplayEconomyProducerMetrics();
+  private final GameplayEconomyProducerMetricsRegistry metricsRegistry = new GameplayEconomyProducerMetricsRegistry();
   private final GameplayEconomyIdempotencyDedupCache dedupCache;
   private final GameplayEconomyCaptureService captureService;
   private final List<GameplayEconomyProducer> producers;
@@ -46,7 +46,8 @@ public final class GameplayEconomySyncService {
         config.economy().gameplaySync().producers().dedupCacheTtl(),
         config.economy().gameplaySync().producers().dedupCacheMaxEntries()
     );
-    this.captureService = new GameplayEconomyCaptureService(config, buffer, dedupCache, metrics, gameplayMetrics, syncLogger, logger);
+    this.captureService = new GameplayEconomyCaptureService(
+        config, buffer, dedupCache, metricsRegistry, gameplayMetrics, syncLogger, logger);
     EconomyShopGuiSellProducer economyShopGuiSell = new EconomyShopGuiSellProducer(plugin, config, captureService, logger);
     EconomyShopGuiBuyProducer economyShopGuiBuy = new EconomyShopGuiBuyProducer(plugin, config, captureService, logger);
     this.producers = List.of(economyShopGuiSell, economyShopGuiBuy);
@@ -94,9 +95,9 @@ public final class GameplayEconomySyncService {
     }
     StringBuilder summary = new StringBuilder();
     summary.append("server=").append(config.serverId());
-    summary.append(" captured=").append(metrics.captured());
-    summary.append(" dryRun=").append(metrics.dryRunCaptured());
-    summary.append(" queued=").append(metrics.queued());
+    summary.append(" captured=").append(metricsRegistry.aggregate().captured());
+    summary.append(" dryRun=").append(metricsRegistry.aggregate().dryRunCaptured());
+    summary.append(" queued=").append(metricsRegistry.aggregate().queued());
     if (gameplayMetrics != null) {
       summary.append(" gameplayQueued=").append(gameplayMetrics.gameplayQueued());
       summary.append(" gameplayOk=").append(gameplayMetrics.gameplaySucceeded());
@@ -112,7 +113,11 @@ public final class GameplayEconomySyncService {
   }
 
   public GameplayEconomyProducerMetrics metrics() {
-    return metrics;
+    return metricsRegistry.aggregate();
+  }
+
+  public GameplayEconomyProducerMetricsRegistry metricsRegistry() {
+    return metricsRegistry;
   }
 
   public GameplayEconomyWriterMetrics gameplayMetrics() {
