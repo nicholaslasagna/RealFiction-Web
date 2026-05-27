@@ -52,13 +52,13 @@ Policy fields:
 - `max_debit_minor`
 - `max_batch_count`
 
-Category gates:
+Category gates (see `docs/ECONOMY_TRANSACTION_CATEGORIES.md`):
 
 - `vote_reward` requires `can_reward`
-- `gameplay_earn` requires `can_earn`
-- `spend` requires `can_spend`
-- `admin_adjustment` is not accepted by plugin routes
-- `migration_import` is not accepted by plugin routes
+- `gameplay_earn` and `shop_sell` require `can_earn`
+- `gameplay_spend`, `shop_buy`, and legacy `spend` require `can_spend`
+- `admin_adjustment`, `migration_import`, and `vault_mirror_adjustment` are not
+  accepted by plugin routes
 
 Anarchy is blocked from mutations by the RPC policy checks even if the request
 is signed with a valid plugin HMAC.
