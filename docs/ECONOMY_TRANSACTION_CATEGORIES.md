@@ -44,4 +44,5 @@ compensating append-only entries (`admin_adjustment` or reviewed
 
 - `docs/GLOBAL_ECONOMY.md` — foundation and policy fields
 - `docs/GAMEPLAY_ECONOMY_SYNC_DESIGN.md` — gameplay sync rollout phases
+- [ECONOMY_DATABASE_READINESS_PHASE17.md](./ECONOMY_DATABASE_READINESS_PHASE17.md) — production migration/policy verification SQL
 - Migration `supabase/migrations/202605270026_economy_transaction_categories.sql`
