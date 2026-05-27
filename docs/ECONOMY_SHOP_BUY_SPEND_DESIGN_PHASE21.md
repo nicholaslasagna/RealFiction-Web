@@ -25,8 +25,18 @@ both `dryRun=true`, one tiny buy, confirm `[GameplaySync:DRYRUN] category=shop_b
 
 ---
 
+## Phase 24: SMP live shop_buy ledger trial
+
+After Phase 23 dry-run sign-off: **[ECONOMY_SMP_SHOP_BUY_LIVE_TRIAL.md](ECONOMY_SMP_SHOP_BUY_LIVE_TRIAL.md)**.
+
+Manual `can_spend` policy SQL, `dryRun: false`, one tiny buy, ledger verification.
+**This design doc does not enable live debits.**
+
+---
+
 ## Related docs
 
 - [ECONOMY_SMP_SHOP_BUY_DRY_RUN_ROLLOUT.md](ECONOMY_SMP_SHOP_BUY_DRY_RUN_ROLLOUT.md)
+- [ECONOMY_SMP_SHOP_BUY_LIVE_TRIAL.md](ECONOMY_SMP_SHOP_BUY_LIVE_TRIAL.md)
 - [ECONOMY_GAMEPLAY_PRODUCER_ROLLOUT.md](ECONOMY_GAMEPLAY_PRODUCER_ROLLOUT.md)
 - [GAMEPLAY_ECONOMY_SYNC_DESIGN.md](GAMEPLAY_ECONOMY_SYNC_DESIGN.md)
