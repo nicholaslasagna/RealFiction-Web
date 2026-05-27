@@ -41,7 +41,7 @@ final class GameplayEconomyTransactionBufferTest {
     economyService = new EconomyService(
         config, new NoopScheduler(), new PlatformApiClient(config, Logger.getLogger("test")), Logger.getLogger("test"));
     economyService.start();
-    buffer = new GameplayEconomyTransactionBuffer(config, economyService, Logger.getLogger("test"));
+    buffer = new GameplayEconomyTransactionBuffer(config, economyService, null, null, Logger.getLogger("test"));
   }
 
   @Test
@@ -53,7 +53,7 @@ final class GameplayEconomyTransactionBufferTest {
           enabled: true
         """);
     GameplayEconomyTransactionBuffer disabled = new GameplayEconomyTransactionBuffer(
-        config, economyService, Logger.getLogger("test"));
+        config, economyService, null, null, Logger.getLogger("test"));
 
     GameplayEconomyTransactionBuffer.Result result = disabled.propose(proposal(100, GameplayEconomyCategory.GAMEPLAY_EARN));
 
@@ -88,7 +88,7 @@ final class GameplayEconomyTransactionBufferTest {
     EconomyService economy = new EconomyService(
         config, new NoopScheduler(), new PlatformApiClient(config, Logger.getLogger("test")), Logger.getLogger("test"));
     economy.start();
-    GameplayEconomyTransactionBuffer live = new GameplayEconomyTransactionBuffer(config, economy, Logger.getLogger("test"));
+    GameplayEconomyTransactionBuffer live = new GameplayEconomyTransactionBuffer(config, economy, null, null, Logger.getLogger("test"));
 
     GameplayEconomyTransactionBuffer.Result result = live.propose(proposal(250, GameplayEconomyCategory.GAMEPLAY_EARN));
 
@@ -115,7 +115,7 @@ final class GameplayEconomyTransactionBufferTest {
               gameplayEarn: true
         """);
     GameplayEconomyTransactionBuffer anarchyBuffer = new GameplayEconomyTransactionBuffer(
-        config, economyService, Logger.getLogger("test"));
+        config, economyService, null, null, Logger.getLogger("test"));
 
     GameplayEconomyTransactionBuffer.Result result = anarchyBuffer.propose(proposal(100, GameplayEconomyCategory.GAMEPLAY_EARN));
 
@@ -141,7 +141,7 @@ final class GameplayEconomyTransactionBufferTest {
               gameplayEarn: true
         """);
     GameplayEconomyTransactionBuffer factionsBuffer = new GameplayEconomyTransactionBuffer(
-        config, economyService, Logger.getLogger("test"));
+        config, economyService, null, null, Logger.getLogger("test"));
 
     GameplayEconomyTransactionBuffer.Result result = factionsBuffer.propose(proposal(100, GameplayEconomyCategory.GAMEPLAY_EARN));
 
@@ -163,7 +163,7 @@ final class GameplayEconomyTransactionBufferTest {
               shopSell: true
         """);
     GameplayEconomyTransactionBuffer restricted = new GameplayEconomyTransactionBuffer(
-        config, economyService, Logger.getLogger("test"));
+        config, economyService, null, null, Logger.getLogger("test"));
 
     GameplayEconomyTransactionBuffer.Result result = restricted.propose(proposal(100, GameplayEconomyCategory.GAMEPLAY_EARN));
 
@@ -185,7 +185,7 @@ final class GameplayEconomyTransactionBufferTest {
               gameplayEarn: true
         """);
     GameplayEconomyTransactionBuffer capped = new GameplayEconomyTransactionBuffer(
-        config, economyService, Logger.getLogger("test"));
+        config, economyService, null, null, Logger.getLogger("test"));
 
     GameplayEconomyTransactionBuffer.Result result = capped.propose(proposal(101, GameplayEconomyCategory.GAMEPLAY_EARN));
 

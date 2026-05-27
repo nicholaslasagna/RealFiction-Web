@@ -39,6 +39,8 @@ public final class GameplayEconomyCaptureService {
   private final GameplayEconomyTransactionBuffer buffer;
   private final GameplayEconomyIdempotencyDedupCache dedupCache;
   private final GameplayEconomyProducerMetrics metrics;
+  private final GameplayEconomyWriterMetrics gameplayMetrics;
+  private final GameplaySyncLogger syncLogger;
   private final Logger logger;
   private final AtomicInteger eventsThisFlushWindow = new AtomicInteger();
 
@@ -47,6 +49,8 @@ public final class GameplayEconomyCaptureService {
       GameplayEconomyTransactionBuffer buffer,
       GameplayEconomyIdempotencyDedupCache dedupCache,
       GameplayEconomyProducerMetrics metrics,
+      GameplayEconomyWriterMetrics gameplayMetrics,
+      GameplaySyncLogger syncLogger,
       Logger logger
   ) {
     this.config = Objects.requireNonNull(config, "config");
@@ -55,11 +59,17 @@ public final class GameplayEconomyCaptureService {
     this.buffer = buffer;
     this.dedupCache = dedupCache;
     this.metrics = metrics;
+    this.gameplayMetrics = gameplayMetrics;
+    this.syncLogger = syncLogger == null ? new GameplaySyncLogger(logger) : syncLogger;
     this.logger = logger == null ? Logger.getLogger("RealCore") : logger;
   }
 
   public void resetFlushWindow() {
     eventsThisFlushWindow.set(0);
+  }
+
+  public int drainFlushWindowCount() {
+    return eventsThisFlushWindow.getAndSet(0);
   }
 
   public GameplayEconomyProducerMetrics metrics() {
@@ -79,6 +89,7 @@ public final class GameplayEconomyCaptureService {
 
     if (eventsThisFlushWindow.incrementAndGet() > request.producerConfig().maxEventsPerFlush()) {
       metrics.recordInvalidRejected();
+      syncLogger.warnOnce("producer-cap", "maxEventsPerFlush exceeded for " + request.producerId());
       return;
     }
 
@@ -108,6 +119,7 @@ public final class GameplayEconomyCaptureService {
 
     if (!dedupCache.markIfAbsent(idempotencyKey)) {
       metrics.recordDuplicateRejected();
+      syncLogger.warnOnce("duplicate-storm", "duplicate event rejected for " + idempotencyKey);
       return;
     }
 
@@ -117,6 +129,9 @@ public final class GameplayEconomyCaptureService {
     boolean dryRun = request.producerConfig().dryRun() || gameplayConfig.dryRun();
     if (dryRun) {
       metrics.recordDryRunCaptured();
+      if (gameplayMetrics != null) {
+        gameplayMetrics.recordDryRunSimulatedTransaction(request.amountMinor());
+      }
       if (request.producerConfig().logEvents()) {
         logger.info(formatDryRunLog(request, category));
       }

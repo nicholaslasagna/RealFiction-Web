@@ -134,6 +134,14 @@ economy:
     logTransactions: true
     dedupCacheSeconds: 300
     dedupCacheMaxEntries: 10000
+    observability:
+      enabled: true
+      slowFlushMs: 2000
+      slowHttpMs: 1000
+      summaryIntervalSeconds: 300
+      maxQueueEntries: 5000
+      maxRetryEntries: 12
+      maxTransactionAgeSeconds: 3600
     producers:
       economyShopGuiSell:
         enabled: false

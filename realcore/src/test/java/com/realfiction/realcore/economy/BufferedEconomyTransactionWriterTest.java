@@ -129,6 +129,30 @@ final class BufferedEconomyTransactionWriterTest {
   }
 
   @Test
+  void gameplayMetricsTrackedSeparately() {
+    GameplayEconomyWriterMetrics gameplayMetrics = new GameplayEconomyWriterMetrics();
+    BufferedEconomyTransactionWriter gameplayWriter = new BufferedEconomyTransactionWriter(
+        config, economyConfig, new NoopScheduler(), transport, Logger.getLogger("test"), true,
+        gameplayMetrics, null, null);
+    gameplayWriter.start();
+    gameplayWriter.enqueue(EconomyTransaction.credit(
+        UUID.randomUUID(),
+        "Alex",
+        100,
+        EconomyCategory.SHOP_SELL,
+        "sell",
+        "gameplay:smp-1:shop_sell:economyshopgui:" + UUID.randomUUID() + ":evt-1",
+        "shop",
+        "evt-1",
+        Map.of()));
+    transport.completeWithSuccess(1, 0, false);
+    gameplayWriter.flushOnce();
+    assertEquals(1, gameplayMetrics.gameplayQueued());
+    assertEquals(1, gameplayMetrics.gameplaySucceeded());
+    assertEquals(1, gameplayWriter.batchesCreated());
+  }
+
+  @Test
   void maxBatchSizeSplitsFreshBatches() {
     writer.enqueue(earn("idem-1", 100));
     writer.enqueue(earn("idem-2", 200));

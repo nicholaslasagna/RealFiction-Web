@@ -11,6 +11,8 @@ import com.realfiction.realcore.cosmetics.CosmeticsManager;
 import com.realfiction.realcore.economy.EconomyService;
 import com.realfiction.realcore.economy.GameplayEconomySyncService;
 import com.realfiction.realcore.economy.GameplayEconomyTransactionBuffer;
+import com.realfiction.realcore.economy.GameplayEconomyWriterMetrics;
+import com.realfiction.realcore.economy.GameplaySyncLogger;
 import com.realfiction.realcore.economy.VaultDeltaShadowService;
 import com.realfiction.realcore.linking.AccountLinkService;
 import com.realfiction.realcore.lobby.LobbyItemListener;
@@ -67,6 +69,8 @@ public final class RealCorePlugin extends JavaPlugin {
   private BufferedNetworkStatWriter networkStatWriter;
   private EconomyMirrorService economyMirrorService;
   private EconomyService economyService;
+  private GameplayEconomyWriterMetrics gameplayEconomyWriterMetrics;
+  private GameplaySyncLogger gameplaySyncLogger;
   private GameplayEconomyTransactionBuffer gameplayEconomyTransactionBuffer;
   private GameplayEconomySyncService gameplayEconomySyncService;
   private VaultDeltaShadowService vaultDeltaShadowService;
@@ -174,11 +178,20 @@ public final class RealCorePlugin extends JavaPlugin {
           this, realCoreConfig, scheduler, luckPermsService, voteRewardLedgerShadowService, voteRewardLedgerWriteService);
       accountLinkService = new AccountLinkService(this, realCoreConfig, scheduler, apiClient);
       rewardPoller = new RewardPoller(this, realCoreConfig, scheduler, apiClient, dispatcher);
-      economyService = new EconomyService(realCoreConfig, scheduler, apiClient, getLogger());
+      gameplaySyncLogger = new GameplaySyncLogger(getLogger());
+      gameplayEconomyWriterMetrics = new GameplayEconomyWriterMetrics();
+      economyService = new EconomyService(
+          realCoreConfig, scheduler, apiClient, getLogger(), gameplayEconomyWriterMetrics, gameplaySyncLogger);
       gameplayEconomyTransactionBuffer = new GameplayEconomyTransactionBuffer(
-          realCoreConfig, economyService, getLogger());
+          realCoreConfig, economyService, gameplayEconomyWriterMetrics, gameplaySyncLogger, getLogger());
       gameplayEconomySyncService = new GameplayEconomySyncService(
-          this, realCoreConfig, gameplayEconomyTransactionBuffer, scheduler, getLogger());
+          this,
+          realCoreConfig,
+          gameplayEconomyTransactionBuffer,
+          gameplayEconomyWriterMetrics,
+          gameplaySyncLogger,
+          scheduler,
+          getLogger());
       gameplayEconomySyncService.start();
       servicesLoaded = true;
 
@@ -665,7 +678,8 @@ public final class RealCorePlugin extends JavaPlugin {
         || !getConfig().contains("economy.shadow.repeatedOffenderThreshold")
         || !getConfig().contains("economy.shadow.observationCacheSize")
         || !getConfig().isConfigurationSection("economy.gameplaySync")
-        || !getConfig().isConfigurationSection("economy.gameplaySync.producers");
+        || !getConfig().isConfigurationSection("economy.gameplaySync.producers")
+        || !getConfig().isConfigurationSection("economy.gameplaySync.observability");
     if (!missingLobbyDefaults) {
       return;
     }
@@ -688,6 +702,8 @@ public final class RealCorePlugin extends JavaPlugin {
       gameplayEconomySyncService.stop();
       gameplayEconomySyncService = null;
     }
+    gameplayEconomyWriterMetrics = null;
+    gameplaySyncLogger = null;
     gameplayEconomyTransactionBuffer = null;
     voteRewardLedgerShadowService = null;
     voteRewardLedgerWriteService = null;

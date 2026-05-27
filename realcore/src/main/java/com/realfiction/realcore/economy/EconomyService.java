@@ -43,11 +43,28 @@ public final class EconomyService {
   private volatile String disabledReason = "";
 
   public EconomyService(RealCoreConfig config, RealCoreScheduler scheduler, PlatformApiClient apiClient, Logger logger) {
-    this(config, scheduler, apiClient::fetchEconomyBalance, apiClient::postEconomyTransactions, logger);
+    this(config, scheduler, apiClient::fetchEconomyBalance, apiClient::postEconomyTransactions, logger, null, null);
+  }
+
+  public EconomyService(
+      RealCoreConfig config,
+      RealCoreScheduler scheduler,
+      PlatformApiClient apiClient,
+      Logger logger,
+      GameplayEconomyWriterMetrics gameplayMetrics,
+      GameplaySyncLogger syncLogger
+  ) {
+    this(config, scheduler, apiClient::fetchEconomyBalance, apiClient::postEconomyTransactions, logger, gameplayMetrics, syncLogger);
   }
 
   EconomyService(RealCoreConfig config, RealCoreScheduler scheduler, EconomyBalanceTransport balanceTransport,
                  EconomyTransactionsTransport transactionsTransport, Logger logger) {
+    this(config, scheduler, balanceTransport, transactionsTransport, logger, null, null);
+  }
+
+  EconomyService(RealCoreConfig config, RealCoreScheduler scheduler, EconomyBalanceTransport balanceTransport,
+                 EconomyTransactionsTransport transactionsTransport, Logger logger,
+                 GameplayEconomyWriterMetrics gameplayMetrics, GameplaySyncLogger syncLogger) {
     this.config = config;
     this.economyConfig = config.economy();
     this.balanceTransport = balanceTransport;
@@ -59,7 +76,10 @@ public final class EconomyService {
         scheduler,
         transactionsTransport,
         logger,
-        mutationsAllowed
+        mutationsAllowed,
+        gameplayMetrics,
+        economyConfig.gameplaySync().observability(),
+        syncLogger
     );
   }
 
