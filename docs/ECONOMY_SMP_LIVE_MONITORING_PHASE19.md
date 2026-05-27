@@ -421,7 +421,7 @@ At the end of Phase 19, the system is **still not** the final global economy arc
 | Automatic reconciliation | Shadow/observe only; no mass sync |
 | Factions / Arcade / Anarchy rollout | Explicitly out of scope |
 
-Phase 19 only proves that **live `shop_sell` ledger capture** is stable on SMP under controlled policy. Debit paths (`shop_buy` / spend) are **not** in scope until [ECONOMY_SHOP_BUY_SPEND_DESIGN_PHASE21.md](./ECONOMY_SHOP_BUY_SPEND_DESIGN_PHASE21.md) rollout after sign-off.
+Phase 19 only proves that **live `shop_sell` ledger capture** is stable on SMP under controlled policy. Further phases decide scope expansion, spend categories, and long-term sync strategy ([GAMEPLAY_ECONOMY_SYNC_DESIGN.md](./GAMEPLAY_ECONOMY_SYNC_DESIGN.md) Phase 3+). Scope expansion and long-term Vault/DB authority: [ECONOMY_AUTHORITY_MODEL_PHASE20.md](./ECONOMY_AUTHORITY_MODEL_PHASE20.md).
 
 ---
 
@@ -453,5 +453,4 @@ shop_sell rows (24h): ___  |  Failed batches: ___  |  Dup plugin: ___
 | [ECONOMY_SMP_SHOP_SELL_LIVE_TRIAL.md](./ECONOMY_SMP_SHOP_SELL_LIVE_TRIAL.md) | Trial overview |
 | [ECONOMY_GAMEPLAY_OBSERVABILITY.md](./ECONOMY_GAMEPLAY_OBSERVABILITY.md) | Metrics reference |
 | [ECONOMY_GAMEPLAY_PREFLIGHT.md](./ECONOMY_GAMEPLAY_PREFLIGHT.md) | Preflight live |
-| [ECONOMY_AUTHORITY_MODEL_PHASE20.md](./ECONOMY_AUTHORITY_MODEL_PHASE20.md) | DB/Vault authority ADR |
-| [ECONOMY_SHOP_BUY_SPEND_DESIGN_PHASE21.md](./ECONOMY_SHOP_BUY_SPEND_DESIGN_PHASE21.md) | Next: shop_buy / spend (not enabled) |
+| [ECONOMY_AUTHORITY_MODEL_PHASE20.md](./ECONOMY_AUTHORITY_MODEL_PHASE20.md) | DB/Vault authority ADR (after monitoring) |

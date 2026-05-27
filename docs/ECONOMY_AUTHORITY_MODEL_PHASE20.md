@@ -303,7 +303,6 @@ Stop expanding hooks or starting Option A pilot if:
 | [GLOBAL_ECONOMY.md](./GLOBAL_ECONOMY.md) | Ledger foundation |
 | [ECONOMY_GAMEPLAY_OBSERVABILITY.md](./ECONOMY_GAMEPLAY_OBSERVABILITY.md) | Metrics / shadow |
 | [ECONOMY_SMP_LIVE_MONITORING_PHASE19.md](./ECONOMY_SMP_LIVE_MONITORING_PHASE19.md) | Pre-requisite stability |
-| [ECONOMY_SHOP_BUY_SPEND_DESIGN_PHASE21.md](./ECONOMY_SHOP_BUY_SPEND_DESIGN_PHASE21.md) | Debit path design (after sell stable) |
 
 ---
 
@@ -315,5 +314,4 @@ Stop expanding hooks or starting Option A pilot if:
 | Plugin / RealCore | | | |
 | Ops / DB | | | |
 
-**shop_buy / gameplay_spend enablement:** blocked until row above complete and
-[ECONOMY_SHOP_BUY_SPEND_DESIGN_PHASE21.md](./ECONOMY_SHOP_BUY_SPEND_DESIGN_PHASE21.md) is approved.
+**shop_buy / gameplay_spend enablement:** blocked until row above complete.

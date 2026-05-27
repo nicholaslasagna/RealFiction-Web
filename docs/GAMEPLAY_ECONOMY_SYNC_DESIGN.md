@@ -336,10 +336,40 @@ No DB ledger writes occur unless all flags are explicitly enabled later.
 Dry-run log format:
 
 ```text
-[GameplaySync:DRYRUN] server=smp-1 category=shop_sell player=Alex(uuid) amountMinor=2500 source=EconomyShopGUI eventId=...
+[GameplaySync:DRYRUN] dryRun=true serverId=smp-1 producerId=economyShopGuiSell category=shop_sell player=Alex(uuid) amountMinor=2500 source=EconomyShopGUI eventId=...
 ```
 
 `shop_buy` / `gameplay_spend` are intentionally not implemented in this phase.
+
+### Phase 22: EconomyShopGUI buy producer skeleton (code PR)
+
+Disabled-by-default `economyShopGuiBuy` on `PostTransactionEvent` (BUY + SUCCESS).
+See [ECONOMY_SHOP_BUY_SPEND_DESIGN_PHASE21.md](ECONOMY_SHOP_BUY_SPEND_DESIGN_PHASE21.md).
+
+### Phase 23: SMP shop_buy dry-run ops plan
+
+Operator checklist for SMP-only EconomyShopGUI **buy** capture validation: no DB
+rows, `dryRun=true`, `can_spend` unchanged. Requires Phase 22 jar. See
+[`ECONOMY_SMP_SHOP_BUY_DRY_RUN_ROLLOUT.md`](ECONOMY_SMP_SHOP_BUY_DRY_RUN_ROLLOUT.md).
+
+### Phase 24: SMP shop_buy live ledger trial plan
+
+Operator plan for **manual** policy SQL + `dryRun=false` single-buy trial after
+Phase 23 passes. Docs only — no automatic `can_spend` or config changes in repo.
+See [`ECONOMY_SMP_SHOP_BUY_LIVE_TRIAL.md`](ECONOMY_SMP_SHOP_BUY_LIVE_TRIAL.md).
+
+### Phase 25: SMP combined shop_sell + shop_buy monitoring
+
+After separate single-event live trials pass, run capped **combined** earn/spend
+monitoring on `smp-1` only (`shop_sell` + `shop_buy`, no generic gameplay categories).
+Docs/ops only. See
+[`ECONOMY_SMP_EARN_SPEND_MONITORING_PHASE25.md`](ECONOMY_SMP_EARN_SPEND_MONITORING_PHASE25.md).
+
+### Phase 26: Generic gameplay_earn / gameplay_spend design
+
+Non-shop categories for quests, events, minigames, staff grants, and gameplay fees.
+Design only — no producers, policy changes, or category enablement. See
+[`ECONOMY_GENERIC_GAMEPLAY_EARN_SPEND_DESIGN_PHASE26.md`](ECONOMY_GENERIC_GAMEPLAY_EARN_SPEND_DESIGN_PHASE26.md).
 
 ### Phase 10: SMP shop_sell dry-run ops plan
 
@@ -362,13 +392,40 @@ safety limits, structured `[GameplaySync:*]` logs, and expanded `/rf economy
 gameplay` diagnostics. Defaults unchanged (`enabled=false`, `dryRun=true`). See
 [`docs/ECONOMY_GAMEPLAY_OBSERVABILITY.md`](ECONOMY_GAMEPLAY_OBSERVABILITY.md).
 
-### Phases 14–20: Preflight through authority ADR
+### Phase 14: Gameplay economy preflight
 
-| Phase | Doc |
-|-------|-----|
-| 14 | [`ECONOMY_GAMEPLAY_PREFLIGHT.md`](ECONOMY_GAMEPLAY_PREFLIGHT.md) |
-| 16–19 | SMP dry-run, DB readiness, live execution, monitoring (see release plan) |
-| 20 | [`ECONOMY_AUTHORITY_MODEL_PHASE20.md`](ECONOMY_AUTHORITY_MODEL_PHASE20.md) |
+`/rf economy gameplay preflight` (dryrun/live) — read-only readiness gates before
+policy or `dryRun:false` changes. See
+[`docs/ECONOMY_GAMEPLAY_PREFLIGHT.md`](ECONOMY_GAMEPLAY_PREFLIGHT.md).
+
+### Phase 16: SMP dry-run deployment validation
+
+Operator checklist: RC jar on SMP, dry-run config, one sell, no ledger rows. See
+[`docs/ECONOMY_SMP_DRY_RUN_VALIDATION_RESULTS.md`](ECONOMY_SMP_DRY_RUN_VALIDATION_RESULTS.md).
+
+### Phase 17: Database readiness
+
+Migration inventory and read-only Supabase verification before live writes. See
+[`docs/ECONOMY_DATABASE_READINESS_PHASE17.md`](ECONOMY_DATABASE_READINESS_PHASE17.md).
+
+### Phase 18: SMP live shop_sell execution
+
+First **live** SMP `shop_sell` trial: manual policy SQL, `dryRun:false`, one
+capped sell, verification and rollback. See
+[`docs/ECONOMY_SMP_SHOP_SELL_LIVE_EXECUTION.md`](ECONOMY_SMP_SHOP_SELL_LIVE_EXECUTION.md)
+(overview: [`docs/ECONOMY_SMP_SHOP_SELL_LIVE_TRIAL.md`](ECONOMY_SMP_SHOP_SELL_LIVE_TRIAL.md)).
+
+### Phase 19: SMP live monitoring
+
+Post-first-live stability window: metrics, SQL, drift samples, stop/rollback. Still
+not full rollout. See
+[`docs/ECONOMY_SMP_LIVE_MONITORING_PHASE19.md`](ECONOMY_SMP_LIVE_MONITORING_PHASE19.md).
+
+### Phase 20: DB / Vault authority model (ADR)
+
+Short term **Option B** (plugin hooks), long term **Option A** (DB-backed Vault provider),
+**reject Option C** for production live sync. See
+[`docs/ECONOMY_AUTHORITY_MODEL_PHASE20.md`](ECONOMY_AUTHORITY_MODEL_PHASE20.md).
 
 ### Phase 21: Shop buy and spend design
 
@@ -395,14 +452,11 @@ ledger entries.
 
 ### Phase 3: Choose The Real Sync Strategy
 
-Choose between:
+**Resolved in Phase 20:** see [`docs/ECONOMY_AUTHORITY_MODEL_PHASE20.md`](ECONOMY_AUTHORITY_MODEL_PHASE20.md).
 
-- DB-backed Vault provider,
-- plugin-specific integrations,
-- a temporary, capped `vault_mirror_adjustment` delta bridge.
-
-The DB-backed Vault provider remains the clean long-term target, but it should
-not be the first live change.
+- **Short term:** plugin hook integration (Option B) — current `shop_sell` path.
+- **Long term:** DB-backed Vault provider (Option A).
+- **Rejected for production:** Vault polling / delta mirror (Option C) — shadow only.
 
 ### Phase 4: One-Server Real Write Trial
 
