@@ -357,6 +357,10 @@ Inspect via `/rf economy gameplay producers` → **genericGameplay** (disabled, 
 Phase 28 adds an admin dry-run simulator command (no real gameplay wiring). See
 [ECONOMY_GENERIC_GAMEPLAY_SIMULATOR_PHASE28.md](ECONOMY_GENERIC_GAMEPLAY_SIMULATOR_PHASE28.md).
 
+Phase 29 defines the live-trial approval architecture (source certification, rollout
+gates, monitoring, stop/rollback) before any real source is connected. See
+[ECONOMY_GENERIC_GAMEPLAY_LIVE_APPROVAL_PHASE29.md](ECONOMY_GENERIC_GAMEPLAY_LIVE_APPROVAL_PHASE29.md).
+
 ---
 
 ## Related docs
@@ -368,3 +372,4 @@ Phase 28 adds an admin dry-run simulator command (no real gameplay wiring). See
 - [ECONOMY_TRANSACTION_CATEGORIES.md](ECONOMY_TRANSACTION_CATEGORIES.md)
 - [ECONOMY_GAMEPLAY_PRODUCER_ROLLOUT.md](ECONOMY_GAMEPLAY_PRODUCER_ROLLOUT.md)
 - [ECONOMY_GENERIC_GAMEPLAY_SIMULATOR_PHASE28.md](ECONOMY_GENERIC_GAMEPLAY_SIMULATOR_PHASE28.md)
+- [ECONOMY_GENERIC_GAMEPLAY_LIVE_APPROVAL_PHASE29.md](ECONOMY_GENERIC_GAMEPLAY_LIVE_APPROVAL_PHASE29.md)

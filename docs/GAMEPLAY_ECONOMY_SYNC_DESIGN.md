@@ -385,6 +385,13 @@ through the generic producer for dry-run observability testing. No gameplay hook
 Vault mutation, or live writes by default. See
 [`ECONOMY_GENERIC_GAMEPLAY_SIMULATOR_PHASE28.md`](ECONOMY_GENERIC_GAMEPLAY_SIMULATOR_PHASE28.md).
 
+### Phase 29: Generic gameplay live-trial approval architecture
+
+Docs-only approval framework: source certification, rollout gates A–H, monitoring
+SQL, drift policy, stop/rollback rules before any real source connects to the
+generic producer. No source approved by default. See
+[`ECONOMY_GENERIC_GAMEPLAY_LIVE_APPROVAL_PHASE29.md`](ECONOMY_GENERIC_GAMEPLAY_LIVE_APPROVAL_PHASE29.md).
+
 ### Phase 10: SMP shop_sell dry-run ops plan
 
 Operator rollout to install Phase 8/9 jar on SMP and verify EconomyShopGUI sell
