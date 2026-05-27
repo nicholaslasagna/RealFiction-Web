@@ -97,6 +97,12 @@ run:
 rollback;
 ```
 
+## Next phase
+
+Phase 7 documents staged SQL to enable a **future** capped SMP gameplay write
+trial. That phase does not change policy automatically. See
+[`ECONOMY_SMP_GAMEPLAY_WRITE_POLICY_ROLLOUT.md`](ECONOMY_SMP_GAMEPLAY_WRITE_POLICY_ROLLOUT.md).
+
 ## Stop Conditions
 
 Stop before enabling RealCore config if:
