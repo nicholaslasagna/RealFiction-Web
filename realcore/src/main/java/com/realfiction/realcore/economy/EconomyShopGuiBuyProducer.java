@@ -5,13 +5,13 @@ import java.util.logging.Logger;
 import org.bukkit.plugin.Plugin;
 
 /**
- * Captures EconomyShopGUI sell {@code PostTransactionEvent} instances via reflection.
+ * Captures EconomyShopGUI buy {@code PostTransactionEvent} instances via reflection.
  */
-public final class EconomyShopGuiSellProducer extends AbstractEconomyShopGuiProducer {
-  public static final String ID = "economyShopGuiSell";
+public final class EconomyShopGuiBuyProducer extends AbstractEconomyShopGuiProducer {
+  public static final String ID = "economyShopGuiBuy";
   public static final String SOURCE = "EconomyShopGUI";
 
-  public EconomyShopGuiSellProducer(
+  public EconomyShopGuiBuyProducer(
       Plugin plugin,
       RealCoreConfig config,
       GameplayEconomyCaptureService captureService,
@@ -23,27 +23,27 @@ public final class EconomyShopGuiSellProducer extends AbstractEconomyShopGuiProd
         config,
         captureService,
         logger,
-        config.economy().gameplaySync().producers().economyShopGuiSell()
+        config.economy().gameplaySync().producers().economyShopGuiBuy()
     );
   }
 
   @Override
   protected boolean acceptsTransactionType(String typeNameUpper) {
-    return matchesSellTransactionType(typeNameUpper);
+    return matchesBuyTransactionType(typeNameUpper);
   }
 
   @Override
   protected String hookLabel() {
-    return "SELL";
+    return "BUY";
   }
 
   @Override
   protected String registrationLogMessage() {
-    return "Gameplay sync EconomyShopGUI sell producer registered.";
+    return "Gameplay sync EconomyShopGUI buy producer registered.";
   }
 
   @Override
   protected String captureReasonLabel() {
-    return "EconomyShopGUI sell";
+    return "EconomyShopGUI buy";
   }
 }

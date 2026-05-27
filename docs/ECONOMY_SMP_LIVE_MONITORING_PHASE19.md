@@ -421,7 +421,7 @@ At the end of Phase 19, the system is **still not** the final global economy arc
 | Automatic reconciliation | Shadow/observe only; no mass sync |
 | Factions / Arcade / Anarchy rollout | Explicitly out of scope |
 
-Phase 19 only proves that **live `shop_sell` ledger capture** is stable on SMP under controlled policy. Scope expansion and long-term Vault/DB authority: [ECONOMY_AUTHORITY_MODEL_PHASE20.md](./ECONOMY_AUTHORITY_MODEL_PHASE20.md).
+Phase 19 only proves that **live `shop_sell` ledger capture** is stable on SMP under controlled policy. Further phases decide scope expansion, spend categories, and long-term sync strategy ([GAMEPLAY_ECONOMY_SYNC_DESIGN.md](./GAMEPLAY_ECONOMY_SYNC_DESIGN.md) Phase 3+). Scope expansion and long-term Vault/DB authority: [ECONOMY_AUTHORITY_MODEL_PHASE20.md](./ECONOMY_AUTHORITY_MODEL_PHASE20.md).
 
 ---
 
