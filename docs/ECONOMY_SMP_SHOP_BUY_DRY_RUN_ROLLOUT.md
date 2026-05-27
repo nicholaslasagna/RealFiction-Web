@@ -121,7 +121,7 @@ Run on SMP as staff with `realcore.admin`.
 | Baseline | `/rf economy` |
 | Gameplay sync | `/rf economy gameplay` |
 | Producer metrics (before buy) | `/rf economy gameplay producers` |
-| Preflight | `/rf economy gameplay preflight dryrun` |
+| Preflight | `/rf economy gameplay preflight dryrun-buy` (Gate C; use `dryrun-sell` for Gate B only) |
 
 ### Expected preflight / status (dry-run)
 
@@ -270,7 +270,7 @@ Copy for each test session:
 - **Test player (UUID):**
 - **Item purchased:**
 - **Expected amountMinor (from log):**
-- **Preflight:** `/rf economy gameplay preflight dryrun` → (READY / NOT READY)
+- **Preflight:** `/rf economy gameplay preflight dryrun-buy` → (READY / NOT READY)
 - **Dry-run log line:** (paste `[GameplaySync:DRYRUN]` line)
 - **shop_buy count before:**
 - **shop_buy count after:**

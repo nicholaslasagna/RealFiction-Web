@@ -461,7 +461,8 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
       return true;
     }
 
-    GameplayEconomyPreflightService.Mode mode = parseGameplayPreflightMode(args);
+    GameplayEconomyPreflightService.Mode mode = GameplayEconomyPreflightService.parseMode(
+        args.length >= 4 ? args[3] : null);
     EconomyService economy = plugin.economyService();
     GameplayEconomyTransactionBuffer buffer = plugin.gameplayEconomyTransactionBuffer();
     GameplayEconomyPreflightService service = new GameplayEconomyPreflightService();
@@ -472,7 +473,8 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
         GameplayEconomyPreflightService.runtimeProbeFromPlugin(plugin)
     );
 
-    send(sender, ChatColor.YELLOW + "Running gameplay economy preflight (" + mode.name().toLowerCase(Locale.ROOT) + ")...");
+    send(sender, ChatColor.YELLOW + "Running gameplay economy preflight ("
+        + GameplayEconomyPreflightService.modeDisplayName(mode) + ")...");
     GameplayEconomyPreflightService.Report report = service.run(mode, snapshot);
     sendGameplayPreflightReport(sender, report);
 
@@ -504,18 +506,6 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
       send(sender, ChatColor.GRAY + "Read-only: no transactions, Vault changes, or policy writes.");
     });
     return true;
-  }
-
-  private GameplayEconomyPreflightService.Mode parseGameplayPreflightMode(String[] args) {
-    if (args.length >= 4) {
-      if ("live".equalsIgnoreCase(args[3])) {
-        return GameplayEconomyPreflightService.Mode.LIVE;
-      }
-      if ("dryrun".equalsIgnoreCase(args[3])) {
-        return GameplayEconomyPreflightService.Mode.DRYRUN;
-      }
-    }
-    return GameplayEconomyPreflightService.Mode.DRYRUN;
   }
 
   private GameplayEconomyPreflightService.ApiProbeResult mapPreflightApiProbe(Throwable error) {
@@ -1504,7 +1494,7 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
         && "gameplay".equalsIgnoreCase(args[1])
         && "preflight".equalsIgnoreCase(args[2])
         && sender.hasPermission("realcore.admin")) {
-      return List.of("dryrun", "live");
+      return List.of("dryrun", "dryrun-sell", "dryrun-buy", "live");
     }
     if (args.length == 3 && "economy".equalsIgnoreCase(args[0])
         && "syncfromdb".equalsIgnoreCase(args[1])

@@ -13,13 +13,17 @@ Run on the target backend (console or staff with `realcore.admin`):
 ```text
 /rf economy gameplay preflight
 /rf economy gameplay preflight dryrun
+/rf economy gameplay preflight dryrun-sell
+/rf economy gameplay preflight dryrun-buy
 /rf economy gameplay preflight live
 ```
 
-- **`dryrun`** (default when the third argument is omitted): validates a safe
-  dry-run rollout (`dryRun=true`, no writer enqueue, dry-run volume estimates).
-- **`live`**: validates configuration and runtime health for flipping to live
-  enqueue and API writes. Still does not post transactions.
+| Mode | SMP gate | Expects |
+|------|----------|---------|
+| **`dryrun`** (default) | Legacy / Gate A infra | `dryRun=true`, `shopBuy=false`, sell producer on — **fails** if buy category enabled (use gate-specific modes below). |
+| **`dryrun-sell`** | **Gate B** | `shopSell` + sell producer on/dry-run; `shopBuy` and buy producer **off**. |
+| **`dryrun-buy`** | **Gate C** | `shopSell` + `shopBuy` and both producers on with `dryRun=true`; generic producer off. |
+| **`live`** | Future live trial | `dryRun=false`, live producer caps — unchanged from Phase 14. |
 
 ## Interpreting PASS / WARN / FAIL
 
