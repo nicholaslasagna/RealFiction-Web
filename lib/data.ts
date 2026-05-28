@@ -518,33 +518,154 @@ export const rules = [
   }
 ]
 
-export const updates = [
+/**
+ * Patch-note style updates. Each entry has a slug so /updates/[slug]
+ * can render the full breakdown. Section headings follow the standard
+ * Added / Changed / Fixed / Notes flow so they read like a real
+ * changelog instead of a marketing blurb.
+ */
+export type UpdateSection = {
+  heading: string
+  items: string[]
+}
+
+export type UpdateEntry = {
+  slug: string
+  version: string
+  title: string
+  date: string
+  type: string
+  summary: string
+  tags: string[]
+  body: string
+  sections: UpdateSection[]
+}
+
+export const updates: UpdateEntry[] = [
   {
+    slug: "site-2-0-foundation",
     version: "Site 2.0",
     title: "New RealFiction Site Foundation",
     date: "2026-05-20",
     type: "Website",
     summary:
       "A refreshed home for accounts, store checkout, voting, live maps, support, and server rewards.",
-    tags: ["Website", "Accounts", "Store"]
+    tags: ["Website", "Accounts", "Store"],
+    body:
+      "Site 2.0 is the new foundation for everything outside the game itself. Accounts, store checkout, voting, live maps, support, leaderboards, and reward delivery now all live on a single fast Next.js platform. This release is mostly plumbing — the visible polish is just the start.",
+    sections: [
+      {
+        heading: "Added",
+        items: [
+          "Account system with email sign-in, Minecraft account linking, and a per-player dashboard.",
+          "Store checkout flow with Stripe, Apple Pay, Google Pay, and PayPal support.",
+          "Live network leaderboards for total playtime and economy balance, with real Minecraft skin avatars.",
+          "Live BlueMap embeds for SMP, Factions, and RealAnarchy.",
+          "Public economy balance lookup tied to your linked Minecraft account.",
+          "Gift card redemption form on the account page (back-end activation rolling out next)."
+        ]
+      },
+      {
+        heading: "Changed",
+        items: [
+          "Homepage rebuilt around the new mockup design — navy/gold palette, iconic green Minecraft button, full-bleed hero.",
+          "Discord member counts on the homepage are now fetched live from Discord's public invite API instead of hardcoded.",
+          "Vote streak card now reflects your real streak from the database when you're signed in."
+        ]
+      },
+      {
+        heading: "Fixed",
+        items: [
+          "Bedrock players (Geyser \".\"-prefixed usernames) now show a Steve head on the economy leaderboard instead of a blank avatar.",
+          "Quantity +/- controls in the cart now render their icons correctly across sizes.",
+          "Mobile hamburger menu now includes the Store CTA and locks body scroll when open."
+        ]
+      },
+      {
+        heading: "Notes",
+        items: [
+          "Gameplay is not affected by this release. All Minecraft worlds, balances, ranks, and ownerships are unchanged.",
+          "If something looks off, ping #support on Discord — we're watching closely."
+        ]
+      }
+    ]
   },
   {
+    slug: "fair-store-direction",
     version: "Network Ops",
     title: "Fair Store Direction",
     date: "2026-05-20",
     type: "Store",
     summary:
       "RealFiction store products are cosmetics, supporter identity, visual effects, and lobby convenience only.",
-    tags: ["No P2W", "Cosmetics", "Supporter"]
+    tags: ["No P2W", "Cosmetics", "Supporter"],
+    body:
+      "We're formalizing what the RealFiction store does and doesn't sell. The short version: cosmetics, supporter identity, visual effects, lobby-only convenience, and gift cards. Nothing that changes the outcome of gameplay.",
+    sections: [
+      {
+        heading: "What the store sells",
+        items: [
+          "RealVIP and RealSupporter ranks (chat flair, profile frames, lobby-only perks).",
+          "Pets, particles, username colors, and cosmetic bundles.",
+          "Lobby flight — usable only in hubs, not in survival, factions, or PvP areas.",
+          "Gift cards for store credit."
+        ]
+      },
+      {
+        heading: "What we don't sell",
+        items: [
+          "Gameplay advantage of any kind — no paid kits, gear, enchants, currency packs, or boosts.",
+          "Anything that lets a buyer skip rules, gating, or progression on SMP, Factions, or Arcade modes.",
+          "Server-side advantages tied to vote rewards (vote rewards stay cosmetic + minor progression)."
+        ]
+      },
+      {
+        heading: "Why",
+        items: [
+          "Fair play is the network's pitch. The moment buying becomes a shortcut to outcomes, the rest of the community loses.",
+          "This policy is now enforced at the product level: every SKU in the store database is tagged as cosmetic / supporter / lobby / gift card."
+        ]
+      }
+    ]
   },
   {
+    slug: "vote-progression-system",
     version: "Voting",
     title: "Vote Progression System",
     date: "2026-05-20",
     type: "Community",
     summary:
       "Vote sites, streaks, monthly top voters, cooldowns, and reward progress are planned in one flow.",
-    tags: ["Voting", "Rewards", "Leaderboard"]
+    tags: ["Voting", "Rewards", "Leaderboard"],
+    body:
+      "Voting now flows through a single per-player progression record. Vote on any partner site, your streak ticks, your monthly count goes up, and milestone rewards queue automatically.",
+    sections: [
+      {
+        heading: "Added",
+        items: [
+          "Per-player vote streak tracking (current streak, longest streak, monthly count, lifetime count).",
+          "Monthly top voter board on /vote with end-of-month rewards.",
+          "Milestone rewards at 5, 15, 30, and 75 monthly votes — each fires once per month.",
+          "Per-site cooldown countdowns so you can tell when the next vote is ready."
+        ]
+      },
+      {
+        heading: "Vote sites supported",
+        items: [
+          "MinecraftServers.org · PlanetMinecraft.com · Minecraft-MP · TopG · Minecraft.Buzz",
+          "CurseForge · mclist.io · MCSL · Minecraft Menu · Servers-Minecraft",
+          "All sites credit the same streak and the same monthly count."
+        ]
+      },
+      {
+        heading: "Notes",
+        items: [
+          "You must link your Minecraft account on /account before votes count toward your record.",
+          "Test usernames and PMC dummy votes are filtered out — they won't pad the leaderboard.",
+          "Vote rewards stay cosmetic + minor progression to match the Fair Store Direction policy."
+        ]
+      }
+    ]
   }
 ]
 
