@@ -1,9 +1,8 @@
 import type { Metadata } from "next"
 import Link from "next/link"
-import { ExternalLink, MessageCircle, Radio, UsersRound } from "lucide-react"
+import { ExternalLink, Radio, UsersRound } from "lucide-react"
 
 import { Reveal } from "@/components/reveal"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 
@@ -17,11 +16,7 @@ export default function DiscordPage() {
     <section className="container-shell py-14">
       <Reveal className="grid gap-8 lg:grid-cols-[0.9fr_1.1fr]">
         <div>
-          <Badge variant="default">
-            <MessageCircle className="mr-1.5 h-3.5 w-3.5" />
-            Community hub
-          </Badge>
-          <h1 className="display-font mt-5 text-5xl font-semibold leading-tight md:text-6xl">Discord</h1>
+          <h1 className="display-font text-5xl font-semibold leading-tight md:text-6xl">Discord</h1>
           <p className="mt-5 max-w-2xl text-lg leading-8 text-muted-foreground">
             Events, support, screenshots, updates, vote reminders, tournament notices, staff
             announcements, and community highlights.

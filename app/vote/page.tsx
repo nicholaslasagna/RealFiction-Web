@@ -1,7 +1,7 @@
 import type { Metadata } from "next"
 import Link from "next/link"
 import Image from "next/image"
-import { ArrowUpRight, CalendarDays, Gift, Medal, ShieldCheck, Trophy } from "lucide-react"
+import { ArrowUpRight, CalendarDays, Gift, ShieldCheck, Trophy } from "lucide-react"
 
 import { Reveal } from "@/components/reveal"
 import { VoteCountdown } from "@/components/vote-countdown"
@@ -30,11 +30,7 @@ export default function VotePage() {
         <div className="absolute inset-0 -z-10 bg-gradient-to-b from-background/68 via-background/86 to-background" />
         <div className="container-shell">
           <Reveal className="max-w-4xl">
-            <Badge variant="warning">
-              <Medal className="mr-1.5 h-3.5 w-3.5" />
-              Voting hub
-            </Badge>
-            <h1 className="display-font mt-5 text-5xl font-semibold leading-tight md:text-7xl">Vote for RealFiction</h1>
+            <h1 className="display-font text-5xl font-semibold leading-tight md:text-7xl">Vote for RealFiction</h1>
             <p className="mt-5 max-w-3xl text-lg leading-8 text-muted-foreground">
               Help the server climb the lists, keep the community growing, and earn cosmetic-friendly
               rewards through account-linked vote streaks.

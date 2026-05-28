@@ -66,3 +66,16 @@ export function avatarUrl(uuid: string | null | undefined, size = 48) {
   // (Steve/Alex) for unknown/offline UUIDs instead of failing.
   return `https://mc-heads.net/avatar/${cleaned}/${size}`
 }
+
+// Username-based avatar lookup for sources that don't carry a UUID (e.g. the
+// economy leaderboard RPC). mc-heads.net accepts a Minecraft username and
+// resolves it server-side, falling back to a Steve/Alex head when the name
+// is unknown. Returns null for blank/invalid input so callers can render a
+// neutral placeholder.
+const MINECRAFT_USERNAME_RE = /^[A-Za-z0-9_]{1,16}$/
+export function avatarUrlByUsername(name: string | null | undefined, size = 48) {
+  if (!name) return null
+  const trimmed = name.trim()
+  if (!MINECRAFT_USERNAME_RE.test(trimmed)) return null
+  return `https://mc-heads.net/avatar/${encodeURIComponent(trimmed)}/${size}`
+}

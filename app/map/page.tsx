@@ -1,10 +1,8 @@
 import type { Metadata } from "next"
 import Image from "next/image"
-import { MapPinned } from "lucide-react"
 
 import { MapTabs } from "@/components/map-tabs"
 import { Reveal } from "@/components/reveal"
-import { Badge } from "@/components/ui/badge"
 
 export const metadata: Metadata = {
   title: "Map",
@@ -26,11 +24,7 @@ export default function MapPage() {
         <div className="absolute inset-0 -z-10 bg-gradient-to-b from-background/66 via-background/86 to-background" />
         <div className="container-shell">
           <Reveal className="max-w-4xl">
-            <Badge variant="default">
-              <MapPinned className="mr-1.5 h-3.5 w-3.5" />
-              Live world maps
-            </Badge>
-            <h1 className="display-font mt-5 text-5xl font-semibold leading-tight md:text-7xl">Explore the Worlds</h1>
+            <h1 className="display-font text-5xl font-semibold leading-tight md:text-7xl">Explore the Worlds</h1>
             <p className="mt-5 max-w-3xl text-lg leading-8 text-muted-foreground">
               Jump into the RealFiction and RealAnarchy live maps. Pick a world below and open the
               full interactive map in a new tab.
