@@ -67,9 +67,11 @@ export const DURATION_LABEL: Record<DurationMonths, string> = {
   12: "1 year"
 }
 
+// "Store" intentionally omitted from the centered nav — there's already a
+// dedicated yellow Store CTA pinned to the right side of the header, and
+// surfacing it twice was confusing.
 export const navItems = [
   { href: "/", label: "Home" },
-  { href: "/store", label: "Store" },
   { href: "/vote", label: "Vote" },
   { href: "/leaderboards", label: "Leaderboards" },
   { href: "/map", label: "Map" },
