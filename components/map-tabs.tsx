@@ -31,8 +31,8 @@ export function MapTabs() {
               className={cn(
                 "inline-flex h-12 shrink-0 items-center gap-2 rounded-md border px-4 text-sm font-bold transition",
                 active.url === map.url
-                  ? "border-amber-200/45 bg-amber-200/14 text-amber-100"
-                  : "border-amber-200/14 bg-black/24 text-muted-foreground hover:bg-amber-200/8 hover:text-amber-100"
+                  ? "border-border bg-primary/10 text-primary"
+                  : "border-border bg-secondary text-muted-foreground hover:bg-primary/10 hover:text-primary"
               )}
               onClick={() => setActive(map)}
               type="button"
@@ -45,7 +45,7 @@ export function MapTabs() {
       </div>
 
       <div className="minecraft-panel overflow-hidden rounded-lg">
-        <div className="flex flex-col gap-3 border-b border-amber-200/12 p-4 md:flex-row md:items-center md:justify-between">
+        <div className="flex flex-col gap-3 border-b border-border p-4 md:flex-row md:items-center md:justify-between">
           <div>
             <h2 className="display-font text-2xl font-semibold">{active.name}</h2>
             <p className="text-sm text-muted-foreground">{active.description}</p>
@@ -70,15 +70,15 @@ export function MapTabs() {
         ) : (
           <div className="relative">
             <Image alt="" src={backdrop} fill className="object-cover opacity-25" sizes="100vw" />
-            <div className="absolute inset-0 bg-gradient-to-b from-[#06101c]/82 via-[#06101c]/86 to-[#06101c]" />
+            <div className="absolute inset-0 bg-gradient-to-b from-background/82 via-background/86 to-background" />
 
             <div className="relative flex flex-col items-center gap-5 px-6 py-16 text-center md:py-24">
-              <span className="rounded-xl border border-amber-200/25 bg-black/45 p-3.5 shadow-lg">
-                <MapPinned className="h-7 w-7 text-amber-200" />
+              <span className="rounded-xl border border-border bg-secondary p-3.5 shadow-lg">
+                <MapPinned className="h-7 w-7 text-primary" />
               </span>
               <div>
-                <h3 className="display-font text-2xl font-semibold text-white">Opens in a new tab</h3>
-                <p className="mx-auto mt-2.5 max-w-md text-sm leading-6 text-slate-300">
+                <h3 className="display-font text-2xl font-semibold text-foreground">Opens in a new tab</h3>
+                <p className="mx-auto mt-2.5 max-w-md text-sm leading-6 text-muted-foreground">
                   This map can&rsquo;t be embedded here yet, but the full live view works in a new tab.
                 </p>
               </div>
@@ -88,7 +88,7 @@ export function MapTabs() {
                   Open Live Map
                 </a>
               </Button>
-              <p className="font-mono text-xs text-slate-400">{host}</p>
+              <p className="font-mono text-xs text-muted-foreground">{host}</p>
             </div>
           </div>
         )}

@@ -55,11 +55,11 @@ function SettingsSection({
   return (
     <section className="minecraft-card rounded-lg p-6 md:p-7">
       <div className="flex items-start gap-3">
-        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md border border-amber-200/16 bg-black/24 text-amber-200">
+        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md border border-border bg-secondary text-primary">
           <Icon className="h-5 w-5" />
         </div>
         <div>
-          <h2 className="display-font text-2xl font-semibold text-white">{title}</h2>
+          <h2 className="display-font text-2xl font-semibold text-foreground">{title}</h2>
           <p className="mt-1 text-sm leading-6 text-muted-foreground">{description}</p>
         </div>
       </div>
@@ -74,8 +74,8 @@ function FeedbackLine({ feedback }: { feedback: NonNullable<Feedback> }) {
       className={cn(
         "rounded-md border p-3 text-sm",
         feedback.kind === "error"
-          ? "border-rose-400/25 bg-rose-500/10 text-rose-100"
-          : "border-emerald-300/20 bg-emerald-400/10 text-emerald-100"
+          ? "border-destructive/30 bg-destructive/90 text-primary"
+          : "border-border bg-primary/10 text-primary"
       )}
     >
       {feedback.text}
@@ -122,12 +122,12 @@ function EmailSection({ currentEmail }: { currentEmail: string }) {
   return (
     <SettingsSection icon={Mail} title="Email" description="Change the email used for sign-in and notifications.">
       <p className="mb-4 text-sm text-muted-foreground">
-        Current: <span className="font-semibold text-slate-200">{currentEmail}</span>
+        Current: <span className="font-semibold text-foreground">{currentEmail}</span>
       </p>
       <form className="grid gap-3 sm:grid-cols-[1fr_auto]" onSubmit={submit}>
         <Input
           autoComplete="email"
-          className="h-12 border-white/10 bg-white/[0.035]"
+          className="h-12 border-border bg-white/[0.035]"
           name="email"
           placeholder="new@example.com"
           required
@@ -180,7 +180,7 @@ function PasswordSection() {
       <form className="grid gap-3 sm:grid-cols-2" onSubmit={submit}>
         <Input
           autoComplete="new-password"
-          className="h-12 border-white/10 bg-white/[0.035]"
+          className="h-12 border-border bg-white/[0.035]"
           minLength={8}
           name="password"
           placeholder="New password"
@@ -189,7 +189,7 @@ function PasswordSection() {
         />
         <Input
           autoComplete="new-password"
-          className="h-12 border-white/10 bg-white/[0.035]"
+          className="h-12 border-border bg-white/[0.035]"
           minLength={8}
           name="confirm"
           placeholder="Confirm new password"
@@ -226,7 +226,7 @@ function MinecraftSection({
     >
       {linked ? (
         <p className="mb-4 text-sm text-muted-foreground">
-          Currently linked: <span className="font-semibold text-emerald-200">{minecraftUsername}</span>
+          Currently linked: <span className="font-semibold text-primary">{minecraftUsername}</span>
           {minecraftUuid ? <span className="block break-all text-xs text-muted-foreground/80">ID: {minecraftUuid}</span> : null}
         </p>
       ) : null}
@@ -350,7 +350,7 @@ function TwoFactorSection() {
           <p className="text-sm text-muted-foreground">
             Scan this with your authenticator app, then enter the 6-digit code to turn it on.
           </p>
-          <div className="flex flex-col items-center gap-3 rounded-lg border border-white/10 bg-white p-4">
+          <div className="flex flex-col items-center gap-3 rounded-lg border border-border bg-white p-4">
             {qr ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img alt="Authenticator QR code" className="h-44 w-44" src={qr} />
@@ -358,13 +358,13 @@ function TwoFactorSection() {
           </div>
           {secret ? (
             <p className="break-all text-center text-xs text-muted-foreground">
-              Manual key: <span className="font-mono text-slate-200">{secret}</span>
+              Manual key: <span className="font-mono text-foreground">{secret}</span>
             </p>
           ) : null}
           <form className="grid gap-3 sm:grid-cols-[1fr_auto]" onSubmit={verifyEnroll}>
             <Input
               autoComplete="one-time-code"
-              className="h-12 border-white/10 bg-white/[0.035] text-center font-mono text-lg tracking-[0.4em]"
+              className="h-12 border-border bg-white/[0.035] text-center font-mono text-lg tracking-[0.4em]"
               inputMode="numeric"
               maxLength={6}
               name="code"
@@ -383,7 +383,7 @@ function TwoFactorSection() {
         </div>
       ) : status === "on" ? (
         <div className="grid gap-4">
-          <p className="inline-flex w-fit items-center gap-2 rounded-md border border-emerald-300/25 bg-emerald-400/10 px-3 py-2 text-sm font-semibold text-emerald-100">
+          <p className="inline-flex w-fit items-center gap-2 rounded-md border border-border bg-primary/10 px-3 py-2 text-sm font-semibold text-primary">
             <ShieldCheck className="h-4 w-4" /> Two-step verification is on
           </p>
           <Button className="w-fit" disabled={busy} onClick={disable} type="button" variant="outline">

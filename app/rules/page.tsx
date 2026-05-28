@@ -23,7 +23,7 @@ export default function RulesPage() {
           Simple rules for chat, fair play, factions, builds, purchases, account safety, and moderation.
         </p>
         <div className="mt-5 flex items-center gap-2 text-sm text-muted-foreground">
-          <Search className="h-4 w-4 text-amber-200" />
+          <Search className="h-4 w-4 text-primary" />
           Searchable and ready for admin-managed rule updates.
         </div>
       </Reveal>

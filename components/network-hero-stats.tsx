@@ -53,15 +53,15 @@ export async function NetworkHeroStats() {
 
   return (
     <Reveal className="h-full">
-      <article className="minecraft-card flex h-full flex-col p-6 md:p-7">
+      <article className="minecraft-card flex h-full flex-col p-7 md:p-8">
         <div className="flex items-center gap-2.5">
-          <Globe2 className="h-5 w-5 text-amber-200" aria-hidden />
-          <Badge variant="outline" className="font-mono text-[11px] uppercase tracking-[0.16em]">
+          <Globe2 className="h-5 w-5 text-primary" aria-hidden />
+          <Badge variant="outline" className="font-mono text-[11px] uppercase tracking-[0.10em]">
             Live network
           </Badge>
         </div>
 
-        <h3 className="display-font mt-4 text-3xl font-semibold leading-tight md:text-4xl">
+        <h3 className="display-font mt-5 text-3xl leading-tight tracking-[-0.022em] text-foreground md:text-4xl">
           The whole network, in numbers.
         </h3>
         <p className="mt-3 text-sm leading-7 text-muted-foreground">
@@ -85,7 +85,7 @@ export async function NetworkHeroStats() {
         </div>
 
         {totals === null ? (
-          <p className="mt-4 text-xs text-slate-400">
+          <p className="mt-4 text-xs text-muted-foreground">
             Live totals will appear once the network stat cache is warm.
           </p>
         ) : null}
@@ -96,10 +96,10 @@ export async function NetworkHeroStats() {
 
 function StatTile({ label, value }: { label: ReactNode; value: string | null }) {
   return (
-    <div className="rounded-md border border-amber-200/10 bg-black/18 p-4 shadow-none">
-      <p className="minecraft-font text-[11px] uppercase tracking-[0.18em] text-amber-200/85">{label}</p>
+    <div className="rounded-lg border border-border bg-secondary p-4">
+      <p className="text-[11px] font-medium uppercase tracking-[0.10em] text-muted-foreground">{label}</p>
       <p
-        className="mt-2 font-mono text-2xl font-semibold text-white md:text-3xl"
+        className="display-font mt-2 text-3xl leading-none tracking-[-0.025em] text-foreground md:text-4xl"
         aria-live="polite"
       >
         {value ?? "—"}

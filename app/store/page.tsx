@@ -17,7 +17,7 @@ export const metadata: Metadata = {
 export default function StorePage() {
   return (
     <section>
-      <div className="relative overflow-hidden border-b border-amber-200/10 py-16 md:py-20">
+      <div className="relative overflow-hidden border-b border-border py-16 md:py-20">
         <Image
           alt="RealFiction store"
           src="/images/hero1.png"
@@ -54,12 +54,12 @@ export default function StorePage() {
             "Rewards delivered to your linked Minecraft account",
             "Cosmetics, supporter perks, lobby fun, and gift cards only"
           ].map((item) => (
-            <Card key={item} className="border-amber-200/12 bg-black/18 shadow-none backdrop-blur-sm">
+            <Card key={item} className="border-border bg-secondary shadow-none backdrop-blur-sm">
               <CardContent className="flex items-start gap-3 p-4">
                 {item.includes("gift") ? (
-                  <Gift className="mt-0.5 h-4 w-4 text-amber-200" />
+                  <Gift className="mt-0.5 h-4 w-4 text-primary" />
                 ) : (
-                  <ShieldCheck className="mt-0.5 h-4 w-4 text-emerald-200" />
+                  <ShieldCheck className="mt-0.5 h-4 w-4 text-primary" />
                 )}
                 <p className="text-sm leading-6 text-muted-foreground">{item}</p>
               </CardContent>

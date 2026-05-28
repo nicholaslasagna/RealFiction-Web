@@ -58,7 +58,7 @@ export default async function AccountSettingsPage() {
           sizes="100vw"
         />
       </div>
-      <div className="absolute inset-0 -z-20 bg-[linear-gradient(135deg,rgba(6,16,28,0.86),rgba(42,21,55,0.8),rgba(6,16,28,0.95))]" />
+      <div className="absolute inset-0 -z-20 bg-background" />
 
       <div className="container-shell flex min-h-screen flex-col">
         <header className="flex h-24 items-center justify-between gap-4">
@@ -68,13 +68,13 @@ export default async function AccountSettingsPage() {
               src="/images/logo1.png"
               width={174}
               height={54}
-              className="drop-shadow-[0_12px_28px_rgba(0,0,0,0.5)]"
+              className="drop-shadow-[0_6px_24px_rgba(20,20,19,0.08)]"
             />
           </Link>
           <div className="flex items-center gap-2">
             <AccountSignOutButton />
             <Link
-              className="inline-flex items-center gap-2 rounded-md border border-white/12 bg-black/24 px-3 py-2 text-sm font-semibold text-muted-foreground backdrop-blur transition hover:border-amber-200/35 hover:text-amber-100"
+              className="inline-flex items-center gap-2 rounded-md border border-border bg-secondary px-3 py-2 text-sm font-semibold text-muted-foreground backdrop-blur transition hover:border-border hover:text-primary"
               href="/account"
             >
               <ArrowLeft className="h-4 w-4" />
@@ -85,7 +85,7 @@ export default async function AccountSettingsPage() {
 
         <main className="mx-auto w-full max-w-3xl pb-16 pt-2">
           <div className="minecraft-panel rounded-lg p-6 md:p-8">
-            <h1 className="display-font text-4xl font-semibold leading-tight text-white md:text-5xl">Account settings</h1>
+            <h1 className="display-font text-4xl font-semibold leading-tight text-foreground md:text-5xl">Account settings</h1>
             <p className="mt-3 max-w-2xl text-base leading-7 text-muted-foreground">
               Manage your email, password, two-step verification, and linked Minecraft account.
             </p>

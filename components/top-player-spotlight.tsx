@@ -57,10 +57,10 @@ export async function TopPlayerSpotlight() {
 
   return (
     <Reveal delay={0.05} className="h-full">
-      <article className="minecraft-card flex h-full flex-col gap-5 p-6 md:p-7">
+      <article className="minecraft-card flex h-full flex-col gap-5 p-7 md:p-8">
         <div className="flex items-center gap-2.5">
-          <Trophy className="h-5 w-5 text-amber-200" aria-hidden />
-          <Badge variant="warning" className="font-mono text-[11px] uppercase tracking-[0.16em]">
+          <Trophy className="h-5 w-5 text-primary" aria-hidden />
+          <Badge variant="warning" className="font-mono text-[11px] uppercase tracking-[0.10em]">
             Top network player
           </Badge>
         </div>
@@ -73,27 +73,27 @@ export async function TopPlayerSpotlight() {
               src={avatar}
               width={96}
               height={96}
-              className="h-20 w-20 rounded-md border border-white/10 shadow-[0_18px_40px_rgba(0,0,0,0.45)]"
+              className="h-20 w-20 rounded-md border border-border"
               loading="lazy"
             />
           ) : (
             <div
               aria-hidden
-              className="flex h-20 w-20 items-center justify-center rounded-md border border-white/10 bg-white/5"
+              className="flex h-20 w-20 items-center justify-center rounded-md border border-border bg-secondary"
             >
-              <Crown className="h-7 w-7 text-amber-200/60" />
+              <Crown className="h-7 w-7 text-primary/60" />
             </div>
           )}
 
           <div className="min-w-0 flex-1">
-            <p className="minecraft-font text-[11px] uppercase tracking-[0.18em] text-amber-200/85">
+            <p className="text-[11px] font-medium uppercase tracking-[0.10em] text-muted-foreground">
               Most network playtime
             </p>
-            <p className="display-font mt-1.5 truncate text-3xl font-semibold leading-tight">
+            <p className="display-font mt-1.5 truncate text-3xl leading-tight tracking-[-0.022em] text-foreground">
               {top?.name ?? "Awaiting first session"}
             </p>
-            <p className="mt-2 inline-flex items-center gap-1.5 rounded-sm border border-amber-200/20 bg-black/20 px-2.5 py-1 font-mono text-sm text-amber-100">
-              <Crown className="h-3.5 w-3.5" aria-hidden />
+            <p className="mt-2 inline-flex items-center gap-1.5 rounded-md border border-border bg-secondary px-2.5 py-1 font-mono text-sm text-foreground">
+              <Crown className="h-3.5 w-3.5 text-primary" aria-hidden />
               {top ? formatPlaytimeShort(top.value) : "—"}
             </p>
           </div>
@@ -106,7 +106,7 @@ export async function TopPlayerSpotlight() {
               top 10 lives on the{" "}
               <Link
                 href="/leaderboards"
-                className="text-amber-200 underline-offset-4 hover:underline"
+                className="text-primary underline-offset-4 hover:underline"
               >
                 leaderboards page
               </Link>
@@ -117,7 +117,7 @@ export async function TopPlayerSpotlight() {
               Logged-in players will start appearing here once sessions sync from the network.{" "}
               <Link
                 href="/leaderboards"
-                className="text-amber-200 underline-offset-4 hover:underline"
+                className="text-primary underline-offset-4 hover:underline"
               >
                 See all leaderboards.
               </Link>
