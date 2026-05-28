@@ -2,6 +2,8 @@ import Image from "next/image"
 import Link from "next/link"
 
 import { CopyServerButton } from "@/components/copy-server-button"
+import { HomeAdventureGrid } from "@/components/home-adventure-grid"
+import { HomeDiscordCard } from "@/components/home-discord-card"
 import { HomeLiveMaps } from "@/components/home-live-maps"
 import { HomeNetworkInNumbers } from "@/components/home-network-in-numbers"
 import { HomeVoteStreak } from "@/components/home-vote-streak"
@@ -42,48 +44,56 @@ function GemIcon({ width = 18, height = 18 }: { width?: number; height?: number 
    Mockup data — the exact content from sections.jsx
    ============================================================ */
 
+/* Adventure data — each card opens a description modal instead of
+   navigating away. `long` is the expanded copy shown in the modal. */
 const ADVENTURES = [
   {
     name: "SMP",
     tag: "Community survival",
     bg: "/images/hero2.png",
     body: "Long-term survival with player economies, community builds, and fair progression.",
-    href: "/map"
+    long:
+      "RealFiction SMP is our flagship long-term survival world. Build wherever you like, claim land, run shops, trade with the player economy, and join community projects without anyone ever buying their way to the top. Hostile mobs, full Vanilla+ progression, and seasonal events keep things alive."
   },
   {
     name: "Factions",
     tag: "Seasonal conflict",
     bg: "/images/hero1.png",
     body: "Territory, alliances, base defense, and seasonal competition without paid power.",
-    href: "/rules"
+    long:
+      "Form a faction, fight for territory, raid rivals, and defend your base across a fresh seasonal map. Every season starts on equal footing — no purchased kits, no pay-to-win gear, just smart base design, alliances, and grit."
   },
   {
     name: "Arcade",
     tag: "Quick play",
     bg: "/images/parkour.png",
     body: "Fast minigames, parkour challenges, quick matches, and rotating server events.",
-    href: "/updates"
+    long:
+      "Quick, snackable rounds — parkour courses, mini-games, weekly challenges, and rotating community events. Hop in for 5 minutes between SMP sessions or sink an evening into the leaderboards."
   },
   {
     name: "BedWars",
     tag: "Competitive arcade",
     bg: "/images/bedwars.png",
     body: "Fast team rounds, clean matchmaking, cosmetics, and tournament-ready stats.",
-    href: "/updates"
+    long:
+      "Classic BedWars with clean matchmaking and tournament-grade stats. Defend your bed, raid your enemies, and climb the rotation ladder. Solo, duos, and squads queues — cosmetics earned in-game or via the supporter store."
   },
   {
     name: "Murder Mystery",
     tag: "Party mode",
     bg: "/images/hero2.png",
     body: "Social deduction, lobby parties, clean progression, and profile-level rewards.",
-    href: "/updates"
+    long:
+      "Social deduction in a curated party-mode lobby. One murderer, one detective, a roomful of innocents, and a steady drip of profile-level rewards. Great for groups jumping between modes."
   },
   {
     name: "Tournaments",
     tag: "Live events",
     bg: "/images/tournaments.png",
     body: "Scheduled events, live brackets, rewards, and a fair competitive ruleset.",
-    href: "/vote"
+    long:
+      "Scheduled live events with public brackets and a fair competitive ruleset. Sign up for BedWars duos, parkour cups, faction wars, or themed seasonal showdowns. Prize pools are cosmetic + in-game economy — never advantages."
   }
 ]
 
@@ -95,12 +105,6 @@ const SUPPORT_PERKS = [
   "Username colors",
   "Lobby flight",
   "Gift cards"
-]
-
-const DISCORD_FEED = [
-  { c: "#announcements", n: "Season 6 launches Friday — patch notes inside.", who: "RF-Bot", t: "2m ago" },
-  { c: "#tournaments", n: "BedWars duos sign-ups open · 32 slots.", who: "moderator-mim", t: "12m ago" },
-  { c: "#screenshots", n: "Built a glass cathedral at -487, 64, 1203 👀", who: "ironhive", t: "1h ago" }
 ]
 
 export default function HomePage() {
@@ -145,20 +149,21 @@ export default function HomePage() {
       <section className="who">
         <h3>Who We Are</h3>
         <p>
-          Founded in late 2018, <span className="accent">RealFiction</span> is a fun,
-          community-driven Minecraft network designed for players who value fair gameplay and
-          a welcoming environment. We specialize in Survival and Factions, with plenty of
-          other gamemodes to keep the adventure going. Our server is proudly anti pay-to-win,
-          ensuring a level playing field for everyone — whether you&apos;re teaming up with
-          friends or carving out your own path, RealFiction offers the perfect mix of
-          creativity, challenge, and community spirit.
+          Founded in late 2018,{" "}
+          <span className="accent">RealFiction</span>
+          {" "}is a fun, community-driven Minecraft network designed for players who value
+          fair gameplay and a welcoming environment. We specialize in Survival and Factions,
+          with plenty of other gamemodes to keep the adventure going. Our server is proudly
+          anti pay-to-win, ensuring a level playing field for everyone — whether you&apos;re
+          teaming up with friends or carving out your own path, RealFiction offers the perfect
+          mix of creativity, challenge, and community spirit.
         </p>
       </section>
 
       {/* ─── LIVE NETWORK STATS (real data + Minecraft skins) ─ */}
       <HomeNetworkInNumbers />
 
-      {/* ─── CHOOSE YOUR ADVENTURE — newsbox image cards ──── */}
+      {/* ─── CHOOSE YOUR ADVENTURE — click opens a modal, no navigation ─ */}
       <section className="section-dark">
         <h3 className="section-title">Choose Your Adventure</h3>
         <p className="section-kicker">
@@ -166,23 +171,7 @@ export default function HomePage() {
           and community events built around fair play.
         </p>
 
-        <div className="newsbox-grid">
-          {ADVENTURES.map((a) => (
-            <Link
-              key={a.name}
-              href={a.href}
-              className="newsbox"
-              style={{ backgroundImage: `url(${a.bg})` }}
-            >
-              <div className="newsbox-overlay" />
-              <div className="newsbox-text">
-                <div className="newsbox-tag">{a.tag}</div>
-                <div className="newsbox-title">{a.name}</div>
-                <div className="newsbox-body">{a.body}</div>
-              </div>
-            </Link>
-          ))}
-        </div>
+        <HomeAdventureGrid adventures={ADVENTURES} />
       </section>
 
       {/* ─── SUPPORT — perks-band ─────────────────────────── */}
@@ -215,54 +204,8 @@ export default function HomePage() {
       {/* ─── LIVE MAPS — tabs + map frame (client component) ─ */}
       <HomeLiveMaps />
 
-      {/* ─── COMMUNITY — discord-block ────────────────────── */}
-      <section className="section-dark">
-        <h3 className="section-title">Join the Community</h3>
-        <p className="section-kicker">
-          Announcements, events, support, screenshots, and voice chat live in the RealFiction
-          Discord. The server lives there too.
-        </p>
-
-        <div className="discord-block">
-          <div>
-            <div className="discord-feed">
-              {DISCORD_FEED.map((m) => (
-                <div key={m.c} className="feed-item">
-                  <span className="channel">{m.c}</span>
-                  <span className="meta">
-                    {m.who} · {m.t}
-                  </span>
-                  <div className="msg">{m.n}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div style={{ textAlign: "center" }}>
-            <DiscordIcon
-              width={64}
-              height={64}
-              className="mx-auto mb-[18px] block text-[#5865f2]"
-            />
-            <p
-              style={{
-                fontFamily: "rf-light, sans-serif",
-                color: "var(--text-dim)",
-                marginBottom: 22,
-                fontSize: 15
-              }}
-            >
-              2,400+ players in the network. Drop in any time.
-            </p>
-            <a
-              href="https://discord.com/invite/JkPpmzn"
-              className="mc-button mc-button--discord"
-            >
-              <DiscordIcon /> Join Discord
-            </a>
-          </div>
-        </div>
-      </section>
+      {/* ─── COMMUNITY — real Discord member count, no fake feed ─ */}
+      <HomeDiscordCard />
 
       {/* ─── FINAL CTA banner with bg image ───────────────── */}
       <section className="section-dark" style={{ padding: "10px 0 60px" }}>

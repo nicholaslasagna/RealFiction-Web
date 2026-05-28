@@ -1,7 +1,7 @@
 import type { Metadata } from "next"
 import Link from "next/link"
 import Image from "next/image"
-import { ArrowUpRight, CalendarDays, Gift, ShieldCheck, Trophy } from "lucide-react"
+import { ArrowUpRight, CalendarDays } from "lucide-react"
 
 import { Reveal } from "@/components/reveal"
 import { VoteCountdown } from "@/components/vote-countdown"
@@ -40,28 +40,35 @@ export default function VotePage() {
       </div>
 
       <div className="container-shell py-10 md:py-14">
-      <Reveal className="grid gap-5 md:grid-cols-3">
-        <Card className="minecraft-card">
-          <CardHeader>
-            <Gift className="h-5 w-5 text-amber-200" />
-            <CardTitle>Daily rewards</CardTitle>
-            <CardDescription>Vote keys, profile points, and server-safe progress rewards.</CardDescription>
-          </CardHeader>
-        </Card>
-        <Card className="minecraft-card">
-          <CardHeader>
-            <Trophy className="h-5 w-5 text-amber-200" />
-            <CardTitle>Monthly top voters</CardTitle>
-            <CardDescription>Leaderboards and showcase rewards for players who support the network.</CardDescription>
-          </CardHeader>
-        </Card>
-        <Card className="minecraft-card">
-          <CardHeader>
-            <ShieldCheck className="h-5 w-5 text-emerald-200" />
-            <CardTitle>Verified voting</CardTitle>
-            <CardDescription>Cooldowns, account linking, and verified votes help keep rewards fair.</CardDescription>
-          </CardHeader>
-        </Card>
+      {/* Icon-free 3-up summary — calm, dark, easier on the eyes. */}
+      <Reveal className="grid gap-4 md:grid-cols-3">
+        {[
+          {
+            title: "Daily rewards",
+            body: "Vote keys, profile points, and server-safe progress rewards."
+          },
+          {
+            title: "Monthly top voters",
+            body: "Leaderboards and showcase rewards for players who support the network."
+          },
+          {
+            title: "Verified voting",
+            body: "Cooldowns, account linking, and verified votes help keep rewards fair."
+          }
+        ].map((item) => (
+          <div
+            key={item.title}
+            className="border border-amber-200/14 bg-black/24 p-5"
+          >
+            <h3
+              className="text-lg text-white"
+              style={{ fontFamily: "rf-h1, sans-serif" }}
+            >
+              {item.title}
+            </h3>
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">{item.body}</p>
+          </div>
+        ))}
       </Reveal>
 
       <div className="mt-10 grid gap-8 lg:grid-cols-[1fr_330px]">

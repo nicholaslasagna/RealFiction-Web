@@ -249,6 +249,17 @@ select {
   width: auto;
   display: block;
 }
+
+/* Mobile: smaller logo + tighter nav padding so the hamburger sits
+   comfortably and the logo + toggle don't crowd each other on phones. */
+@media (max-width: 768px) {
+  .rf-nav {
+    padding: 10px 16px;
+  }
+  .rf-nav .logo img {
+    height: 40px;
+  }
+}
 .rf-nav ul {
   list-style: none;
   display: flex;
