@@ -2,6 +2,7 @@ import type { Metadata } from "next"
 import Image from "next/image"
 import Link from "next/link"
 import { Gift, ShieldCheck } from "lucide-react"
+// ShieldCheck is still used by the trust card row below.
 
 import { Reveal } from "@/components/reveal"
 import { Storefront } from "@/components/storefront"
@@ -29,11 +30,7 @@ export default function StorePage() {
         <div className="absolute inset-0 -z-10 bg-gradient-to-b from-background/70 via-background/82 to-background" />
         <div className="container-shell">
           <Reveal className="max-w-4xl">
-            <div className="rf-kicker">
-              <ShieldCheck className="mr-1.5 h-3.5 w-3.5" />
-              Cosmetic-only server shop
-            </div>
-            <h1 className="display-font mt-5 text-4xl font-semibold leading-tight sm:text-5xl md:text-7xl">
+            <h1 className="display-font text-4xl font-semibold leading-tight sm:text-5xl md:text-7xl">
               RealFiction Store
             </h1>
             <p className="mt-5 max-w-3xl text-base leading-7 text-muted-foreground sm:text-lg sm:leading-8">

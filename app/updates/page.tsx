@@ -1,5 +1,5 @@
 import type { Metadata } from "next"
-import { CalendarDays, FileText, Tag } from "lucide-react"
+import { CalendarDays, Tag } from "lucide-react"
 
 import { Reveal } from "@/components/reveal"
 import { Badge } from "@/components/ui/badge"
@@ -15,11 +15,7 @@ export default function UpdatesPage() {
   return (
     <section className="container-shell py-14">
       <Reveal className="max-w-4xl">
-        <Badge variant="default">
-          <FileText className="mr-1.5 h-3.5 w-3.5" />
-          Changelog
-        </Badge>
-        <h1 className="display-font mt-5 text-5xl font-semibold leading-tight md:text-6xl">Updates</h1>
+        <h1 className="display-font text-5xl font-semibold leading-tight md:text-6xl">Updates</h1>
         <p className="mt-5 max-w-3xl text-lg leading-8 text-muted-foreground">
           Server news, event posts, tournament updates, rule changes, store policy notes, and community announcements.
         </p>

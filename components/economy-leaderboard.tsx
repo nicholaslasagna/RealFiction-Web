@@ -2,6 +2,7 @@ import { Coins } from "lucide-react"
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { formatEconomyBalance } from "@/lib/format-economy"
+import { avatarUrlByUsername } from "@/lib/format-playtime"
 import { cn } from "@/lib/utils"
 
 type EconomyEntry = {
@@ -62,33 +63,56 @@ export async function EconomyLeaderboard() {
       <CardContent className="pt-0">
         {entries.length > 0 ? (
           <ol className="divide-y divide-white/5 overflow-hidden rounded-md border border-amber-200/10 bg-black/18">
-            {entries.map((entry) => (
-              <li
-                key={`${entry.position}-${entry.name}`}
-                className="flex items-center gap-4 px-4 py-3 transition hover:bg-amber-200/[0.04]"
-              >
-                <span
-                  className={cn(
-                    "flex h-8 w-9 shrink-0 items-center justify-center rounded-md border text-sm font-bold",
-                    entry.position === 1
-                      ? "border-amber-200 text-amber-200"
-                      : entry.position <= 3
-                        ? "border-white/25 text-slate-100"
-                        : "border-white/12 text-slate-300"
-                  )}
+            {entries.map((entry) => {
+              const skin = avatarUrlByUsername(entry.name, 64)
+
+              return (
+                <li
+                  key={`${entry.position}-${entry.name}`}
+                  className="flex items-center gap-4 px-4 py-3 transition hover:bg-amber-200/[0.04]"
                 >
-                  {entry.position}
-                </span>
+                  <span
+                    className={cn(
+                      "flex h-8 w-9 shrink-0 items-center justify-center rounded-md border text-sm font-bold",
+                      entry.position === 1
+                        ? "border-amber-200 text-amber-200"
+                        : entry.position <= 3
+                          ? "border-white/25 text-slate-100"
+                          : "border-white/12 text-slate-300"
+                    )}
+                  >
+                    {entry.position}
+                  </span>
 
-                <span className="min-w-0 flex-1 truncate font-semibold text-slate-100">
-                  {entry.name || "Unknown player"}
-                </span>
+                  <div className="flex min-w-0 flex-1 items-center gap-3">
+                    {skin ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        alt=""
+                        src={skin}
+                        width={32}
+                        height={32}
+                        loading="lazy"
+                        className="h-8 w-8 rounded-md border border-white/10 bg-white/5"
+                        style={{ imageRendering: "pixelated" }}
+                      />
+                    ) : (
+                      <div
+                        aria-hidden
+                        className="h-8 w-8 rounded-md border border-white/10 bg-white/5"
+                      />
+                    )}
+                    <span className="truncate font-semibold text-slate-100">
+                      {entry.name || "Unknown player"}
+                    </span>
+                  </div>
 
-                <span className="shrink-0 font-mono text-sm font-semibold text-amber-100">
-                  {formatEconomyBalance(entry.balanceMinor, scale)}
-                </span>
-              </li>
-            ))}
+                  <span className="shrink-0 font-mono text-sm font-semibold text-amber-100">
+                    {formatEconomyBalance(entry.balanceMinor, scale)}
+                  </span>
+                </li>
+              )
+            })}
           </ol>
         ) : (
           <div className="rounded-md border border-dashed border-amber-200/12 bg-black/18 px-6 py-10 text-center">

@@ -1,9 +1,8 @@
 import type { Metadata } from "next"
-import { LifeBuoy, Mail, MessageSquareWarning, ShieldCheck } from "lucide-react"
+import { Mail, MessageSquareWarning, ShieldCheck } from "lucide-react"
 
 import { ContactForm } from "@/components/contact-form"
 import { Reveal } from "@/components/reveal"
-import { Badge } from "@/components/ui/badge"
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 
 export const metadata: Metadata = {
@@ -16,11 +15,7 @@ export default function ContactPage() {
     <section className="container-shell py-14">
       <Reveal className="grid gap-8 lg:grid-cols-[0.9fr_1.1fr]">
         <div>
-          <Badge variant="warning">
-            <LifeBuoy className="mr-1.5 h-3.5 w-3.5" />
-            Support
-          </Badge>
-          <h1 className="display-font mt-5 text-5xl font-semibold leading-tight md:text-6xl">Contact RealFiction</h1>
+          <h1 className="display-font text-5xl font-semibold leading-tight md:text-6xl">Contact RealFiction</h1>
           <p className="mt-5 max-w-2xl text-lg leading-8 text-muted-foreground">
             Billing, Minecraft account linking, moderation, appeals, partnership requests, bug reports,
             player safety, and store support all reach the RealFiction team here.

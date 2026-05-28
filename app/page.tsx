@@ -3,6 +3,7 @@ import Link from "next/link"
 
 import { CopyServerButton } from "@/components/copy-server-button"
 import { HomeLiveMaps } from "@/components/home-live-maps"
+import { HomeNetworkInNumbers } from "@/components/home-network-in-numbers"
 import { LivePlayerCount } from "@/components/live-player-count"
 
 /* ============================================================
@@ -101,35 +102,6 @@ const DISCORD_FEED = [
   { c: "#screenshots", n: "Built a glass cathedral at -487, 64, 1203 👀", who: "ironhive", t: "1h ago" }
 ]
 
-/* ============================================================
-   Pixel head SVG (Top network player avatar in stat card 3)
-   ============================================================ */
-
-function PixelHead() {
-  return (
-    <svg
-      width="56"
-      height="56"
-      viewBox="0 0 16 16"
-      shapeRendering="crispEdges"
-      style={{
-        background: "#1c2a40",
-        border: "2px solid #0a0f18",
-        padding: 2,
-        boxShadow: "inset 0 2px 0 rgba(255,255,255,0.08), inset 0 -2px 0 rgba(0,0,0,0.3)"
-      }}
-    >
-      <rect x="2" y="1" width="12" height="3" fill="#3a2316" />
-      <rect x="1" y="2" width="14" height="2" fill="#3a2316" />
-      <rect x="2" y="4" width="12" height="8" fill="#f1c08b" />
-      <rect x="4" y="6" width="2" height="2" fill="#1c2a40" />
-      <rect x="10" y="6" width="2" height="2" fill="#1c2a40" />
-      <rect x="6" y="10" width="4" height="1" fill="#7a4023" />
-      <rect x="2" y="12" width="12" height="3" fill="var(--mc-green)" />
-    </svg>
-  )
-}
-
 export default function HomePage() {
   return (
     <>
@@ -182,90 +154,8 @@ export default function HomePage() {
         </p>
       </section>
 
-      {/* ─── LIVE NETWORK STATS ───────────────────────────── */}
-      <section className="section-tinted">
-        <h3 className="section-title">The whole network, in numbers.</h3>
-        <p className="section-kicker">
-          Totals roll up SMP, Factions, Anarchy, Arcade, and lobby playtime from across the
-          RealFiction network.
-        </p>
-
-        <div className="stats-grid">
-          <div className="stat-card">
-            <div className="stat-eyebrow">Network playtime</div>
-            <div className="stat-value">1 hr, 25 min</div>
-            <div
-              style={{
-                marginTop: 16,
-                height: 8,
-                background: "rgba(255,255,255,0.06)",
-                overflow: "hidden"
-              }}
-            >
-              <div
-                style={{
-                  width: "62%",
-                  height: "100%",
-                  background: "linear-gradient(90deg, var(--mc-green), var(--gold))"
-                }}
-              />
-            </div>
-            <div className="stat-foot">Across SMP · Factions · Arcade · Anarchy · Lobby</div>
-          </div>
-
-          <div className="stat-card emerald">
-            <div className="stat-eyebrow">Tracked players</div>
-            <div className="stat-value" style={{ color: "var(--mc-green)" }}>
-              4
-            </div>
-            <div style={{ marginTop: 18, display: "flex" }}>
-              {["6c4326", "8e9092", "4d8a3a", "f2c66d"].map((c, i) => (
-                <div
-                  key={i}
-                  style={{
-                    width: 32,
-                    height: 32,
-                    background: `#${c}`,
-                    border: "2px solid var(--navy-card)",
-                    marginLeft: i ? -8 : 0,
-                    boxShadow: "inset 0 -3px 0 rgba(0,0,0,0.25)",
-                    imageRendering: "pixelated"
-                  }}
-                />
-              ))}
-            </div>
-            <div className="stat-foot">Linked accounts seen on the network.</div>
-          </div>
-
-          <div className="stat-card navy">
-            <div className="stat-eyebrow">Top network player</div>
-            <div style={{ display: "flex", alignItems: "center", gap: 14, marginTop: 14 }}>
-              <PixelHead />
-              <div>
-                <div
-                  style={{
-                    fontFamily: "rf-h1, sans-serif",
-                    fontSize: 22,
-                    color: "white",
-                    lineHeight: 1.05
-                  }}
-                >
-                  LittleNicholas
-                </div>
-                <div
-                  className="f-mc"
-                  style={{ color: "var(--gold)", fontSize: 15, marginTop: 4 }}
-                >
-                  52 min played
-                </div>
-              </div>
-            </div>
-            <div className="stat-foot">
-              Full top 10 lives on the <Link href="/leaderboards">leaderboards page</Link>.
-            </div>
-          </div>
-        </div>
-      </section>
+      {/* ─── LIVE NETWORK STATS (real data + Minecraft skins) ─ */}
+      <HomeNetworkInNumbers />
 
       {/* ─── CHOOSE YOUR ADVENTURE — newsbox image cards ──── */}
       <section className="section-dark">
