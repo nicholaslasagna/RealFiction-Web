@@ -4,6 +4,7 @@ import Link from "next/link"
 import { CopyServerButton } from "@/components/copy-server-button"
 import { HomeLiveMaps } from "@/components/home-live-maps"
 import { HomeNetworkInNumbers } from "@/components/home-network-in-numbers"
+import { HomeVoteStreak } from "@/components/home-vote-streak"
 import { LivePlayerCount } from "@/components/live-player-count"
 
 /* ============================================================
@@ -208,43 +209,8 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* ─── VOTE & EARN REWARDS ──────────────────────────── */}
-      <section className="section-dark">
-        <h3 className="section-title">Vote &amp; Earn Rewards</h3>
-        <p className="section-kicker">
-          Vote daily to help RealFiction grow, build streaks, and earn server-safe rewards
-          through your linked Minecraft account.
-        </p>
-
-        <div className="streak-card">
-          <div>
-            <div className="stat-eyebrow" style={{ color: "var(--text-mute)" }}>
-              Your streak · 14 days
-            </div>
-            <div className="streak-blocks" style={{ marginTop: 12 }}>
-              {Array.from({ length: 14 }).map((_, i) => (
-                <span key={i} className="blk" />
-              ))}
-              {Array.from({ length: 16 }).map((_, i) => (
-                <span key={`e${i}`} className="blk empty" />
-              ))}
-            </div>
-            <div
-              style={{
-                marginTop: 14,
-                fontSize: 13,
-                color: "var(--text-dim)",
-                fontFamily: "rf-light, sans-serif"
-              }}
-            >
-              Streak +30 unlocks a cape and Epic crate.
-            </div>
-          </div>
-          <Link className="mc-button" href="/vote">
-            Open Voting Hub
-          </Link>
-        </div>
-      </section>
+      {/* ─── VOTE & EARN REWARDS (real per-user streak) ───── */}
+      <HomeVoteStreak />
 
       {/* ─── LIVE MAPS — tabs + map frame (client component) ─ */}
       <HomeLiveMaps />
