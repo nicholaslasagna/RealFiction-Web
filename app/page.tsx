@@ -2,6 +2,7 @@ import Image from "next/image"
 import Link from "next/link"
 
 import { CopyServerButton } from "@/components/copy-server-button"
+import { HomeDiscordCard } from "@/components/home-discord-card"
 import { HomeLiveMaps } from "@/components/home-live-maps"
 import { HomeNetworkInNumbers } from "@/components/home-network-in-numbers"
 import { HomeVoteStreak } from "@/components/home-vote-streak"
@@ -97,12 +98,6 @@ const SUPPORT_PERKS = [
   "Gift cards"
 ]
 
-const DISCORD_FEED = [
-  { c: "#announcements", n: "Season 6 launches Friday — patch notes inside.", who: "RF-Bot", t: "2m ago" },
-  { c: "#tournaments", n: "BedWars duos sign-ups open · 32 slots.", who: "moderator-mim", t: "12m ago" },
-  { c: "#screenshots", n: "Built a glass cathedral at -487, 64, 1203 👀", who: "ironhive", t: "1h ago" }
-]
-
 export default function HomePage() {
   return (
     <>
@@ -145,13 +140,14 @@ export default function HomePage() {
       <section className="who">
         <h3>Who We Are</h3>
         <p>
-          Founded in late 2018, <span className="accent">RealFiction</span> is a fun,
-          community-driven Minecraft network designed for players who value fair gameplay and
-          a welcoming environment. We specialize in Survival and Factions, with plenty of
-          other gamemodes to keep the adventure going. Our server is proudly anti pay-to-win,
-          ensuring a level playing field for everyone — whether you&apos;re teaming up with
-          friends or carving out your own path, RealFiction offers the perfect mix of
-          creativity, challenge, and community spirit.
+          Founded in late 2018,{" "}
+          <span className="accent">RealFiction</span>
+          {" "}is a fun, community-driven Minecraft network designed for players who value
+          fair gameplay and a welcoming environment. We specialize in Survival and Factions,
+          with plenty of other gamemodes to keep the adventure going. Our server is proudly
+          anti pay-to-win, ensuring a level playing field for everyone — whether you&apos;re
+          teaming up with friends or carving out your own path, RealFiction offers the perfect
+          mix of creativity, challenge, and community spirit.
         </p>
       </section>
 
@@ -215,54 +211,8 @@ export default function HomePage() {
       {/* ─── LIVE MAPS — tabs + map frame (client component) ─ */}
       <HomeLiveMaps />
 
-      {/* ─── COMMUNITY — discord-block ────────────────────── */}
-      <section className="section-dark">
-        <h3 className="section-title">Join the Community</h3>
-        <p className="section-kicker">
-          Announcements, events, support, screenshots, and voice chat live in the RealFiction
-          Discord. The server lives there too.
-        </p>
-
-        <div className="discord-block">
-          <div>
-            <div className="discord-feed">
-              {DISCORD_FEED.map((m) => (
-                <div key={m.c} className="feed-item">
-                  <span className="channel">{m.c}</span>
-                  <span className="meta">
-                    {m.who} · {m.t}
-                  </span>
-                  <div className="msg">{m.n}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div style={{ textAlign: "center" }}>
-            <DiscordIcon
-              width={64}
-              height={64}
-              className="mx-auto mb-[18px] block text-[#5865f2]"
-            />
-            <p
-              style={{
-                fontFamily: "rf-light, sans-serif",
-                color: "var(--text-dim)",
-                marginBottom: 22,
-                fontSize: 15
-              }}
-            >
-              2,400+ players in the network. Drop in any time.
-            </p>
-            <a
-              href="https://discord.com/invite/JkPpmzn"
-              className="mc-button mc-button--discord"
-            >
-              <DiscordIcon /> Join Discord
-            </a>
-          </div>
-        </div>
-      </section>
+      {/* ─── COMMUNITY — real Discord member count, no fake feed ─ */}
+      <HomeDiscordCard />
 
       {/* ─── FINAL CTA banner with bg image ───────────────── */}
       <section className="section-dark" style={{ padding: "10px 0 60px" }}>

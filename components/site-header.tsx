@@ -3,7 +3,7 @@
 import Image from "next/image"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
-import { ChevronDown, LogOut, Menu, UserRound, X } from "lucide-react"
+import { ChevronDown, LogOut, Menu, X } from "lucide-react"
 import { useEffect, useRef, useState } from "react"
 
 import { Button } from "@/components/ui/button"
@@ -113,7 +113,6 @@ export function SiteHeader() {
               className="inline-flex items-center gap-2 border border-amber-200/30 bg-amber-200/8 px-3 py-2 text-xs uppercase tracking-[0.05em] text-amber-100 transition hover:bg-amber-200/15"
               style={{ fontFamily: "rf-bold, sans-serif" }}
             >
-              <UserRound className="h-4 w-4" />
               Account
               <ChevronDown className={cn("h-3.5 w-3.5 transition", accountOpen && "rotate-180")} />
             </button>

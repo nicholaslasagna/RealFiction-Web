@@ -1,12 +1,44 @@
 "use client"
 
-import { Copy, Link2, RefreshCw, ShieldCheck, Unlink } from "lucide-react"
+import { Copy, RefreshCw, Unlink } from "lucide-react"
 import { FormEvent, useEffect, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
+
+/**
+ * Minecraft-style pixel "chain link" icon used for the account link
+ * status. Replaces the generic shield+check / link-chain lucide icons
+ * with something that fits the in-game aesthetic.
+ */
+function PixelChainIcon({ size = 24, color = "#f2c66d" }: { size?: number; color?: string }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 16 16"
+      shapeRendering="crispEdges"
+      aria-hidden
+    >
+      {/* Top link */}
+      <rect x="3" y="2" width="4" height="1" fill={color} />
+      <rect x="2" y="3" width="1" height="3" fill={color} />
+      <rect x="7" y="3" width="1" height="3" fill={color} />
+      <rect x="3" y="6" width="4" height="1" fill={color} />
+      {/* Bottom link */}
+      <rect x="9" y="9" width="4" height="1" fill={color} />
+      <rect x="8" y="10" width="1" height="3" fill={color} />
+      <rect x="13" y="10" width="1" height="3" fill={color} />
+      <rect x="9" y="13" width="4" height="1" fill={color} />
+      {/* Connector */}
+      <rect x="6" y="6" width="1" height="2" fill={color} />
+      <rect x="7" y="7" width="2" height="1" fill={color} />
+      <rect x="9" y="8" width="1" height="1" fill={color} />
+    </svg>
+  )
+}
 
 type AccountLinkCardProps = {
   linked: boolean
@@ -146,8 +178,8 @@ export function AccountLinkCard({
     return (
       <div className="minecraft-card rounded-lg p-6">
         <div className="flex items-start gap-4">
-          <div className="flex h-12 w-12 items-center justify-center rounded-md border border-emerald-300/25 bg-emerald-300/12 text-emerald-200">
-            <ShieldCheck className="h-6 w-6" />
+          <div className="flex h-12 w-12 items-center justify-center border-2 border-[#00060e] bg-gradient-to-b from-[#1a2638] to-[#0a1424] shadow-[inset_0_2px_0_rgba(255,255,255,0.08),inset_0_-2px_0_rgba(0,0,0,0.3)]">
+            <PixelChainIcon size={24} color="#3eb336" />
           </div>
           <div className="min-w-0 flex-1">
             <p className="text-sm font-bold uppercase tracking-[0.18em] text-emerald-200">Minecraft linked</p>
@@ -211,8 +243,8 @@ export function AccountLinkCard({
   return (
     <div className="minecraft-card rounded-lg p-6">
       <div className="flex items-start gap-4">
-        <div className="flex h-12 w-12 items-center justify-center rounded-md border border-amber-300/25 bg-amber-300/12 text-amber-200">
-          <Link2 className="h-6 w-6" />
+        <div className="flex h-12 w-12 items-center justify-center border-2 border-[#00060e] bg-gradient-to-b from-[#1a2638] to-[#0a1424] shadow-[inset_0_2px_0_rgba(255,255,255,0.08),inset_0_-2px_0_rgba(0,0,0,0.3)]">
+          <PixelChainIcon size={24} color="#f2c66d" />
         </div>
         <div className="min-w-0 flex-1">
           <p className="text-sm font-bold uppercase tracking-[0.18em] text-amber-200">Link Minecraft</p>
