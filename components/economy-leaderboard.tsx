@@ -2,12 +2,18 @@ import { Coins } from "lucide-react"
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { formatEconomyBalance } from "@/lib/format-economy"
-import { avatarUrlByUsername } from "@/lib/format-playtime"
+import { avatarUrl, avatarUrlByUsername } from "@/lib/format-playtime"
 import { cn } from "@/lib/utils"
 
 type EconomyEntry = {
   position: number
   name: string
+  /**
+   * Mojang/Geyser UUID for the linked account, when one is known. Brought
+   * over by the route's enrichment step so we can render skins with the
+   * same UUID-based lookup the Top 10 - Network board uses.
+   */
+  uuid: string | null
   balanceMinor: string
 }
 
@@ -35,11 +41,37 @@ async function fetchEconomyLeaderboard(): Promise<EconomyLeaderboardResponse | n
     return {
       currencyKey: json.currencyKey ?? "realfiction_main",
       scale: typeof json.scale === "number" ? json.scale : 100,
-      entries: Array.isArray(json.entries) ? json.entries.slice(0, 10) : []
+      entries: Array.isArray(json.entries)
+        ? json.entries
+            .slice(0, 10)
+            .map((entry) => ({
+              position: entry.position,
+              name: entry.name,
+              uuid: typeof entry.uuid === "string" && entry.uuid.length > 0 ? entry.uuid : null,
+              balanceMinor: String(entry.balanceMinor ?? 0)
+            }))
+        : []
     }
   } catch {
     return null
   }
+}
+
+/**
+ * Pick the best skin URL we can for a row.
+ *
+ * Priority order matches what the playtime "Top 10 - Network" board does:
+ *   1. Real UUID via `avatarUrl(uuid)` — works for Java accounts AND
+ *      Bedrock players linked through GeyserMC.
+ *   2. Fall back to the username lookup; `avatarUrlByUsername` already
+ *      routes Bedrock dot-prefix names to the classic Steve head.
+ */
+function skinFor(entry: EconomyEntry, size = 64) {
+  const fromUuid = avatarUrl(entry.uuid, size)
+  if (fromUuid) {
+    return fromUuid
+  }
+  return avatarUrlByUsername(entry.name, size)
 }
 
 export async function EconomyLeaderboard() {
@@ -64,7 +96,7 @@ export async function EconomyLeaderboard() {
         {entries.length > 0 ? (
           <ol className="divide-y divide-white/5 overflow-hidden rounded-md border border-amber-200/10 bg-black/18">
             {entries.map((entry) => {
-              const skin = avatarUrlByUsername(entry.name, 64)
+              const skin = skinFor(entry, 64)
 
               return (
                 <li

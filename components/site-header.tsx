@@ -74,6 +74,26 @@ export function SiteHeader() {
     router.refresh()
   }
 
+  // Lock body scroll while the mobile menu is open, and close it on Esc.
+  useEffect(() => {
+    if (!open) return
+    const previous = document.body.style.overflow
+    document.body.style.overflow = "hidden"
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape") setOpen(false)
+    }
+    document.addEventListener("keydown", onKey)
+    return () => {
+      document.body.style.overflow = previous
+      document.removeEventListener("keydown", onKey)
+    }
+  }, [open])
+
+  // Close the menu on route change so navigation feels responsive.
+  useEffect(() => {
+    setOpen(false)
+  }, [pathname])
+
   return (
     <header className="rf-nav">
       <Link className="logo flex shrink-0 items-center" href="/" onClick={() => setOpen(false)}>
@@ -163,19 +183,37 @@ export function SiteHeader() {
         </Link>
       </div>
 
-      <Button
+      {/* Mobile hamburger toggle — visible below xl (under 1280px) */}
+      <button
+        type="button"
         aria-label={open ? "Close navigation" : "Open navigation"}
-        className="ml-auto xl:hidden"
+        aria-expanded={open}
         onClick={() => setOpen((value) => !value)}
-        size="icon"
-        variant="ghost"
+        className="ml-auto inline-flex h-11 w-11 items-center justify-center border border-amber-200/30 bg-amber-200/8 text-amber-100 transition hover:bg-amber-200/15 xl:hidden"
       >
         {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-      </Button>
+      </button>
 
+      {/* Mobile menu — opens directly below the nav. Body scroll is locked
+          while open, Esc + route change both close it. */}
       {open ? (
-        <div className="absolute left-0 right-0 top-full border-t border-amber-200/10 bg-[#021429]/96 xl:hidden">
+        <div
+          className="absolute left-0 right-0 top-full border-t border-amber-200/10 bg-[#021429]/97 xl:hidden"
+          style={{ maxHeight: "calc(100vh - 80px)", overflowY: "auto" }}
+        >
           <nav className="grid gap-1 px-5 py-4">
+            {/* Yellow Store CTA pinned to the top of the mobile menu so
+                phone visitors don't lose access when the desktop right-
+                side Store button is hidden. */}
+            <Link
+              href="/store"
+              onClick={() => setOpen(false)}
+              className="mc-button mc-button--gold"
+              style={{ justifyContent: "center", marginBottom: 8 }}
+            >
+              Store
+            </Link>
+
             {navItems.map((item) => (
               <Link
                 key={item.href}

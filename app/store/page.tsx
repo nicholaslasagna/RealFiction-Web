@@ -1,8 +1,8 @@
 import type { Metadata } from "next"
 import Image from "next/image"
 import Link from "next/link"
-import { Gift, ShieldCheck } from "lucide-react"
-// ShieldCheck is still used by the trust card row below.
+// All trust-card icons were removed for a cleaner look — no lucide
+// imports needed here anymore.
 
 import { Reveal } from "@/components/reveal"
 import { Storefront } from "@/components/storefront"
@@ -45,22 +45,27 @@ export default function StorePage() {
       </div>
 
       <div className="container-shell py-10 md:py-14">
+        {/* Quiet, icon-free trust band — clean rf-bold uppercase labels
+            on top, body line below. Reads like a server MOTD instead of
+            a generic SaaS feature row. */}
         <Reveal className="grid gap-3 md:grid-cols-3">
           {[
-            "Stripe, Apple Pay, Google Pay, and PayPal checkout",
-            "Rewards delivered to your linked Minecraft account",
-            "Cosmetics, supporter perks, lobby fun, and gift cards only"
+            { label: "Checkout", body: "Card, Apple Pay, Google Pay, and PayPal." },
+            { label: "Delivery", body: "Rewards land on your linked Minecraft account." },
+            { label: "What's sold", body: "Cosmetics, supporter perks, lobby fun, and gift cards. Nothing else." }
           ].map((item) => (
-            <Card key={item} className="border-amber-200/12 bg-black/18 shadow-none backdrop-blur-sm">
-              <CardContent className="flex items-start gap-3 p-4">
-                {item.includes("gift") ? (
-                  <Gift className="mt-0.5 h-4 w-4 text-amber-200" />
-                ) : (
-                  <ShieldCheck className="mt-0.5 h-4 w-4 text-emerald-200" />
-                )}
-                <p className="text-sm leading-6 text-muted-foreground">{item}</p>
-              </CardContent>
-            </Card>
+            <div
+              key={item.label}
+              className="border border-amber-200/14 bg-black/24 px-4 py-3"
+            >
+              <div
+                className="text-[11px] uppercase tracking-[0.18em] text-amber-200/85"
+                style={{ fontFamily: "rf-bold, sans-serif" }}
+              >
+                {item.label}
+              </div>
+              <p className="mt-1 text-sm leading-6 text-muted-foreground">{item.body}</p>
+            </div>
           ))}
         </Reveal>
 
