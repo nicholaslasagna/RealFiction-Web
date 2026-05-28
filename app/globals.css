@@ -1,8 +1,5 @@
 @import "tailwindcss";
 
-/* Legacy custom font declarations kept as harmless fallbacks. The real type
-   system uses Fraunces (display serif), Inter (sans), and JetBrains Mono
-   loaded via next/font/google in app/layout.tsx. */
 @font-face {
   font-family: "RealFiction Display";
   src: url("/fonts/h1.otf") format("opentype");
@@ -16,46 +13,28 @@
 }
 
 @theme inline {
-  /* ============================================================
-     Claude design tokens — cream background, coral accent
-     ============================================================ */
-  --color-background: #faf9f5;
-  --color-foreground: #141413;
-
-  --color-card: #ffffff;
-  --color-card-foreground: #141413;
-
-  --color-popover: #ffffff;
-  --color-popover-foreground: #141413;
-
-  /* Primary: Claude coral (formerly gold) */
-  --color-primary: #cc785c;
-  --color-primary-foreground: #ffffff;
-
-  /* Secondary: lifted cream surface */
-  --color-secondary: #f0eee6;
-  --color-secondary-foreground: #141413;
-
-  /* Muted: same lifted cream + warm gray text */
-  --color-muted: #f0eee6;
-  --color-muted-foreground: #5d5b56;
-
-  /* Accent: soft coral tint */
-  --color-accent: rgba(204, 120, 92, 0.10);
-  --color-accent-foreground: #141413;
-
-  --color-destructive: #c53030;
-  --color-destructive-foreground: #ffffff;
-
-  --color-border: #e5e4dc;
-  --color-input: #e5e4dc;
-  --color-ring: #cc785c;
-
-  /* Typography — Claude's analogs for Tiempos/Copernicus + Styrene B/Söhne */
-  --font-sans: var(--font-inter), "Inter", ui-sans-serif, system-ui, sans-serif;
-  --font-display: var(--font-fraunces), "Fraunces", "Iowan Old Style", Georgia, serif;
-  --font-minecraft: var(--font-jetbrains-mono), "JetBrains Mono", ui-monospace, monospace;
-
+  --color-background: #06101c;
+  --color-foreground: #f5f8ff;
+  --color-card: #0c1722;
+  --color-card-foreground: #f5f8ff;
+  --color-popover: #0c1722;
+  --color-popover-foreground: #f5f8ff;
+  --color-primary: #f2c66d;
+  --color-primary-foreground: #1a1308;
+  --color-secondary: #142131;
+  --color-secondary-foreground: #f4ead0;
+  --color-muted: #101b2a;
+  --color-muted-foreground: #a9b8c7;
+  --color-accent: #1d3f35;
+  --color-accent-foreground: #f5f8ff;
+  --color-destructive: #ff5f73;
+  --color-destructive-foreground: #fff7f8;
+  --color-border: rgba(242, 198, 109, 0.16);
+  --color-input: rgba(242, 198, 109, 0.18);
+  --color-ring: #f2c66d;
+  --font-sans: "Inter", "Geist", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "RealFiction Display", "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-minecraft: "RealFiction Minecraft", ui-monospace, monospace;
   --radius: 8px;
 }
 
@@ -65,16 +44,21 @@
 
 html {
   scroll-behavior: smooth;
-  background: #faf9f5;
+  background: #06101c;
 }
 
 body {
   min-height: 100vh;
   margin: 0;
-  background: #faf9f5;
-  color: #141413;
+  background:
+    radial-gradient(circle at top, rgba(31, 69, 58, 0.16), transparent 34rem),
+    linear-gradient(180deg, rgba(6, 16, 28, 0.92), rgba(6, 16, 28, 0.98)),
+    linear-gradient(90deg, rgba(242, 198, 109, 0.035) 1px, transparent 1px),
+    linear-gradient(0deg, rgba(105, 81, 49, 0.05) 1px, transparent 1px),
+    #06101c;
+  background-size: auto, auto, 64px 64px, 64px 64px, auto;
+  color: #f5f8ff;
   font-family: var(--font-sans);
-  font-feature-settings: "ss01", "cv11";
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -93,23 +77,15 @@ select {
 }
 
 ::selection {
-  background: rgba(204, 120, 92, 0.22);
-  color: #141413;
+  background: rgba(242, 198, 109, 0.35);
 }
 
-/* Display font helper — used by display-font className on headings */
-.display-font {
-  font-family: var(--font-display);
-  font-optical-sizing: auto;
-  font-variation-settings: "opsz" 144, "SOFT" 50;
-  letter-spacing: -0.022em;
-  font-weight: 400;
-}
-
-/* Monospace helper — historically called minecraft-font, now JetBrains Mono */
 .minecraft-font {
   font-family: var(--font-minecraft);
-  letter-spacing: 0;
+}
+
+.display-font {
+  font-family: var(--font-display);
 }
 
 .container-shell {
@@ -117,34 +93,41 @@ select {
   margin-inline: auto;
 }
 
-/* ============================================================
-   Surface classes — kept by name (components import them), now
-   rebuilt as Claude cream cards with soft borders, no heavy
-   shadows, no backdrop-blur.
-   ============================================================ */
-
 .premium-surface {
-  border: 1px solid #e5e4dc;
-  background: #ffffff;
-  box-shadow: 0 1px 2px rgba(20, 20, 19, 0.04);
+  border: 1px solid rgba(242, 198, 109, 0.16);
+  background:
+    linear-gradient(145deg, rgba(13, 24, 33, 0.94), rgba(6, 16, 28, 0.82)),
+    linear-gradient(90deg, rgba(99, 71, 39, 0.08), rgba(33, 80, 63, 0.06));
+  box-shadow: 0 18px 52px rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(14px);
 }
 
 .minecraft-hero {
-  background-color: #faf9f5;
+  background-color: #06101c;
 }
 
 .minecraft-panel {
-  border: 1px solid #e5e4dc;
+  border: 1px solid rgba(242, 198, 109, 0.18);
   border-radius: var(--radius);
-  background: #ffffff;
-  box-shadow: 0 1px 2px rgba(20, 20, 19, 0.04);
+  background:
+    linear-gradient(145deg, rgba(12, 22, 31, 0.92), rgba(6, 16, 28, 0.84)),
+    linear-gradient(90deg, rgba(91, 62, 34, 0.12), rgba(25, 71, 57, 0.1));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.045),
+    0 20px 56px rgba(0, 0, 0, 0.32);
+  backdrop-filter: blur(14px);
 }
 
 .minecraft-card {
-  border: 1px solid #e5e4dc;
+  border: 1px solid rgba(242, 198, 109, 0.14);
   border-radius: var(--radius);
-  background: #ffffff;
-  box-shadow: 0 1px 2px rgba(20, 20, 19, 0.04);
+  background:
+    linear-gradient(180deg, rgba(12, 23, 32, 0.9), rgba(7, 16, 27, 0.94)),
+    linear-gradient(90deg, rgba(118, 81, 39, 0.035), rgba(33, 83, 66, 0.03));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 14px 42px rgba(0, 0, 0, 0.26);
+  backdrop-filter: blur(12px);
   transition:
     border-color 200ms ease,
     transform 200ms ease,
@@ -152,36 +135,38 @@ select {
 }
 
 .minecraft-card:hover {
-  border-color: #d1cfc4;
-  box-shadow: 0 6px 24px rgba(20, 20, 19, 0.08);
-  transform: translateY(-2px);
+  border-color: rgba(242, 198, 109, 0.28);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.055),
+    0 18px 54px rgba(0, 0, 0, 0.31);
 }
 
-/* Eyebrow / kicker — uppercase tiny label above section titles. */
 .rf-kicker {
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
-  border-left: 2px solid #cc785c;
+  border-left: 2px solid rgba(242, 198, 109, 0.72);
   padding: 0.125rem 0 0.125rem 0.75rem;
-  color: #cc785c;
+  color: rgba(253, 230, 138, 0.92);
   font-size: 0.75rem;
-  font-weight: 600;
+  font-weight: 700;
   letter-spacing: 0.14em;
   line-height: 1.35;
   text-transform: uppercase;
 }
 
-/* Live server status indicator — refined to Claude pill style. */
 .rf-status-beacon {
   position: relative;
   display: inline-grid;
   width: 1rem;
   height: 1rem;
   place-items: center;
-  border-radius: 50%;
-  border: 1px solid rgba(74, 138, 71, 0.4);
-  background: rgba(74, 138, 71, 0.10);
+  border: 1px solid rgba(52, 211, 153, 0.5);
+  background:
+    linear-gradient(90deg, transparent 44%, rgba(52, 211, 153, 0.14) 44% 56%, transparent 56%),
+    linear-gradient(0deg, transparent 44%, rgba(52, 211, 153, 0.12) 44% 56%, transparent 56%),
+    rgba(3, 18, 19, 0.75);
+  box-shadow: inset 0 0 0 2px rgba(2, 8, 12, 0.85);
 }
 
 .rf-status-beacon::before,
@@ -189,37 +174,40 @@ select {
   content: "";
   position: absolute;
   inset: -4px;
-  border-radius: 50%;
-  border: 1px solid rgba(74, 138, 71, 0.22);
+  border: 1px solid rgba(52, 211, 153, 0.22);
   animation: rf-beacon-pulse 2.8s ease-out infinite;
 }
 
 .rf-status-beacon::after {
   inset: -8px;
-  border-color: rgba(74, 138, 71, 0.13);
+  border-color: rgba(45, 212, 191, 0.13);
   animation-delay: 1.35s;
 }
 
 .rf-status-beacon span {
-  width: 0.4rem;
-  height: 0.4rem;
-  border-radius: 50%;
-  background: #4a8a47;
+  width: 0.375rem;
+  height: 0.375rem;
+  background: rgb(52, 211, 153);
+  box-shadow: 0 0 10px rgba(52, 211, 153, 0.42);
 }
 
 .rf-status-beacon[data-online="false"] {
-  border-color: rgba(214, 158, 46, 0.4);
-  background: rgba(214, 158, 46, 0.10);
+  border-color: rgba(251, 191, 36, 0.44);
+  background:
+    linear-gradient(90deg, transparent 44%, rgba(251, 191, 36, 0.12) 44% 56%, transparent 56%),
+    linear-gradient(0deg, transparent 44%, rgba(251, 191, 36, 0.1) 44% 56%, transparent 56%),
+    rgba(22, 14, 7, 0.75);
 }
 
 .rf-status-beacon[data-online="false"]::before,
 .rf-status-beacon[data-online="false"]::after {
-  border-color: rgba(214, 158, 46, 0.18);
+  border-color: rgba(251, 191, 36, 0.13);
   animation: none;
 }
 
 .rf-status-beacon[data-online="false"] span {
-  background: #d69e2e;
+  background: rgb(251, 191, 36);
+  box-shadow: none;
 }
 
 @keyframes rf-beacon-pulse {
@@ -233,7 +221,6 @@ select {
   }
 }
 
-/* Floating social rail — subtle Claude pill, no dark slab. */
 .rf-social-rail {
   position: fixed;
   right: 1rem;
@@ -241,10 +228,11 @@ select {
   z-index: 35;
   display: none;
   padding: 0.35rem;
-  border: 1px solid #e5e4dc;
+  border: 1px solid rgba(242, 198, 109, 0.16);
   border-radius: var(--radius);
-  background: #ffffff;
-  box-shadow: 0 6px 24px rgba(20, 20, 19, 0.08);
+  background: rgba(4, 11, 19, 0.76);
+  box-shadow: 0 12px 34px rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(12px);
 }
 
 .rf-social-rail a {
@@ -253,7 +241,7 @@ select {
   height: 2rem;
   place-items: center;
   border-radius: 6px;
-  color: #5d5b56;
+  color: rgba(226, 232, 240, 0.78);
   transition:
     background 180ms ease,
     color 180ms ease,
@@ -261,8 +249,8 @@ select {
 }
 
 .rf-social-rail a:hover {
-  background: #f0eee6;
-  color: #141413;
+  background: rgba(242, 198, 109, 0.1);
+  color: rgb(253, 230, 138);
   transform: translateY(-1px);
 }
 
@@ -278,14 +266,13 @@ select {
   }
 }
 
-/* Pixel grid overlay — softened to be barely visible on cream. */
 .pixel-grid {
   position: absolute;
   inset: 0;
   pointer-events: none;
   background-image:
-    linear-gradient(rgba(20, 20, 19, 0.04) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(20, 20, 19, 0.04) 1px, transparent 1px);
+    linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
   background-size: 28px 28px;
   mask-image: linear-gradient(to bottom, black, transparent 72%);
 }
@@ -300,6 +287,7 @@ select {
   100% {
     background-position: 0% 50%;
   }
+
   50% {
     background-position: 100% 50%;
   }

@@ -88,18 +88,18 @@ export function ResetPasswordForm() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-[460px] rounded-lg border border-border bg-card p-6 shadow-[0_6px_24px_rgba(20,20,19,0.08)] backdrop-blur-xl md:p-9">
+    <div className="mx-auto w-full max-w-[460px] rounded-lg border border-amber-200/12 bg-[#080d18]/92 p-6 shadow-[0_30px_90px_rgba(0,0,0,0.48)] backdrop-blur-xl md:p-9">
       {state === "done" ? (
         <div className="text-center">
-          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full border border-border bg-primary/10 text-primary">
+          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full border border-emerald-300/25 bg-emerald-400/12 text-emerald-200">
             <CircleCheckBig className="h-8 w-8" />
           </div>
-          <h1 className="display-font mt-6 text-3xl font-semibold text-foreground">Password updated</h1>
+          <h1 className="display-font mt-6 text-3xl font-semibold text-white">Password updated</h1>
           <p className="mt-3 text-sm text-muted-foreground">Taking you to your account...</p>
         </div>
       ) : state === "invalid" ? (
         <div className="text-center">
-          <h1 className="display-font text-3xl font-semibold text-foreground">Reset link expired</h1>
+          <h1 className="display-font text-3xl font-semibold text-white">Reset link expired</h1>
           <p className="mx-auto mt-3 max-w-sm text-sm leading-6 text-muted-foreground">
             This password reset link is invalid or has expired. Request a new one from the sign-in page.
           </p>
@@ -112,19 +112,19 @@ export function ResetPasswordForm() {
         </div>
       ) : (
         <>
-          <h1 className="display-font text-3xl font-semibold text-foreground md:text-4xl">Choose a new password</h1>
+          <h1 className="display-font text-3xl font-semibold text-white md:text-4xl">Choose a new password</h1>
           <p className="mt-3 text-sm leading-6 text-muted-foreground">
             Pick something at least 8 characters long.
           </p>
 
           <form className="mt-7 grid gap-5" onSubmit={submit}>
-            <label className="grid gap-2 text-sm font-bold text-foreground">
+            <label className="grid gap-2 text-sm font-bold text-slate-100">
               New password
               <span className="relative">
                 <LockKeyhole className="pointer-events-none absolute left-3 top-3.5 h-4 w-4 text-muted-foreground" />
                 <Input
                   autoComplete="new-password"
-                  className="h-12 border-border bg-white/[0.035] pl-10"
+                  className="h-12 border-white/10 bg-white/[0.035] pl-10"
                   minLength={8}
                   name="password"
                   placeholder="At least 8 characters"
@@ -133,13 +133,13 @@ export function ResetPasswordForm() {
                 />
               </span>
             </label>
-            <label className="grid gap-2 text-sm font-bold text-foreground">
+            <label className="grid gap-2 text-sm font-bold text-slate-100">
               Confirm password
               <span className="relative">
                 <LockKeyhole className="pointer-events-none absolute left-3 top-3.5 h-4 w-4 text-muted-foreground" />
                 <Input
                   autoComplete="new-password"
-                  className="h-12 border-border bg-white/[0.035] pl-10"
+                  className="h-12 border-white/10 bg-white/[0.035] pl-10"
                   minLength={8}
                   name="confirm"
                   placeholder="Re-enter your password"
@@ -154,7 +154,7 @@ export function ResetPasswordForm() {
             </Button>
 
             {error ? (
-              <p className={cn("rounded-md border border-destructive/30 bg-destructive/90 p-3 text-sm text-primary")}>{error}</p>
+              <p className={cn("rounded-md border border-rose-400/25 bg-rose-500/10 p-3 text-sm text-rose-100")}>{error}</p>
             ) : null}
           </form>
         </>

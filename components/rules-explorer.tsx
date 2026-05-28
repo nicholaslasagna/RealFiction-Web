@@ -51,7 +51,7 @@ export function RulesExplorer() {
               <ol className="grid gap-3">
                 {group.items.map((item, index) => (
                   <li key={item} className="flex gap-3 text-sm leading-6 text-muted-foreground">
-                    <span className="font-mono text-primary">{String(index + 1).padStart(2, "0")}</span>
+                    <span className="font-mono text-amber-100">{String(index + 1).padStart(2, "0")}</span>
                     <span>{item}</span>
                   </li>
                 ))}

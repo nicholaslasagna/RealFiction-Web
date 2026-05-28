@@ -155,8 +155,8 @@ export function PlaytimeLeaderboards() {
               className={cn(
                 "rounded-md border px-3 py-1.5 text-sm font-semibold uppercase tracking-[0.08em] transition",
                 isActive
-                  ? "border-border bg-primary/10 text-primary"
-                  : "border-border bg-secondary text-muted-foreground hover:border-border hover:text-primary"
+                  ? "border-amber-200/32 bg-amber-200/8 text-amber-100"
+                  : "border-white/10 bg-black/22 text-slate-300 hover:border-amber-200/22 hover:text-amber-100"
               )}
             >
               {board.label}
@@ -227,7 +227,7 @@ function PlayerAvatar({ uuid }: { uuid: string }) {
   const url = failed ? null : avatarUrl(uuid)
 
   if (!url) {
-    return <div className="h-8 w-8 rounded-md border border-border bg-secondary" aria-hidden />
+    return <div className="h-8 w-8 rounded-md border border-white/10 bg-white/5" aria-hidden />
   }
 
   return (
@@ -237,7 +237,7 @@ function PlayerAvatar({ uuid }: { uuid: string }) {
       src={url}
       width={32}
       height={32}
-      className="h-8 w-8 rounded-md border border-border bg-secondary"
+      className="h-8 w-8 rounded-md border border-white/10 bg-white/5"
       loading="lazy"
       onError={() => setFailed(true)}
     />
@@ -246,21 +246,21 @@ function PlayerAvatar({ uuid }: { uuid: string }) {
 
 function LeaderboardRows({ entries }: { entries: LeaderboardEntry[] }) {
   return (
-    <ol className="divide-y divide-white/5 overflow-hidden rounded-md border border-border bg-secondary">
+    <ol className="divide-y divide-white/5 overflow-hidden rounded-md border border-amber-200/10 bg-black/18">
       {entries.map((entry) => {
         return (
           <li
             key={`${entry.uuid}-${entry.position}`}
-            className="flex items-center gap-4 px-4 py-3 transition hover:bg-primary/10/[0.04]"
+            className="flex items-center gap-4 px-4 py-3 transition hover:bg-amber-200/[0.04]"
           >
             <span
               className={cn(
                 "flex h-8 w-9 shrink-0 items-center justify-center rounded-md border text-sm font-bold",
                 entry.position === 1
-                  ? "border-border text-primary"
+                  ? "border-amber-200/45 text-amber-200"
                   : entry.position <= 3
-                    ? "border-border text-foreground"
-                    : "border-border text-muted-foreground"
+                    ? "border-white/20 text-slate-100"
+                    : "border-white/12 text-slate-300"
               )}
             >
               {entry.position}
@@ -268,13 +268,13 @@ function LeaderboardRows({ entries }: { entries: LeaderboardEntry[] }) {
 
             <div className="flex min-w-0 flex-1 items-center gap-3">
               <PlayerAvatar uuid={entry.uuid} />
-              <span className="truncate font-semibold text-foreground">
+              <span className="truncate font-semibold text-slate-100">
                 {entry.name ?? "Unknown player"}
               </span>
             </div>
 
-            <span className="flex shrink-0 items-center gap-1.5 font-mono text-sm text-primary">
-              <Clock3 className="h-3.5 w-3.5 text-primary" aria-hidden />
+            <span className="flex shrink-0 items-center gap-1.5 font-mono text-sm text-amber-100/90">
+              <Clock3 className="h-3.5 w-3.5 text-amber-200/70" aria-hidden />
               {formatPlaytimeShort(entry.value)}
             </span>
           </li>
@@ -286,13 +286,13 @@ function LeaderboardRows({ entries }: { entries: LeaderboardEntry[] }) {
 
 function LoadingRows() {
   return (
-    <ol aria-busy className="divide-y divide-white/5 overflow-hidden rounded-md border border-border bg-secondary">
+    <ol aria-busy className="divide-y divide-white/5 overflow-hidden rounded-md border border-amber-200/10 bg-black/18">
       {Array.from({ length: 6 }).map((_, idx) => (
         <li key={idx} className="flex items-center gap-4 px-4 py-3">
-          <div className="h-8 w-9 shrink-0 animate-pulse rounded-md bg-secondary" />
-          <div className="h-8 w-8 shrink-0 animate-pulse rounded-md bg-secondary" />
-          <div className="h-3 flex-1 animate-pulse rounded bg-secondary" />
-          <div className="h-3 w-16 animate-pulse rounded bg-secondary" />
+          <div className="h-8 w-9 shrink-0 animate-pulse rounded-md bg-white/5" />
+          <div className="h-8 w-8 shrink-0 animate-pulse rounded-md bg-white/5" />
+          <div className="h-3 flex-1 animate-pulse rounded bg-white/5" />
+          <div className="h-3 w-16 animate-pulse rounded bg-white/5" />
         </li>
       ))}
     </ol>
@@ -312,13 +312,13 @@ function EmptyState({
 }) {
   const Icon = tone === "error" ? AlertCircle : tone === "warning" ? Loader2 : Clock3
   const iconClass =
-    tone === "error" ? "text-primary" : tone === "warning" ? "text-primary animate-spin" : "text-muted-foreground"
+    tone === "error" ? "text-rose-300" : tone === "warning" ? "text-amber-200 animate-spin" : "text-slate-400"
 
   return (
-    <div className="flex flex-col items-center justify-center gap-3 rounded-md border border-dashed border-border bg-secondary px-6 py-12 text-center">
+    <div className="flex flex-col items-center justify-center gap-3 rounded-md border border-dashed border-amber-200/12 bg-black/18 px-6 py-12 text-center">
       <Icon className={cn("h-6 w-6", iconClass)} aria-hidden />
       <div>
-        <p className="font-semibold text-foreground">{title}</p>
+        <p className="font-semibold text-slate-100">{title}</p>
         <p className="mt-1 text-sm text-muted-foreground">{body}</p>
       </div>
       {onRetry ? (

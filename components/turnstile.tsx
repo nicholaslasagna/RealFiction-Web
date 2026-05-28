@@ -90,7 +90,7 @@ export function Turnstile({
   if (!siteKey) {
     return (
       <div className={className}>
-        <div className="rounded-md border border-border bg-secondary px-4 py-3 text-center text-sm text-muted-foreground">
+        <div className="rounded-md border border-amber-200/18 bg-black/24 px-4 py-3 text-center text-sm text-muted-foreground">
           Cloudflare check is being set up.
         </div>
       </div>

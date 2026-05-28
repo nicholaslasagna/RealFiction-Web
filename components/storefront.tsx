@@ -22,12 +22,12 @@ import { cn, formatCurrency } from "@/lib/utils"
 type CartItem = { slug: string; quantity: number }
 
 const accentThemes: Record<string, { surface: string; icon: string }> = {
-  cyan: { surface: "border-primary/30 bg-primary/[0.055]", icon: "text-primary" },
-  amber: { surface: "border-border bg-primary/[0.06]", icon: "text-primary" },
-  emerald: { surface: "border-border bg-primary/[0.055]", icon: "text-primary" },
+  cyan: { surface: "border-cyan-300/16 bg-cyan-300/[0.055]", icon: "text-cyan-200" },
+  amber: { surface: "border-amber-300/18 bg-amber-300/[0.06]", icon: "text-amber-200" },
+  emerald: { surface: "border-emerald-300/16 bg-emerald-300/[0.055]", icon: "text-emerald-200" },
   violet: { surface: "border-violet-300/16 bg-violet-300/[0.052]", icon: "text-violet-200" },
-  rose: { surface: "border-destructive/30 bg-destructive/[0.052]", icon: "text-primary" },
-  sky: { surface: "border-border bg-primary/[0.055]", icon: "text-primary" },
+  rose: { surface: "border-rose-300/16 bg-rose-300/[0.052]", icon: "text-rose-200" },
+  sky: { surface: "border-sky-300/16 bg-sky-300/[0.055]", icon: "text-sky-200" },
   blue: { surface: "border-blue-300/16 bg-blue-300/[0.052]", icon: "text-blue-200" }
 }
 
@@ -147,8 +147,8 @@ export function Storefront() {
                 className={cn(
                   "inline-flex h-11 shrink-0 items-center gap-2 rounded-md border px-4 text-sm font-bold transition",
                   active
-                    ? "border-border bg-primary/10 text-primary"
-                    : "border-border bg-secondary text-muted-foreground hover:bg-primary/10 hover:text-primary"
+                    ? "border-amber-200/45 bg-amber-200/14 text-amber-100"
+                    : "border-amber-200/14 bg-black/24 text-muted-foreground hover:bg-amber-200/8 hover:text-amber-100"
                 )}
                 onClick={() => setCategory(item.id)}
                 type="button"
@@ -169,11 +169,11 @@ export function Storefront() {
             return (
               <section key={section.meta.id} className="space-y-4">
                 <div className="flex items-center gap-2.5">
-                  <span className="rounded-md border border-border bg-secondary p-2">
-                    <SectionIcon className="h-4 w-4 text-primary" />
+                  <span className="rounded-md border border-amber-200/20 bg-black/30 p-2">
+                    <SectionIcon className="h-4 w-4 text-amber-200" />
                   </span>
                   <h2 className="display-font text-2xl font-semibold">{section.meta.label}</h2>
-                  <span className="rounded-full border border-border bg-secondary px-2 py-0.5 text-xs text-muted-foreground">
+                  <span className="rounded-full border border-white/10 bg-black/20 px-2 py-0.5 text-xs text-muted-foreground">
                     {count}
                   </span>
                 </div>
@@ -182,19 +182,19 @@ export function Storefront() {
                   <div className="grid gap-4 min-[480px]:grid-cols-2 lg:grid-cols-3">
                     {section.cards.map((card) => (
                       <Card key={card.id} className="minecraft-card flex flex-col overflow-hidden">
-                        <div className="flex justify-center bg-secondary px-3 pt-4">
+                        <div className="flex justify-center bg-black/30 px-3 pt-4">
                           <Image
                             alt={`${card.name} for RealFiction`}
                             src={card.image}
                             width={384}
                             height={606}
-                            className="h-auto w-[80%] max-w-[170px] rounded-lg drop-shadow-[0_6px_24px_rgba(20,20,19,0.08)]"
+                            className="h-auto w-[80%] max-w-[170px] rounded-lg drop-shadow-[0_16px_36px_rgba(0,0,0,0.55)]"
                           />
                         </div>
                         <CardContent className="flex flex-1 flex-col gap-2 pt-4">
                           <div className="flex flex-wrap items-center justify-between gap-2">
                             <CardTitle className="display-font text-lg">{card.name}</CardTitle>
-                            <span className="font-mono text-base font-semibold text-primary">
+                            <span className="font-mono text-base font-semibold text-amber-100">
                               {formatCurrency(card.priceCents)}
                             </span>
                           </div>
@@ -222,7 +222,7 @@ export function Storefront() {
                               theme.surface
                             )}
                           >
-                            <SectionIcon className={cn("relative h-10 w-10 drop-shadow-[0_1px_2px_rgba(20,20,19,0.04)]", theme.icon)} />
+                            <SectionIcon className={cn("relative h-10 w-10 drop-shadow-[0_6px_16px_rgba(0,0,0,0.5)]", theme.icon)} />
                             {product.featured ? (
                               <Badge variant="warning" className="absolute left-3 top-3">
                                 Popular
@@ -245,16 +245,16 @@ export function Storefront() {
                                     className={cn(
                                       "relative rounded-md border px-3 py-2 text-left transition",
                                       selected
-                                        ? "border-border bg-primary/10"
-                                        : "border-border bg-secondary hover:border-border"
+                                        ? "border-amber-300/60 bg-amber-200/12"
+                                        : "border-white/10 bg-black/24 hover:border-amber-200/30"
                                     )}
                                   >
-                                    <div className="text-xs font-bold text-foreground">{DURATION_LABEL[entry.months]}</div>
-                                    <div className="font-mono text-sm font-semibold text-primary">
+                                    <div className="text-xs font-bold text-slate-200">{DURATION_LABEL[entry.months]}</div>
+                                    <div className="font-mono text-sm font-semibold text-amber-100">
                                       {formatCurrency(entry.priceCents)}
                                     </div>
                                     {pct > 0 ? (
-                                      <span className="absolute right-1.5 top-1.5 rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-bold text-primary">
+                                      <span className="absolute right-1.5 top-1.5 rounded bg-emerald-400/15 px-1.5 py-0.5 text-[10px] font-bold text-emerald-200">
                                         -{pct}%
                                       </span>
                                     ) : null}
@@ -264,7 +264,7 @@ export function Storefront() {
                             </div>
 
                             <div>
-                              <div className="font-mono text-2xl font-semibold text-primary">{formatCurrency(tier.priceCents)}</div>
+                              <div className="font-mono text-2xl font-semibold text-amber-100">{formatCurrency(tier.priceCents)}</div>
                               <div className="text-xs text-muted-foreground">
                                 {DURATION_LABEL[tier.months]} of access · about {formatCurrency(perMonth)}/mo
                               </div>
@@ -273,7 +273,7 @@ export function Storefront() {
                             <ul className="grid gap-2 text-sm text-muted-foreground">
                               {product.details.map((detail) => (
                                 <li key={detail} className="flex gap-2">
-                                  <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                                  <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-emerald-200" />
                                   <span>{detail}</span>
                                 </li>
                               ))}
@@ -300,7 +300,7 @@ export function Storefront() {
           <CardHeader>
             <div className="rf-kicker">Cosmetic-only shop</div>
             <CardTitle className="display-font flex items-center gap-2 text-3xl">
-              <ShoppingCart className="h-5 w-5 text-primary" />
+              <ShoppingCart className="h-5 w-5 text-amber-200" />
               Server Cart
             </CardTitle>
             <CardDescription>Pay safely with card, Apple Pay, Google Pay, or PayPal.</CardDescription>
@@ -328,12 +328,12 @@ export function Storefront() {
 
             <div className="grid gap-3">
               {cartLines.length === 0 ? (
-                <div className="rounded-lg border border-dashed border-border bg-secondary p-5 text-sm text-muted-foreground">
+                <div className="rounded-lg border border-dashed border-amber-200/18 bg-black/18 p-5 text-sm text-muted-foreground">
                   Add a supporter rank, cosmetics, particles, pets, lobby perks, or gift cards.
                 </div>
               ) : (
                 cartLines.map((item) => (
-                  <div key={item.slug} className="rounded-lg border border-border bg-secondary p-3">
+                  <div key={item.slug} className="rounded-lg border border-amber-200/14 bg-black/24 p-3">
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <div className="font-semibold">{item.name}</div>
@@ -341,7 +341,7 @@ export function Storefront() {
                       </div>
                       <button
                         aria-label={`Remove ${item.name}`}
-                        className="rounded-md p-2 text-muted-foreground hover:bg-primary/10 hover:text-primary"
+                        className="rounded-md p-2 text-muted-foreground hover:bg-amber-200/10 hover:text-amber-100"
                         onClick={() => setCart((current) => current.filter((line) => line.slug !== item.slug))}
                         type="button"
                       >
@@ -376,7 +376,7 @@ export function Storefront() {
 
             <div className="flex items-center justify-between border-t border-border pt-4">
               <span className="text-sm text-muted-foreground">Total</span>
-              <strong className="font-mono text-xl text-primary">{formatCurrency(total)}</strong>
+              <strong className="font-mono text-xl text-amber-100">{formatCurrency(total)}</strong>
             </div>
 
             <div className="grid gap-2">

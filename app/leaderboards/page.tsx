@@ -16,7 +16,7 @@ export const metadata: Metadata = {
 export default function LeaderboardsPage() {
   return (
     <section>
-      <div className="relative overflow-hidden border-b border-border py-16 md:py-20">
+      <div className="relative overflow-hidden border-b border-amber-200/10 py-16 md:py-20">
         <Image
           alt="RealFiction leaderboards"
           src="/images/tournaments.png"

@@ -49,19 +49,19 @@ export function LivePlayerCount() {
   const online = state.online && !loading
 
   return (
-    <div className="inline-flex items-center gap-3 rounded-full border border-border bg-card px-4 py-1.5 text-sm">
+    <div className="inline-flex items-center gap-3 rounded-md border border-amber-200/12 bg-black/32 px-4 py-2 text-sm shadow-[0_10px_28px_rgba(0,0,0,0.28)] backdrop-blur">
       <span className="rf-status-beacon shrink-0" data-online={online ? "true" : "false"} aria-hidden>
         <span />
       </span>
       {loading ? (
-        <span className="text-muted-foreground">Checking players...</span>
+        <span className="text-slate-300">Checking players...</span>
       ) : online ? (
-        <span className="text-muted-foreground">
-          <strong className="font-semibold text-foreground">{state.playersOnline}</strong>{" "}
+        <span className="text-slate-200">
+          <strong className="font-semibold text-amber-200">{state.playersOnline}</strong>{" "}
           player{state.playersOnline === 1 ? "" : "s"} online
         </span>
       ) : (
-        <span className="text-muted-foreground">Server status updating</span>
+        <span className="text-slate-300">Server status updating</span>
       )}
     </div>
   )

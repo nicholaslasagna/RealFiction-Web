@@ -42,7 +42,7 @@ export default function DiscordPage() {
         <div className="grid gap-5">
           <Card className="minecraft-card">
             <CardHeader>
-              <UsersRound className="h-5 w-5 text-primary" />
+              <UsersRound className="h-5 w-5 text-amber-200" />
               <CardTitle>Online members</CardTitle>
               <CardDescription>
                 Discord widget integration is ready for a server widget ID or bot-backed member endpoint.
@@ -51,7 +51,7 @@ export default function DiscordPage() {
           </Card>
           <Card className="minecraft-card">
             <CardHeader>
-              <Radio className="h-5 w-5 text-primary" />
+              <Radio className="h-5 w-5 text-emerald-200" />
               <CardTitle>Live network announcements</CardTitle>
               <CardDescription>
                 Updates, maintenance, launches, votes, and tournament cards can publish to web and Discord together.

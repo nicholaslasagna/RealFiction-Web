@@ -36,7 +36,7 @@ export default function ContactPage() {
               return (
                 <Card key={item.title} className="minecraft-card">
                   <CardHeader>
-                    <Icon className="h-5 w-5 text-primary" />
+                    <Icon className="h-5 w-5 text-amber-200" />
                     <CardTitle>{item.title}</CardTitle>
                     <CardDescription>{item.value}</CardDescription>
                   </CardHeader>

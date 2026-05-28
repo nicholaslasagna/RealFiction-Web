@@ -146,12 +146,12 @@ export function AccountLinkCard({
     return (
       <div className="minecraft-card rounded-lg p-6">
         <div className="flex items-start gap-4">
-          <div className="flex h-12 w-12 items-center justify-center rounded-md border border-border bg-primary/10 text-primary">
+          <div className="flex h-12 w-12 items-center justify-center rounded-md border border-emerald-300/25 bg-emerald-300/12 text-emerald-200">
             <ShieldCheck className="h-6 w-6" />
           </div>
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-bold uppercase tracking-[0.18em] text-primary">Minecraft linked</p>
-            <h2 className="display-font mt-2 text-3xl font-semibold text-foreground">{minecraftUsername}</h2>
+            <p className="text-sm font-bold uppercase tracking-[0.18em] text-emerald-200">Minecraft linked</p>
+            <h2 className="display-font mt-2 text-3xl font-semibold text-white">{minecraftUsername}</h2>
             {minecraftUuid ? (
               <p className="mt-2 break-all text-sm text-muted-foreground">Player ID: {minecraftUuid}</p>
             ) : null}
@@ -159,16 +159,16 @@ export function AccountLinkCard({
               Your rewards and cosmetics can now find you in-game.
             </p>
 
-            <div className="mt-5 border-t border-border pt-4">
+            <div className="mt-5 border-t border-white/10 pt-4">
               {unlinkConfirm ? (
-                <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-4">
-                  <p className="text-sm leading-6 text-primary">
+                <div className="rounded-lg border border-rose-300/20 bg-rose-300/5 p-4">
+                  <p className="text-sm leading-6 text-rose-100">
                     Unlink {minecraftUsername}? Your in-game perks come off this account right away. You keep
                     everything you bought — link any account later to use them again.
                   </p>
                   <div className="mt-3 flex flex-wrap gap-2">
                     <Button
-                      className="bg-destructive/90 text-destructive-foreground hover:bg-destructive"
+                      className="bg-rose-500/90 text-white hover:bg-rose-500"
                       disabled={unlinking}
                       onClick={unlinkAccount}
                       type="button"
@@ -183,7 +183,7 @@ export function AccountLinkCard({
                 </div>
               ) : (
                 <Button
-                  className="text-muted-foreground hover:text-primary"
+                  className="text-muted-foreground hover:text-rose-100"
                   onClick={() => {
                     setUnlinkMessage(null)
                     setUnlinkConfirm(true)
@@ -197,7 +197,7 @@ export function AccountLinkCard({
               )}
 
               {unlinkMessage ? (
-                <p className="mt-3 rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-primary">
+                <p className="mt-3 rounded-md border border-rose-300/18 bg-rose-300/10 p-3 text-sm text-rose-100">
                   {unlinkMessage}
                 </p>
               ) : null}
@@ -211,12 +211,12 @@ export function AccountLinkCard({
   return (
     <div className="minecraft-card rounded-lg p-6">
       <div className="flex items-start gap-4">
-        <div className="flex h-12 w-12 items-center justify-center rounded-md border border-border bg-primary/10 text-primary">
+        <div className="flex h-12 w-12 items-center justify-center rounded-md border border-amber-300/25 bg-amber-300/12 text-amber-200">
           <Link2 className="h-6 w-6" />
         </div>
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-bold uppercase tracking-[0.18em] text-primary">Link Minecraft</p>
-          <h2 className="display-font mt-2 text-3xl font-semibold text-foreground">Connect your player</h2>
+          <p className="text-sm font-bold uppercase tracking-[0.18em] text-amber-200">Link Minecraft</p>
+          <h2 className="display-font mt-2 text-3xl font-semibold text-white">Connect your player</h2>
           <p className="mt-3 text-sm leading-6 text-muted-foreground">
             Get a short code, then run it in Lobby1 to connect your account.
           </p>
@@ -226,7 +226,7 @@ export function AccountLinkCard({
       <form className="mt-6 grid gap-3 sm:grid-cols-[1fr_auto]" onSubmit={startLink}>
         <Input
           autoComplete="username"
-          className="h-12 border-border bg-white/[0.035]"
+          className="h-12 border-white/10 bg-white/[0.035]"
           maxLength={16}
           minLength={3}
           onChange={(event) => setMinecraftName(event.target.value)}
@@ -240,10 +240,10 @@ export function AccountLinkCard({
       </form>
 
       {command ? (
-        <div className="mt-5 rounded-lg border border-border bg-secondary p-4">
-          <p className="text-sm font-bold text-primary">Run this in-game:</p>
+        <div className="mt-5 rounded-lg border border-amber-200/16 bg-black/28 p-4">
+          <p className="text-sm font-bold text-amber-100">Run this in-game:</p>
           <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center">
-            <code className="min-w-0 flex-1 overflow-x-auto rounded-md border border-border bg-secondary px-3 py-3 text-sm font-bold text-foreground">
+            <code className="min-w-0 flex-1 overflow-x-auto rounded-md border border-white/10 bg-[#050914] px-3 py-3 text-sm font-bold text-white">
               {command}
             </code>
             <Button className="shrink-0" onClick={copyCommand} type="button" variant="outline">
@@ -253,7 +253,7 @@ export function AccountLinkCard({
           </div>
           <p className="mt-3 text-sm text-muted-foreground">
             {secondsLeft !== null ? (
-              <span className={cn("font-bold", secondsLeft <= 10 ? "text-primary" : "text-primary")}>
+              <span className={cn("font-bold", secondsLeft <= 10 ? "text-rose-200" : "text-amber-100")}>
                 Expires in {secondsLeft}s — run it before it disappears.{" "}
               </span>
             ) : null}
@@ -267,8 +267,8 @@ export function AccountLinkCard({
           className={cn(
             "mt-4 rounded-md border p-3 text-sm",
             code
-              ? "border-border bg-primary/10 text-primary"
-              : "border-border bg-primary/10 text-primary"
+              ? "border-emerald-300/18 bg-emerald-300/10 text-emerald-100"
+              : "border-amber-300/18 bg-amber-300/10 text-amber-100"
           )}
         >
           {message}

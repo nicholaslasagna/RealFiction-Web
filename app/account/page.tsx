@@ -362,7 +362,7 @@ export default async function AccountPage() {
           sizes="100vw"
         />
       </div>
-      <div className="absolute inset-0 -z-20 bg-background" />
+      <div className="absolute inset-0 -z-20 bg-[radial-gradient(circle_at_50%_46%,rgba(242,198,109,0.18),transparent_27rem),radial-gradient(circle_at_70%_72%,rgba(129,55,116,0.38),transparent_36rem),linear-gradient(135deg,rgba(6,16,28,0.82),rgba(42,21,55,0.78),rgba(6,16,28,0.94))]" />
       <div className="pixel-grid opacity-30" />
 
       <div className="container-shell flex min-h-screen flex-col">
@@ -373,13 +373,13 @@ export default async function AccountPage() {
               src="/images/logo1.png"
               width={174}
               height={54}
-              className="drop-shadow-[0_6px_24px_rgba(20,20,19,0.08)]"
+              className="drop-shadow-[0_12px_28px_rgba(0,0,0,0.5)]"
             />
           </Link>
           <div className="flex items-center gap-2">
             {user ? (
               <Link
-                className="inline-flex items-center gap-2 rounded-md border border-border bg-secondary px-3 py-2 text-sm font-semibold text-muted-foreground backdrop-blur transition hover:border-border hover:text-primary"
+                className="inline-flex items-center gap-2 rounded-md border border-white/12 bg-black/24 px-3 py-2 text-sm font-semibold text-muted-foreground backdrop-blur transition hover:border-amber-200/35 hover:text-amber-100"
                 href="/account/settings"
               >
                 <Settings className="h-4 w-4" />
@@ -388,7 +388,7 @@ export default async function AccountPage() {
             ) : null}
             {user ? <AccountSignOutButton /> : null}
             <Link
-              className="inline-flex items-center gap-2 rounded-md border border-border bg-secondary px-3 py-2 text-sm font-semibold text-muted-foreground backdrop-blur transition hover:border-border hover:text-primary"
+              className="inline-flex items-center gap-2 rounded-md border border-white/12 bg-black/24 px-3 py-2 text-sm font-semibold text-muted-foreground backdrop-blur transition hover:border-amber-200/35 hover:text-amber-100"
               href="/"
             >
               <ArrowLeft className="h-4 w-4" />
@@ -429,7 +429,7 @@ async function SignedInAccount() {
               <Badge variant={verifiedLink ? "success" : "warning"}>
                 {verifiedLink ? "Ready to play" : "One step left"}
               </Badge>
-              <h1 className="display-font mt-4 text-5xl font-semibold leading-tight text-foreground md:text-6xl">
+              <h1 className="display-font mt-4 text-5xl font-semibold leading-tight text-white md:text-6xl">
                 Welcome back
               </h1>
               <p className="mt-4 max-w-2xl text-base leading-7 text-muted-foreground">
@@ -446,7 +446,7 @@ async function SignedInAccount() {
             </div>
 
             {data.failed ? (
-              <Card className="minecraft-card border-border">
+              <Card className="minecraft-card border-amber-300/20">
                 <CardHeader>
                   <CardTitle>Some account details are still loading</CardTitle>
                   <CardDescription>
@@ -471,11 +471,11 @@ async function SignedInAccount() {
                 return (
                   <Card
                     key={perk.key}
-                    className={unlocked ? "minecraft-card border-border" : "minecraft-card"}
+                    className={unlocked ? "minecraft-card border-emerald-300/18" : "minecraft-card"}
                   >
                     <CardHeader>
                       <div className="flex items-center justify-between gap-3">
-                        <div className="flex h-11 w-11 items-center justify-center rounded-md border border-border bg-secondary text-primary">
+                        <div className="flex h-11 w-11 items-center justify-center rounded-md border border-amber-200/16 bg-black/24 text-amber-200">
                           <Icon className="h-5 w-5" />
                         </div>
                         <Badge variant={unlocked ? "success" : "outline"}>
@@ -554,8 +554,8 @@ async function SignedInAccount() {
 
 function StatTile({ label, value }: { label: string; value: number }) {
   return (
-    <div className="rounded-lg border border-border bg-secondary p-4">
-      <div className="font-mono text-3xl font-semibold text-primary">{value}</div>
+    <div className="rounded-lg border border-amber-200/14 bg-black/24 p-4">
+      <div className="font-mono text-3xl font-semibold text-amber-100">{value}</div>
       <div className="mt-1 text-xs font-bold uppercase tracking-[0.16em] text-muted-foreground">{label}</div>
     </div>
   )
@@ -571,9 +571,9 @@ function SnapshotLine({
   value: string
 }) {
   return (
-    <div className="flex items-center justify-between gap-4 rounded-md border border-border bg-white/[0.035] px-3 py-3">
-      <span className="flex items-center gap-2 text-foreground">
-        <Icon className="h-4 w-4 text-primary" />
+    <div className="flex items-center justify-between gap-4 rounded-md border border-white/10 bg-white/[0.035] px-3 py-3">
+      <span className="flex items-center gap-2 text-slate-200">
+        <Icon className="h-4 w-4 text-amber-200" />
         {label}
       </span>
       <span className="min-w-0 truncate text-right">{value}</span>
@@ -596,10 +596,10 @@ function RecentPurchases({ orders }: { orders: OrderRow[] }) {
             const moreItems = Math.max((order.order_items?.length ?? 1) - 1, 0)
 
             return (
-              <div key={order.id} className="rounded-lg border border-border bg-secondary p-4">
+              <div key={order.id} className="rounded-lg border border-white/10 bg-black/24 p-4">
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <p className="font-semibold text-foreground">
+                    <p className="font-semibold text-white">
                       {itemName}
                       {moreItems ? ` + ${moreItems} more` : ""}
                     </p>
@@ -609,7 +609,7 @@ function RecentPurchases({ orders }: { orders: OrderRow[] }) {
                     {orderLabel(order.status)}
                   </Badge>
                 </div>
-                <p className="mt-3 text-sm font-semibold text-primary">
+                <p className="mt-3 text-sm font-semibold text-amber-100">
                   {formatMoney(order.total_cents, order.currency)}
                 </p>
               </div>
@@ -633,10 +633,10 @@ function RecentRewards({ rewards }: { rewards: RewardRow[] }) {
       <CardContent className="space-y-3">
         {rewards.length ? (
           rewards.map((reward) => (
-            <div key={reward.id} className="rounded-lg border border-border bg-secondary p-4">
+            <div key={reward.id} className="rounded-lg border border-white/10 bg-black/24 p-4">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <p className="font-semibold text-foreground">{rewardTitle(reward)}</p>
+                  <p className="font-semibold text-white">{rewardTitle(reward)}</p>
                   <p className="mt-1 text-sm text-muted-foreground">
                     {rewardDetail(reward)} · {formatDate(reward.created_at)}
                   </p>
@@ -665,9 +665,9 @@ function EmptyState({
   text: string
 }) {
   return (
-    <div className="rounded-lg border border-border bg-white/[0.035] p-5 text-center">
-      <Icon className="mx-auto h-8 w-8 text-primary" />
-      <p className="mt-3 font-semibold text-foreground">{title}</p>
+    <div className="rounded-lg border border-white/10 bg-white/[0.035] p-5 text-center">
+      <Icon className="mx-auto h-8 w-8 text-amber-200" />
+      <p className="mt-3 font-semibold text-white">{title}</p>
       <p className="mt-1 text-sm text-muted-foreground">{text}</p>
     </div>
   )

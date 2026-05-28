@@ -18,7 +18,7 @@ export const metadata: Metadata = {
 export default function VotePage() {
   return (
     <section>
-      <div className="relative overflow-hidden border-b border-border py-16 md:py-20">
+      <div className="relative overflow-hidden border-b border-amber-200/10 py-16 md:py-20">
         <Image
           alt="RealFiction voting hub"
           src="/images/tournaments.png"
@@ -47,21 +47,21 @@ export default function VotePage() {
       <Reveal className="grid gap-5 md:grid-cols-3">
         <Card className="minecraft-card">
           <CardHeader>
-            <Gift className="h-5 w-5 text-primary" />
+            <Gift className="h-5 w-5 text-amber-200" />
             <CardTitle>Daily rewards</CardTitle>
             <CardDescription>Vote keys, profile points, and server-safe progress rewards.</CardDescription>
           </CardHeader>
         </Card>
         <Card className="minecraft-card">
           <CardHeader>
-            <Trophy className="h-5 w-5 text-primary" />
+            <Trophy className="h-5 w-5 text-amber-200" />
             <CardTitle>Monthly top voters</CardTitle>
             <CardDescription>Leaderboards and showcase rewards for players who support the network.</CardDescription>
           </CardHeader>
         </Card>
         <Card className="minecraft-card">
           <CardHeader>
-            <ShieldCheck className="h-5 w-5 text-primary" />
+            <ShieldCheck className="h-5 w-5 text-emerald-200" />
             <CardTitle>Verified voting</CardTitle>
             <CardDescription>Cooldowns, account linking, and verified votes help keep rewards fair.</CardDescription>
           </CardHeader>
@@ -104,10 +104,10 @@ export default function VotePage() {
             </p>
             <div className="mt-5 grid gap-4">
               {voteMilestones.map((milestone) => (
-                <div key={milestone.votes} className="rounded-lg border border-border bg-secondary p-4">
+                <div key={milestone.votes} className="rounded-lg border border-amber-200/14 bg-black/24 p-4">
                   <div className="flex items-center gap-2">
-                    <CalendarDays className="h-4 w-4 text-primary" />
-                    <div className="font-mono text-2xl font-semibold text-primary">{milestone.votes}</div>
+                    <CalendarDays className="h-4 w-4 text-emerald-200" />
+                    <div className="font-mono text-2xl font-semibold text-amber-100">{milestone.votes}</div>
                   </div>
                   <div className="mt-1 text-sm text-muted-foreground">{milestone.reward}</div>
                 </div>

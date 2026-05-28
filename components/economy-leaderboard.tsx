@@ -54,45 +54,45 @@ export async function EconomyLeaderboard() {
             <CardTitle className="display-font text-3xl">Economy Leaderboard</CardTitle>
             <CardDescription>Top balances from RealFiction economy data.</CardDescription>
           </div>
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md border border-border bg-secondary text-primary">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md border border-amber-200/14 bg-black/20 text-amber-200">
             <Coins className="h-5 w-5" aria-hidden />
           </div>
         </div>
       </CardHeader>
       <CardContent className="pt-0">
         {entries.length > 0 ? (
-          <ol className="divide-y divide-white/5 overflow-hidden rounded-md border border-border bg-secondary">
+          <ol className="divide-y divide-white/5 overflow-hidden rounded-md border border-amber-200/10 bg-black/18">
             {entries.map((entry) => (
               <li
                 key={`${entry.position}-${entry.name}`}
-                className="flex items-center gap-4 px-4 py-3 transition hover:bg-primary/10/[0.04]"
+                className="flex items-center gap-4 px-4 py-3 transition hover:bg-amber-200/[0.04]"
               >
                 <span
                   className={cn(
                     "flex h-8 w-9 shrink-0 items-center justify-center rounded-md border text-sm font-bold",
                     entry.position === 1
-                      ? "border-primary text-primary"
+                      ? "border-amber-200 text-amber-200"
                       : entry.position <= 3
-                        ? "border-border text-foreground"
-                        : "border-border text-muted-foreground"
+                        ? "border-white/25 text-slate-100"
+                        : "border-white/12 text-slate-300"
                   )}
                 >
                   {entry.position}
                 </span>
 
-                <span className="min-w-0 flex-1 truncate font-semibold text-foreground">
+                <span className="min-w-0 flex-1 truncate font-semibold text-slate-100">
                   {entry.name || "Unknown player"}
                 </span>
 
-                <span className="shrink-0 font-mono text-sm font-semibold text-primary">
+                <span className="shrink-0 font-mono text-sm font-semibold text-amber-100">
                   {formatEconomyBalance(entry.balanceMinor, scale)}
                 </span>
               </li>
             ))}
           </ol>
         ) : (
-          <div className="rounded-md border border-dashed border-border bg-secondary px-6 py-10 text-center">
-            <p className="font-semibold text-foreground">No balances to show yet.</p>
+          <div className="rounded-md border border-dashed border-amber-200/12 bg-black/18 px-6 py-10 text-center">
+            <p className="font-semibold text-slate-100">No balances to show yet.</p>
             <p className="mt-1 text-sm text-muted-foreground">
               The leaderboard will appear once players earn RealFiction money.
             </p>
