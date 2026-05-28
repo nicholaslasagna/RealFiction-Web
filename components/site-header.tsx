@@ -11,6 +11,14 @@ import { navItems } from "@/lib/data"
 import { getSupabaseBrowserClient } from "@/lib/supabase/browser"
 import { cn } from "@/lib/utils"
 
+/**
+ * Mockup-styled nav (.rf-nav class):
+ *   - Fixed top, dark transparent bg with backdrop blur
+ *   - Logo on the left (56px tall)
+ *   - Uppercase rf-bold nav links, gold on active/hover
+ *   - Sign in / Store CTA on the right (mc-button styling)
+ *   - Mobile hamburger with collapsible nav
+ */
 export function SiteHeader() {
   const pathname = usePathname()
   const router = useRouter()
@@ -67,110 +75,115 @@ export function SiteHeader() {
   }
 
   return (
-    <header className="fixed left-0 right-0 top-0 z-50 border-b border-amber-200/10 bg-[#071525]/88 shadow-[0_12px_40px_rgba(0,0,0,0.35)] backdrop-blur-xl">
-      <div className="container-shell flex h-20 items-center gap-4">
-        <Link className="flex shrink-0 items-center" href="/" onClick={() => setOpen(false)}>
-          <Image
-            alt="RealFiction"
-            src="/images/logo1.png"
-            width={186}
-            height={58}
-            priority
-            className="h-12 w-auto drop-shadow-[0_10px_24px_rgba(0,0,0,0.45)]"
-          />
-        </Link>
+    <header className="rf-nav">
+      <Link className="logo flex shrink-0 items-center" href="/" onClick={() => setOpen(false)}>
+        <Image
+          alt="RealFiction"
+          src="/images/logo1.png"
+          width={186}
+          height={58}
+          priority
+        />
+      </Link>
 
-        <nav className="hidden flex-1 items-center justify-center gap-0.5 xl:flex">
-          {navItems.map((item) => {
-            const active =
-              item.href === "/" ? pathname === "/" : pathname.startsWith(item.href)
+      <ul className="hidden xl:flex">
+        {navItems.map((item) => {
+          const active =
+            item.href === "/" ? pathname === "/" : pathname.startsWith(item.href)
 
-            return (
+          return (
+            <li key={item.href}>
               <Link
-                key={item.href}
                 href={item.href}
-                className={cn(
-                  "rounded-md px-2.5 py-2 text-sm font-bold uppercase tracking-[0.04em] text-slate-300 transition hover:bg-amber-200/10 hover:text-amber-100",
-                  active && "bg-amber-200/12 text-amber-100"
-                )}
+                className={cn(active && "active")}
               >
                 {item.label}
               </Link>
-            )
-          })}
-        </nav>
+            </li>
+          )
+        })}
+      </ul>
 
-        <div className="hidden shrink-0 items-center gap-2 xl:flex">
-          {signedIn ? (
-            <div className="relative" ref={accountRef}>
-              <Button variant="outline" size="sm" onClick={() => setAccountOpen((value) => !value)}>
-                <UserRound className="h-4 w-4" />
-                Account
-                <ChevronDown className={cn("h-3.5 w-3.5 transition", accountOpen && "rotate-180")} />
-              </Button>
-              {accountOpen ? (
-                <div className="absolute right-0 mt-2 w-60 overflow-hidden rounded-md border border-amber-200/15 bg-[#0a1726] shadow-2xl">
-                  {email ? (
-                    <div className="border-b border-white/10 px-3 py-2.5 text-xs text-muted-foreground">
-                      Signed in as
-                      <div className="truncate text-slate-200">{email}</div>
-                    </div>
-                  ) : null}
-                  <Link
-                    href="/account"
-                    onClick={() => setAccountOpen(false)}
-                    className="block px-3 py-2.5 text-sm text-slate-200 transition hover:bg-amber-200/10 hover:text-amber-100"
-                  >
-                    Account
-                  </Link>
-                  <Link
-                    href="/account/settings"
-                    onClick={() => setAccountOpen(false)}
-                    className="block px-3 py-2.5 text-sm text-slate-200 transition hover:bg-amber-200/10 hover:text-amber-100"
-                  >
-                    Settings
-                  </Link>
-                  <button
-                    type="button"
-                    onClick={signOut}
-                    className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm text-slate-200 transition hover:bg-amber-200/10 hover:text-amber-100"
-                  >
-                    <LogOut className="h-4 w-4" />
-                    Sign out
-                  </button>
-                </div>
-              ) : null}
-            </div>
-          ) : (
-            <Button asChild variant="outline" size="sm">
-              <Link href="/account">Sign in</Link>
-            </Button>
-          )}
-          <Button asChild size="sm">
-            <Link href="/store">Store</Link>
-          </Button>
-        </div>
-
-        <Button
-          aria-label={open ? "Close navigation" : "Open navigation"}
-          className="ml-auto xl:hidden"
-          onClick={() => setOpen((value) => !value)}
-          size="icon"
-          variant="outline"
-        >
-          {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-        </Button>
+      <div className="hidden shrink-0 items-center gap-2 xl:flex">
+        {signedIn ? (
+          <div className="relative" ref={accountRef}>
+            <button
+              type="button"
+              onClick={() => setAccountOpen((value) => !value)}
+              className="inline-flex items-center gap-2 border border-amber-200/30 bg-amber-200/8 px-3 py-2 text-xs uppercase tracking-[0.05em] text-amber-100 transition hover:bg-amber-200/15"
+              style={{ fontFamily: "rf-bold, sans-serif" }}
+            >
+              <UserRound className="h-4 w-4" />
+              Account
+              <ChevronDown className={cn("h-3.5 w-3.5 transition", accountOpen && "rotate-180")} />
+            </button>
+            {accountOpen ? (
+              <div className="absolute right-0 mt-2 w-60 overflow-hidden border border-amber-200/15 bg-[#062038] shadow-2xl">
+                {email ? (
+                  <div className="border-b border-white/10 px-3 py-2.5 text-xs text-slate-400">
+                    Signed in as
+                    <div className="truncate text-slate-200">{email}</div>
+                  </div>
+                ) : null}
+                <Link
+                  href="/account"
+                  onClick={() => setAccountOpen(false)}
+                  className="block px-3 py-2.5 text-sm text-slate-200 transition hover:bg-amber-200/10 hover:text-amber-100"
+                >
+                  Account
+                </Link>
+                <Link
+                  href="/account/settings"
+                  onClick={() => setAccountOpen(false)}
+                  className="block px-3 py-2.5 text-sm text-slate-200 transition hover:bg-amber-200/10 hover:text-amber-100"
+                >
+                  Settings
+                </Link>
+                <button
+                  type="button"
+                  onClick={signOut}
+                  className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm text-slate-200 transition hover:bg-amber-200/10 hover:text-amber-100"
+                >
+                  <LogOut className="h-4 w-4" />
+                  Sign out
+                </button>
+              </div>
+            ) : null}
+          </div>
+        ) : (
+          <Link
+            href="/account"
+            className="inline-flex items-center border border-amber-200/30 bg-amber-200/8 px-3 py-2 text-xs uppercase tracking-[0.05em] text-amber-100 transition hover:bg-amber-200/15"
+            style={{ fontFamily: "rf-bold, sans-serif" }}
+          >
+            Sign in
+          </Link>
+        )}
+        <Link href="/store" className="mc-button mc-button--gold mc-button--sm">
+          Store
+        </Link>
       </div>
 
+      <Button
+        aria-label={open ? "Close navigation" : "Open navigation"}
+        className="ml-auto xl:hidden"
+        onClick={() => setOpen((value) => !value)}
+        size="icon"
+        variant="ghost"
+      >
+        {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+      </Button>
+
       {open ? (
-        <div className="border-t border-amber-200/10 bg-[#071525]/96 xl:hidden">
-          <nav className="container-shell grid gap-1 py-4">
+        <div className="absolute left-0 right-0 top-full border-t border-amber-200/10 bg-[#021429]/96 xl:hidden">
+          <nav className="grid gap-1 px-5 py-4">
             {navItems.map((item) => (
               <Link
                 key={item.href}
                 href={item.href}
                 onClick={() => setOpen(false)}
-                className="rounded-md px-3 py-3 text-sm font-bold uppercase tracking-[0.08em] text-slate-300 hover:bg-amber-200/10 hover:text-amber-100"
+                className="px-3 py-3 text-sm font-bold uppercase tracking-[0.08em] text-slate-300 hover:bg-amber-200/10 hover:text-amber-100"
+                style={{ fontFamily: "rf-bold, sans-serif" }}
               >
                 {item.label}
               </Link>
@@ -182,21 +195,24 @@ export function SiteHeader() {
                   <Link
                     href="/account"
                     onClick={() => setOpen(false)}
-                    className="rounded-md px-3 py-3 text-sm font-bold uppercase tracking-[0.08em] text-slate-300 hover:bg-amber-200/10 hover:text-amber-100"
+                    className="px-3 py-3 text-sm font-bold uppercase tracking-[0.08em] text-slate-300 hover:bg-amber-200/10 hover:text-amber-100"
+                    style={{ fontFamily: "rf-bold, sans-serif" }}
                   >
                     Account
                   </Link>
                   <Link
                     href="/account/settings"
                     onClick={() => setOpen(false)}
-                    className="rounded-md px-3 py-3 text-sm font-bold uppercase tracking-[0.08em] text-slate-300 hover:bg-amber-200/10 hover:text-amber-100"
+                    className="px-3 py-3 text-sm font-bold uppercase tracking-[0.08em] text-slate-300 hover:bg-amber-200/10 hover:text-amber-100"
+                    style={{ fontFamily: "rf-bold, sans-serif" }}
                   >
                     Settings
                   </Link>
                   <button
                     type="button"
                     onClick={signOut}
-                    className="flex items-center gap-2 rounded-md px-3 py-3 text-left text-sm font-bold uppercase tracking-[0.08em] text-slate-300 hover:bg-amber-200/10 hover:text-amber-100"
+                    className="flex items-center gap-2 px-3 py-3 text-left text-sm font-bold uppercase tracking-[0.08em] text-slate-300 hover:bg-amber-200/10 hover:text-amber-100"
+                    style={{ fontFamily: "rf-bold, sans-serif" }}
                   >
                     <LogOut className="h-4 w-4" />
                     Sign out
@@ -206,7 +222,8 @@ export function SiteHeader() {
                 <Link
                   href="/account"
                   onClick={() => setOpen(false)}
-                  className="rounded-md px-3 py-3 text-sm font-bold uppercase tracking-[0.08em] text-slate-300 hover:bg-amber-200/10 hover:text-amber-100"
+                  className="px-3 py-3 text-sm font-bold uppercase tracking-[0.08em] text-slate-300 hover:bg-amber-200/10 hover:text-amber-100"
+                  style={{ fontFamily: "rf-bold, sans-serif" }}
                 >
                   Sign in
                 </Link>

@@ -3,28 +3,52 @@ import { cva, type VariantProps } from "class-variance-authority"
 
 import { cn } from "@/lib/utils"
 
+/**
+ * Button now maps to the mockup's iconic `.mc-button` system:
+ *   default  → green Minecraft button
+ *   gold     → mc-button--gold (primary call-out)
+ *   outline  → mc-button--ghost (outlined stone)
+ *   discord  → mc-button--discord (brand blue)
+ *
+ * `ghost`, `secondary`, `destructive`, and `icon` remain Tailwind-only
+ * so that mobile menu togglers, dropdown buttons, and admin actions can
+ * still look distinct from the marketing CTAs.
+ */
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-semibold transition duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50",
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap transition duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50",
   {
     variants: {
       variant: {
-        default:
-          "bg-primary text-primary-foreground shadow-[0_0_26px_rgba(242,198,109,0.28)] hover:bg-primary/90",
+        default: "mc-button",
+        gold: "mc-button mc-button--gold",
+        outline: "mc-button mc-button--ghost",
+        discord: "mc-button mc-button--discord",
         secondary:
-          "bg-secondary text-secondary-foreground hover:bg-secondary/80",
-        outline:
-          "border border-border bg-background/40 text-foreground hover:bg-accent hover:text-accent-foreground",
-        ghost: "text-muted-foreground hover:bg-accent hover:text-foreground",
+          "minecraft-font text-xs uppercase tracking-[0.05em] text-slate-200 rounded-sm border border-amber-200/30 bg-amber-200/8 px-4 py-2 hover:bg-amber-200/15 hover:text-amber-100",
+        ghost:
+          "minecraft-font text-xs uppercase tracking-[0.05em] text-slate-200 rounded-sm px-3 py-2 hover:bg-amber-200/10 hover:text-amber-100",
         destructive:
-          "bg-destructive text-destructive-foreground hover:bg-destructive/90"
+          "rounded-sm border border-rose-400/30 bg-rose-500/15 px-4 py-2 text-sm font-semibold text-rose-100 hover:bg-rose-500/25"
       },
       size: {
-        default: "h-11 px-5 py-2",
-        sm: "h-9 px-3",
-        lg: "h-12 px-7 text-base",
-        icon: "h-10 w-10"
+        default: "",
+        sm: "",
+        lg: "",
+        icon: "h-10 w-10 rounded-sm border border-amber-200/30 bg-black/30 text-slate-200 hover:bg-amber-200/10 hover:text-amber-100"
       }
     },
+    compoundVariants: [
+      {
+        variant: ["default", "gold", "outline", "discord"],
+        size: "sm",
+        className: "mc-button--sm"
+      },
+      {
+        variant: ["default", "gold", "outline", "discord"],
+        size: "lg",
+        className: "mc-button--lg"
+      }
+    ],
     defaultVariants: {
       variant: "default",
       size: "default"
