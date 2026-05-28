@@ -15,14 +15,19 @@ export function SiteChrome({
   header: ReactNode
 }) {
   const pathname = usePathname()
-  // /account and its sub-pages (settings, reset-password) use their own focused
-  // layout, so the global header/footer are hidden there.
+
+  // /account and its sub-pages use their own focused layout — no global chrome.
   const isAuthPage = pathname === "/account" || pathname.startsWith("/account/")
+
+  // Homepage hero is full-viewport with the fixed nav floating over it
+  // (matches the mockup). Other pages get top padding so content clears the nav.
+  const isHome = pathname === "/"
+  const mainPadding = isAuthPage ? "" : isHome ? "" : "pt-20"
 
   return (
     <>
       {isAuthPage ? null : header}
-      <main className={isAuthPage ? "min-h-screen" : "min-h-screen pt-20"}>{children}</main>
+      <main className={`min-h-screen ${mainPadding}`}>{children}</main>
       {isAuthPage ? null : <SocialRail />}
       {isAuthPage ? null : footer}
     </>

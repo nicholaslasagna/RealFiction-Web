@@ -8,6 +8,11 @@ type PlayerCountState = {
   playersMax?: number
 }
 
+/**
+ * Mockup-styled `.playercount` chip. Uses the global CSS class so the
+ * hero pill matches the design 1:1 (dark transparent bg, "rf-h1" font,
+ * yellow numeric accent on the `.num` span).
+ */
 export function LivePlayerCount() {
   const [state, setState] = useState<PlayerCountState>({
     online: false,
@@ -49,19 +54,16 @@ export function LivePlayerCount() {
   const online = state.online && !loading
 
   return (
-    <div className="inline-flex items-center gap-3 rounded-md border border-amber-200/12 bg-black/32 px-4 py-2 text-sm shadow-[0_10px_28px_rgba(0,0,0,0.28)] backdrop-blur">
-      <span className="rf-status-beacon shrink-0" data-online={online ? "true" : "false"} aria-hidden>
-        <span />
-      </span>
-      {loading ? (
-        <span className="text-slate-300">Checking players...</span>
-      ) : online ? (
-        <span className="text-slate-200">
-          <strong className="font-semibold text-amber-200">{state.playersOnline}</strong>{" "}
-          player{state.playersOnline === 1 ? "" : "s"} online
-        </span>
+    <div className="playercount">
+      {loading || !online ? (
+        <>
+          Checking players<span className="num">…</span>
+        </>
       ) : (
-        <span className="text-slate-300">Server status updating</span>
+        <>
+          There are <span className="num">{state.playersOnline}</span> player
+          {state.playersOnline === 1 ? "" : "s"} online on RealFiction
+        </>
       )}
     </div>
   )

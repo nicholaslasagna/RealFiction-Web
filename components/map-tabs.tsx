@@ -70,7 +70,7 @@ export function MapTabs() {
         ) : (
           <div className="relative">
             <Image alt="" src={backdrop} fill className="object-cover opacity-25" sizes="100vw" />
-            <div className="absolute inset-0 bg-gradient-to-b from-[#06101c]/82 via-[#06101c]/86 to-[#06101c]" />
+            <div className="absolute inset-0 bg-gradient-to-b from-[#021429]/82 via-[#021429]/86 to-[#021429]" />
 
             <div className="relative flex flex-col items-center gap-5 px-6 py-16 text-center md:py-24">
               <span className="rounded-xl border border-amber-200/25 bg-black/45 p-3.5 shadow-lg">
