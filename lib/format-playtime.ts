@@ -68,14 +68,33 @@ export function avatarUrl(uuid: string | null | undefined, size = 48) {
 }
 
 // Username-based avatar lookup for sources that don't carry a UUID (e.g. the
-// economy leaderboard RPC). mc-heads.net accepts a Minecraft username and
-// resolves it server-side, falling back to a Steve/Alex head when the name
-// is unknown. Returns null for blank/invalid input so callers can render a
-// neutral placeholder.
+// economy leaderboard RPC). mc-heads.net accepts a Java Minecraft username
+// and resolves it server-side, falling back to a Steve/Alex head when the
+// name is unknown.
+//
+// Bedrock players on the network show up via GeyserMC, which prefixes their
+// username with a literal `.` (e.g. `.SomeBedrockGuy`). mc-heads.net is a
+// Java-only resolver and can't look those up, which previously rendered as
+// a blank avatar. To match the request "If you can't get it put their
+// images as Steve", any dot-prefixed name is mapped to the classic Steve
+// head (MHF_Steve) instead of attempting a lookup.
+//
+// Returns null for blank/invalid input so callers can render a neutral
+// placeholder.
 const MINECRAFT_USERNAME_RE = /^[A-Za-z0-9_]{1,16}$/
+const STEVE_FALLBACK_NAME = "MHF_Steve"
+
 export function avatarUrlByUsername(name: string | null | undefined, size = 48) {
   if (!name) return null
   const trimmed = name.trim()
+  if (trimmed.length === 0) return null
+
+  // Bedrock-via-Geyser names start with a dot — serve the classic Steve
+  // head so the row never renders blank.
+  if (trimmed.startsWith(".")) {
+    return `https://mc-heads.net/avatar/${STEVE_FALLBACK_NAME}/${size}`
+  }
+
   if (!MINECRAFT_USERNAME_RE.test(trimmed)) return null
   return `https://mc-heads.net/avatar/${encodeURIComponent(trimmed)}/${size}`
 }

@@ -89,27 +89,14 @@ export async function HomeNetworkInNumbers() {
       </p>
 
       <div className="stats-grid">
-        {/* ── Card 1: Network playtime ── */}
+        {/* ── Card 1: Network playtime ──
+            The decorative 62% gradient bar was removed: it didn't
+            correspond to any real metric, and a fake-meaning progress
+            bar on top of a real number is worse than no bar. */}
         <div className="stat-card">
           <div className="stat-eyebrow">Network playtime</div>
           <div className="stat-value">{totalPlaytime}</div>
-          <div
-            style={{
-              marginTop: 16,
-              height: 8,
-              background: "rgba(255,255,255,0.06)",
-              overflow: "hidden"
-            }}
-          >
-            <div
-              style={{
-                width: "62%",
-                height: "100%",
-                background: "linear-gradient(90deg, var(--mc-green), var(--gold))"
-              }}
-            />
-          </div>
-          <div className="stat-foot">
+          <div className="stat-foot" style={{ marginTop: 20 }}>
             Across SMP · Factions · Arcade · Anarchy · Lobby
           </div>
         </div>

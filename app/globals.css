@@ -506,11 +506,13 @@ select {
   background: var(--navy-card);
   padding: 30px 28px;
   box-shadow: var(--shadow);
-  border-top: 3px solid var(--gold);
   position: relative;
 }
-.stat-card.emerald { border-top-color: var(--mc-green); }
-.stat-card.navy { border-top-color: #aab9ff; }
+/* .emerald / .navy modifiers are kept as no-ops in case any markup still
+   references them, but the colored 3px top border was removed — it was
+   purely decorative and read as visual noise above the real data. */
+.stat-card.emerald,
+.stat-card.navy { /* no extra styling */ }
 
 .stat-eyebrow {
   font-family: "rf-bold", sans-serif;
