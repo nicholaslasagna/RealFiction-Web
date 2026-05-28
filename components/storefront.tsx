@@ -1,7 +1,8 @@
 "use client"
 
 import Image from "next/image"
-import { CreditCard, Gift, Minus, Plus, ShieldCheck, ShoppingCart, Trash2 } from "lucide-react"
+import Link from "next/link"
+import { Minus, Plus, ShieldCheck, ShoppingCart, Trash2 } from "lucide-react"
 import { useMemo, useState } from "react"
 
 import { Badge } from "@/components/ui/badge"
@@ -298,31 +299,37 @@ export function Storefront() {
       <aside className="min-w-0 lg:sticky lg:top-28 lg:self-start">
         <Card className="minecraft-panel">
           <CardHeader>
-            <div className="rf-kicker">Cosmetic-only shop</div>
             <CardTitle className="display-font flex items-center gap-2 text-3xl">
               <ShoppingCart className="h-5 w-5 text-amber-200" />
               Server Cart
             </CardTitle>
-            <CardDescription>Pay safely with card, Apple Pay, Google Pay, or PayPal.</CardDescription>
+            <CardDescription>Pay with Card, Apple Pay, Google Pay, or PayPal.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-5">
             <div className="grid gap-3">
               <label className="grid gap-2 text-sm font-medium">
-                Minecraft username
+                Your Minecraft username
                 <Input
                   autoComplete="username"
                   placeholder="Your in-game name"
                   value={minecraftUsername}
                   onChange={(event) => setMinecraftUsername(event.target.value)}
                 />
+                <span className="text-xs font-normal text-muted-foreground">
+                  This is where rewards get delivered.
+                </span>
               </label>
               <label className="grid gap-2 text-sm font-medium">
-                Gift recipient
+                Send as a gift?{" "}
+                <span className="font-normal text-muted-foreground">(optional)</span>
                 <Input
-                  placeholder="Optional"
+                  placeholder="Their Minecraft username"
                   value={giftRecipient}
                   onChange={(event) => setGiftRecipient(event.target.value)}
                 />
+                <span className="text-xs font-normal text-muted-foreground">
+                  Leave blank to deliver to your own account.
+                </span>
               </label>
             </div>
 
@@ -348,26 +355,26 @@ export function Storefront() {
                         <Trash2 className="h-4 w-4" />
                       </button>
                     </div>
-                    <div className="mt-3 flex items-center gap-2">
-                      <Button
+                    <div className="mt-3 flex items-center gap-3">
+                      <button
                         aria-label={`Decrease ${item.name}`}
-                        size="icon"
-                        variant="outline"
+                        className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-amber-200/30 bg-black/40 text-amber-100 transition hover:border-amber-200/60 hover:bg-amber-200/10 disabled:opacity-40"
                         onClick={() => changeQuantity(item.slug, -1)}
                         type="button"
                       >
-                        <Minus className="h-4 w-4" />
-                      </Button>
-                      <span className="w-8 text-center font-mono">{item.quantity}</span>
-                      <Button
+                        <Minus className="h-4 w-4" aria-hidden />
+                      </button>
+                      <span className="min-w-[1.5rem] text-center font-mono text-base font-semibold text-slate-100">
+                        {item.quantity}
+                      </span>
+                      <button
                         aria-label={`Increase ${item.name}`}
-                        size="icon"
-                        variant="outline"
+                        className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-amber-200/30 bg-black/40 text-amber-100 transition hover:border-amber-200/60 hover:bg-amber-200/10 disabled:opacity-40"
                         onClick={() => changeQuantity(item.slug, 1)}
                         type="button"
                       >
-                        <Plus className="h-4 w-4" />
-                      </Button>
+                        <Plus className="h-4 w-4" aria-hidden />
+                      </button>
                     </div>
                   </div>
                 ))
@@ -380,24 +387,243 @@ export function Storefront() {
             </div>
 
             <div className="grid gap-2">
-              <Button disabled={cartLines.length === 0} onClick={() => checkout("stripe")} type="button">
-                <CreditCard className="h-4 w-4" />
-                Pay with card
+              <Button
+                disabled={cartLines.length === 0}
+                onClick={() => checkout("stripe")}
+                type="button"
+              >
+                <CardWalletGlyph />
+                Checkout
               </Button>
-              <Button disabled={cartLines.length === 0} onClick={() => checkout("paypal")} type="button" variant="outline">
-                <Gift className="h-4 w-4" />
+              <Button
+                disabled={cartLines.length === 0}
+                onClick={() => checkout("paypal")}
+                type="button"
+                variant="outline"
+              >
+                <PayPalLogo height={16} />
                 Pay with PayPal
               </Button>
             </div>
 
             {checkoutState ? (
-              <p className="rounded-md border border-border bg-background/55 p-3 text-sm text-muted-foreground">
+              <p
+                className="rounded-md border border-border bg-background/55 p-3 text-sm text-muted-foreground"
+                role="status"
+                aria-live="polite"
+              >
                 {checkoutState}
               </p>
             ) : null}
+
+            {/* Trust + brand row: shows accepted payment methods using
+                clean inline marks so visitors recognize the brands. */}
+            <div className="flex flex-col gap-2 border-t border-border pt-4">
+              <span className="text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
+                We accept
+              </span>
+              <div className="flex flex-wrap items-center gap-2">
+                <PaymentBadge label="Visa"><VisaLogo /></PaymentBadge>
+                <PaymentBadge label="Mastercard"><MastercardLogo /></PaymentBadge>
+                <PaymentBadge label="American Express"><AmexLogo /></PaymentBadge>
+                <PaymentBadge label="Apple Pay"><ApplePayLogo /></PaymentBadge>
+                <PaymentBadge label="Google Pay"><GooglePayLogo /></PaymentBadge>
+                <PaymentBadge label="PayPal"><PayPalLogo height={14} /></PaymentBadge>
+              </div>
+            </div>
+
+            {/* Legal + processor disclosure — kept short, honest, and
+                linked out for the full rules so we cover what's required
+                for an online store while staying readable. */}
+            <p className="text-[11px] leading-5 text-muted-foreground">
+              Cosmetic items only — no gameplay advantages. By placing an order you agree to
+              our{" "}
+              <Link href="/rules" className="text-amber-200 underline-offset-2 hover:underline">
+                Terms &amp; Refund Policy
+              </Link>
+              . Prices in USD. Payments are securely processed by{" "}
+              <span className="font-semibold text-slate-200">Stripe</span> (Card / Apple Pay /
+              Google Pay) and <span className="font-semibold text-slate-200">PayPal</span>.
+              RealFiction never stores your card details.
+            </p>
           </CardContent>
         </Card>
       </aside>
     </div>
+  )
+}
+
+/* ============================================================
+   Payment brand marks — minimal inline SVGs.
+
+   Goals:
+   - Show real brand identity (so customers trust the checkout)
+   - Stay small (these render inline at ~14-16px tall)
+   - Not pull in any tracking from third-party CDNs
+   - Match each brand's actual look closely enough to be recognizable
+     without redrawing the protected wordmark from scratch
+   ============================================================ */
+
+function PaymentBadge({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <span
+      aria-label={label}
+      title={label}
+      className="inline-flex h-7 items-center justify-center rounded-md border border-white/10 bg-white/95 px-2 text-[#1a1a1a]"
+    >
+      {children}
+    </span>
+  )
+}
+
+function CardWalletGlyph() {
+  // Generic card+wallet glyph used inside the Stripe checkout button.
+  // The Stripe-hosted checkout itself will show the actual card / Apple Pay /
+  // Google Pay options, so the button just communicates "secure card flow".
+  return (
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <rect x="2.5" y="6" width="19" height="13" rx="2" />
+      <path d="M2.5 10.5h19" />
+      <path d="M6.5 15.5h3" />
+    </svg>
+  )
+}
+
+function VisaLogo() {
+  return (
+    <svg viewBox="0 0 48 16" height="11" aria-hidden>
+      <text
+        x="0"
+        y="13"
+        fontFamily="Arial, Helvetica, sans-serif"
+        fontSize="14"
+        fontWeight="900"
+        fontStyle="italic"
+        fill="#1A1F71"
+        letterSpacing="0.5"
+      >
+        VISA
+      </text>
+    </svg>
+  )
+}
+
+function MastercardLogo() {
+  return (
+    <svg viewBox="0 0 32 20" height="14" aria-hidden>
+      <circle cx="12" cy="10" r="7" fill="#EB001B" />
+      <circle cx="20" cy="10" r="7" fill="#F79E1B" />
+      <path
+        d="M16 4.6a7 7 0 0 1 0 10.8 7 7 0 0 1 0-10.8z"
+        fill="#FF5F00"
+      />
+    </svg>
+  )
+}
+
+function AmexLogo() {
+  return (
+    <svg viewBox="0 0 40 16" height="11" aria-hidden>
+      <rect width="40" height="16" rx="2" fill="#1F72CD" />
+      <text
+        x="20"
+        y="11.5"
+        textAnchor="middle"
+        fontFamily="Arial, Helvetica, sans-serif"
+        fontSize="6.5"
+        fontWeight="800"
+        fill="#fff"
+        letterSpacing="0.6"
+      >
+        AMERICAN EXPRESS
+      </text>
+    </svg>
+  )
+}
+
+function ApplePayLogo() {
+  return (
+    <svg viewBox="0 0 40 16" height="13" aria-hidden>
+      {/* Apple mark */}
+      <path
+        d="M6.6 4.2c.4-.5.7-1.2.6-1.9-.6 0-1.3.4-1.7.9-.4.4-.7 1.1-.6 1.8.7.1 1.3-.3 1.7-.8zM7.2 5.1c-.9 0-1.7.5-2.1.5-.4 0-1.1-.5-1.9-.5-1 0-1.9.6-2.4 1.5-1 1.8-.3 4.4.7 5.9.5.7 1.1 1.5 1.9 1.5.8 0 1-.5 1.9-.5.9 0 1.1.5 1.9.5.8 0 1.3-.7 1.8-1.5.6-.8.8-1.6.8-1.7-.1 0-1.5-.6-1.5-2.3 0-1.4 1.1-2 1.2-2.1-.7-1-1.7-1.3-2.3-1.3z"
+        fill="#000"
+      />
+      {/* "Pay" */}
+      <text
+        x="13"
+        y="11.5"
+        fontFamily="Arial, Helvetica, sans-serif"
+        fontSize="8.2"
+        fontWeight="600"
+        fill="#000"
+      >
+        Pay
+      </text>
+    </svg>
+  )
+}
+
+function GooglePayLogo() {
+  return (
+    <svg viewBox="0 0 48 16" height="13" aria-hidden>
+      {/* "G" mark approximation */}
+      <path
+        d="M7.7 8.1v1.6h2.3c-.1.7-.4 1.3-.9 1.7-.5.4-1.2.6-2 .6a2.9 2.9 0 1 1 0-5.8c.8 0 1.5.3 2 .8l1.1-1.1A4.5 4.5 0 0 0 4.5 8c0 2.5 2 4.5 4.5 4.5 1.3 0 2.4-.4 3.1-1.2.8-.8 1.1-1.9 1.1-3 0-.3 0-.5-.1-.7H7.7z"
+        fill="#4285F4"
+      />
+      {/* "Pay" wordmark */}
+      <text
+        x="15"
+        y="11.5"
+        fontFamily="Arial, Helvetica, sans-serif"
+        fontSize="8.2"
+        fontWeight="600"
+        fill="#5F6368"
+      >
+        Pay
+      </text>
+    </svg>
+  )
+}
+
+function PayPalLogo({ height = 14 }: { height?: number }) {
+  return (
+    <svg viewBox="0 0 80 20" height={height} aria-hidden>
+      {/* "Pay" in dark blue */}
+      <text
+        x="0"
+        y="15"
+        fontFamily="Arial, Helvetica, sans-serif"
+        fontSize="16"
+        fontWeight="800"
+        fontStyle="italic"
+        fill="#003087"
+      >
+        Pay
+      </text>
+      {/* "Pal" in lighter blue */}
+      <text
+        x="30"
+        y="15"
+        fontFamily="Arial, Helvetica, sans-serif"
+        fontSize="16"
+        fontWeight="800"
+        fontStyle="italic"
+        fill="#009CDE"
+      >
+        Pal
+      </text>
+    </svg>
   )
 }
