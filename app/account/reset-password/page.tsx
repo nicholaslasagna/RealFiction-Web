@@ -23,7 +23,7 @@ export default function ResetPasswordPage() {
           sizes="100vw"
         />
       </div>
-      <div className="absolute inset-0 -z-20 bg-[linear-gradient(135deg,rgba(6,16,28,0.86),rgba(42,21,55,0.8),rgba(6,16,28,0.95))]" />
+      <div className="absolute inset-0 -z-20 bg-background" />
 
       <div className="container-shell flex min-h-screen flex-col">
         <header className="flex h-24 items-center">
@@ -33,7 +33,7 @@ export default function ResetPasswordPage() {
               src="/images/logo1.png"
               width={174}
               height={54}
-              className="drop-shadow-[0_12px_28px_rgba(0,0,0,0.5)]"
+              className="drop-shadow-[0_6px_24px_rgba(20,20,19,0.08)]"
             />
           </Link>
         </header>

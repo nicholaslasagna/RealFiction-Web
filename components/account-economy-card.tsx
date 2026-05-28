@@ -93,29 +93,29 @@ export function AccountEconomyCard() {
   const linked = ready?.linked ?? false
 
   return (
-    <Card className="minecraft-card border-amber-200/18">
+    <Card className="minecraft-card border-border">
       <CardHeader>
         <div className="flex items-start justify-between gap-3">
           <div>
             <CardTitle className="display-font text-3xl">Your Balance</CardTitle>
             <CardDescription>Only you can see this.</CardDescription>
           </div>
-          <div className="flex h-11 w-11 items-center justify-center rounded-md border border-amber-200/16 bg-black/24 text-amber-200">
+          <div className="flex h-11 w-11 items-center justify-center rounded-md border border-border bg-secondary text-primary">
             <Coins className="h-5 w-5" />
           </div>
         </div>
       </CardHeader>
       <CardContent>
         {state.status === "loading" ? (
-          <div className="rounded-lg border border-white/10 bg-black/24 p-4">
-            <div className="h-9 w-32 animate-pulse rounded bg-amber-100/18" />
-            <div className="mt-3 h-4 w-44 animate-pulse rounded bg-white/10" />
+          <div className="rounded-lg border border-border bg-secondary p-4">
+            <div className="h-9 w-32 animate-pulse rounded bg-primary/10" />
+            <div className="mt-3 h-4 w-44 animate-pulse rounded bg-secondary" />
           </div>
         ) : null}
 
         {state.status === "error" ? (
-          <div className="space-y-4 rounded-lg border border-amber-300/20 bg-black/24 p-4">
-            <p className="text-sm font-semibold text-amber-100">{state.error}</p>
+          <div className="space-y-4 rounded-lg border border-border bg-secondary p-4">
+            <p className="text-sm font-semibold text-primary">{state.error}</p>
             <Button type="button" variant="outline" onClick={() => void loadBalance()}>
               <RefreshCw className="h-4 w-4" />
               Try again
@@ -125,10 +125,10 @@ export function AccountEconomyCard() {
 
         {ready ? (
           linked ? (
-            <div className="rounded-lg border border-emerald-300/16 bg-black/24 p-4">
+            <div className="rounded-lg border border-border bg-secondary p-4">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <div className="font-mono text-4xl font-semibold text-amber-100">
+                  <div className="font-mono text-4xl font-semibold text-primary">
                     {formatBalance(ready.balanceMinor, ready.scale)}
                   </div>
                   <p className="mt-2 text-sm text-muted-foreground">
@@ -142,8 +142,8 @@ export function AccountEconomyCard() {
               </p>
             </div>
           ) : (
-            <div className="rounded-lg border border-white/10 bg-black/24 p-4">
-              <p className="font-semibold text-white">Link Minecraft to see your balance.</p>
+            <div className="rounded-lg border border-border bg-secondary p-4">
+              <p className="font-semibold text-foreground">Link Minecraft to see your balance.</p>
               <p className="mt-2 text-sm text-muted-foreground">
                 Once linked, your RealFiction balance will show up here.
               </p>

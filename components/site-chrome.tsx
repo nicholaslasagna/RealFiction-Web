@@ -22,7 +22,7 @@ export function SiteChrome({
   return (
     <>
       {isAuthPage ? null : header}
-      <main className={isAuthPage ? "min-h-screen" : "min-h-screen pt-20"}>{children}</main>
+      <main className={isAuthPage ? "min-h-screen" : "min-h-screen pt-16"}>{children}</main>
       {isAuthPage ? null : <SocialRail />}
       {isAuthPage ? null : footer}
     </>

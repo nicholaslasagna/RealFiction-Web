@@ -36,7 +36,7 @@ export default function UpdatesPage() {
                     <CardTitle className="mt-3">{update.title}</CardTitle>
                     <CardDescription>{update.summary}</CardDescription>
                   </div>
-                  <div className="rounded-md border border-amber-200/14 bg-black/24 px-3 py-2 font-mono text-sm text-amber-100">
+                  <div className="rounded-md border border-border bg-secondary px-3 py-2 font-mono text-sm text-primary">
                     {update.version}
                   </div>
                 </div>
@@ -44,12 +44,12 @@ export default function UpdatesPage() {
               <CardContent>
                 <div className="flex flex-wrap gap-3 text-sm text-muted-foreground">
                   <span className="inline-flex items-center gap-1.5">
-                    <CalendarDays className="h-4 w-4 text-amber-200" />
+                    <CalendarDays className="h-4 w-4 text-primary" />
                     {update.date}
                   </span>
                   {update.tags.map((tag) => (
                     <span key={tag} className="inline-flex items-center gap-1.5">
-                      <Tag className="h-4 w-4 text-amber-200" />
+                      <Tag className="h-4 w-4 text-primary" />
                       {tag}
                     </span>
                   ))}

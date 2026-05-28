@@ -186,14 +186,14 @@ export function AccountAuthCard() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-[520px] rounded-lg border border-amber-200/12 bg-[#080d18]/92 p-6 shadow-[0_30px_90px_rgba(0,0,0,0.48)] backdrop-blur-xl md:p-9">
+    <div className="mx-auto w-full max-w-[520px] rounded-lg border border-border bg-card p-6 shadow-[0_6px_24px_rgba(20,20,19,0.08)] backdrop-blur-xl md:p-9">
       {sent ? (
         <EmailSentPanel sent={sent} busy={busy} cooldown={resendCooldown} notice={notice} onResend={resend} onBack={() => switchMode("signin")} />
       ) : mfaFactorId ? (
         <MfaPanel busy={busy} notice={notice} onSubmit={verifyMfa} onBack={() => switchMode("signin")} />
       ) : (
         <>
-          <div className="flex rounded-md border border-amber-200/12 bg-black/22 p-1">
+          <div className="flex rounded-md border border-border bg-secondary p-1">
             {[
               { id: "signin", label: "Sign in" },
               { id: "signup", label: "Create account" }
@@ -203,8 +203,8 @@ export function AccountAuthCard() {
                 className={cn(
                   "h-10 flex-1 rounded-[6px] text-sm font-bold transition",
                   (mode === item.id || (mode === "forgot" && item.id === "signin"))
-                    ? "bg-amber-300 text-[#211504] shadow-[0_8px_22px_rgba(242,198,109,0.22)]"
-                    : "text-muted-foreground hover:text-amber-100"
+                    ? "bg-primary text-foreground shadow-none"
+                    : "text-muted-foreground hover:text-primary"
                 )}
                 onClick={() => switchMode(item.id as AuthMode)}
                 type="button"
@@ -215,7 +215,7 @@ export function AccountAuthCard() {
           </div>
 
           <div className="mt-8">
-            <h1 className="display-font text-4xl font-semibold leading-tight text-white md:text-5xl">
+            <h1 className="display-font text-4xl font-semibold leading-tight text-foreground md:text-5xl">
               {mode === "signin" ? "Sign in to RealFiction" : mode === "signup" ? "Create your RealFiction account" : "Reset your password"}
             </h1>
             <p className="mt-3 text-sm leading-6 text-muted-foreground">
@@ -228,13 +228,13 @@ export function AccountAuthCard() {
           </div>
 
           <form className="mt-7 grid gap-5" onSubmit={submit}>
-            <label className="grid gap-2 text-sm font-bold text-slate-100">
+            <label className="grid gap-2 text-sm font-bold text-foreground">
               Email
               <span className="relative">
                 <Mail className="pointer-events-none absolute left-3 top-3.5 h-4 w-4 text-muted-foreground" />
                 <Input
                   autoComplete="email"
-                  className="h-12 border-white/10 bg-white/[0.035] pl-10"
+                  className="h-12 border-border bg-white/[0.035] pl-10"
                   name="email"
                   placeholder="you@example.com"
                   required
@@ -244,12 +244,12 @@ export function AccountAuthCard() {
             </label>
 
             {mode !== "forgot" ? (
-              <label className="grid gap-2 text-sm font-bold text-slate-100">
+              <label className="grid gap-2 text-sm font-bold text-foreground">
                 <span className="flex items-center justify-between gap-3">
                   Password
                   {mode === "signin" ? (
                     <button
-                      className="text-xs font-bold text-amber-300 hover:text-amber-200"
+                      className="text-xs font-bold text-primary hover:text-primary"
                       onClick={() => switchMode("forgot")}
                       type="button"
                     >
@@ -261,7 +261,7 @@ export function AccountAuthCard() {
                   <LockKeyhole className="pointer-events-none absolute left-3 top-3.5 h-4 w-4 text-muted-foreground" />
                   <Input
                     autoComplete={mode === "signin" ? "current-password" : "new-password"}
-                    className="h-12 border-white/10 bg-white/[0.035] pl-10"
+                    className="h-12 border-border bg-white/[0.035] pl-10"
                     minLength={8}
                     name="password"
                     placeholder="At least 8 characters"
@@ -273,13 +273,13 @@ export function AccountAuthCard() {
             ) : null}
 
             {mode === "signup" ? (
-              <label className="grid gap-2 text-sm font-bold text-slate-100">
+              <label className="grid gap-2 text-sm font-bold text-foreground">
                 Minecraft username
                 <span className="relative">
                   <UserRound className="pointer-events-none absolute left-3 top-3.5 h-4 w-4 text-muted-foreground" />
                   <Input
                     autoComplete="username"
-                    className="h-12 border-white/10 bg-white/[0.035] pl-10"
+                    className="h-12 border-border bg-white/[0.035] pl-10"
                     name="minecraftUsername"
                     placeholder="Optional for now"
                   />
@@ -287,9 +287,9 @@ export function AccountAuthCard() {
               </label>
             ) : null}
 
-            <div className="grid gap-2 text-sm font-bold text-slate-100">
+            <div className="grid gap-2 text-sm font-bold text-foreground">
               Cloudflare check
-              <div className="flex min-h-[86px] justify-center rounded-lg border border-white/10 bg-white/[0.035] p-3">
+              <div className="flex min-h-[86px] justify-center rounded-lg border border-border bg-white/[0.035] p-3">
                 <Turnstile key={captchaKey} onToken={setCaptchaToken} />
               </div>
             </div>
@@ -308,28 +308,28 @@ export function AccountAuthCard() {
             {notice ? <NoticeLine notice={notice} /> : null}
           </form>
 
-          <div className="mt-7 border-t border-white/10 pt-5 text-center text-sm text-muted-foreground">
+          <div className="mt-7 border-t border-border pt-5 text-center text-sm text-muted-foreground">
             {mode === "forgot" ? (
-              <button className="font-bold text-amber-300 hover:text-amber-200" onClick={() => switchMode("signin")} type="button">
+              <button className="font-bold text-primary hover:text-primary" onClick={() => switchMode("signin")} type="button">
                 Back to sign in
               </button>
             ) : mode === "signin" ? (
               <>
                 New to RealFiction?{" "}
-                <button className="font-bold text-amber-300 hover:text-amber-200" onClick={() => switchMode("signup")} type="button">
+                <button className="font-bold text-primary hover:text-primary" onClick={() => switchMode("signup")} type="button">
                   Create account
                 </button>
               </>
             ) : (
               <>
                 Already have an account?{" "}
-                <button className="font-bold text-amber-300 hover:text-amber-200" onClick={() => switchMode("signin")} type="button">
+                <button className="font-bold text-primary hover:text-primary" onClick={() => switchMode("signin")} type="button">
                   Sign in
                 </button>
               </>
             )}
-            <span className="mx-2 text-white/25">·</span>
-            <Link className="hover:text-amber-100" href="/">
+            <span className="mx-2 text-muted-foreground">·</span>
+            <Link className="hover:text-primary" href="/">
               Continue as guest
             </Link>
           </div>
@@ -345,8 +345,8 @@ function NoticeLine({ notice }: { notice: NonNullable<Notice> }) {
       className={cn(
         "rounded-md border p-3 text-sm",
         notice.kind === "error"
-          ? "border-rose-400/25 bg-rose-500/10 text-rose-100"
-          : "border-amber-200/16 bg-black/24 text-muted-foreground"
+          ? "border-destructive/30 bg-destructive/90 text-primary"
+          : "border-border bg-secondary text-muted-foreground"
       )}
     >
       {notice.text}
@@ -387,14 +387,14 @@ function EmailSentPanel({
           />
         </svg>
       </div>
-      <h1 className="display-font mt-5 text-3xl font-semibold text-white md:text-4xl">
+      <h1 className="display-font mt-5 text-3xl font-semibold text-foreground md:text-4xl">
         {isConfirm ? "Email verification sent" : "Reset link sent"}
       </h1>
       <p className="mx-auto mt-3 max-w-sm text-sm leading-6 text-muted-foreground">
         {isConfirm
           ? "Check your email to finish joining. We sent a verification link to"
           : "Check your email to choose a new password. We sent a link to"}{" "}
-        <span className="font-semibold text-amber-100">{sent.email}</span>.
+        <span className="font-semibold text-primary">{sent.email}</span>.
       </p>
       <p className="mx-auto mt-3 max-w-sm text-xs text-muted-foreground">
         Can&rsquo;t find it? Check spam, or resend below.
@@ -432,10 +432,10 @@ function MfaPanel({
 }) {
   return (
     <div>
-      <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full border border-amber-200/25 bg-amber-300/12 text-amber-200">
+      <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full border border-border bg-primary/10 text-primary">
         <ShieldQuestion className="h-8 w-8" />
       </div>
-      <h1 className="display-font mt-6 text-center text-3xl font-semibold text-white md:text-4xl">Two-step verification</h1>
+      <h1 className="display-font mt-6 text-center text-3xl font-semibold text-foreground md:text-4xl">Two-step verification</h1>
       <p className="mx-auto mt-3 max-w-sm text-center text-sm leading-6 text-muted-foreground">
         Enter the 6-digit code from your authenticator app to finish signing in.
       </p>
