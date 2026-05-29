@@ -210,38 +210,42 @@ public final class CosmeticsPetService {
 
   private PetActiveState followPet(Entity entity, Player player, PetDefinition definition, PetActiveState state) {
     World playerWorld = player.getWorld();
-    String worldName = playerWorld == null ? "" : playerWorld.getName();
     Location desired = PetFollowMath.followLocation(player, definition.followStyle(), state.animationTick() + 1);
     if (playerWorld != null) {
       desired.setWorld(playerWorld);
     }
 
     boolean differentWorld = !sameWorld(entity, player);
-    boolean hardSnapTarget = PetMovementMath.hardSnapTarget(state, desired, worldName)
-        || differentWorld;
-    Location target = PetMovementMath.smoothTarget(state, desired, worldName, hardSnapTarget);
-
     Location current = entity.getLocation();
-    double distanceSq = current.distanceSquared(target);
-    boolean forceSnap = PetMovementMath.shouldForceSnap(distanceSq, differentWorld);
-    boolean strongCorrect = PetMovementMath.shouldStrongCorrect(distanceSq, differentWorld);
+    double distanceSq = differentWorld ? Double.MAX_VALUE : current.distanceSquared(desired);
     boolean displayPet = definition.displayPet() || entity instanceof ArmorStand;
 
-    if (forceSnap || (strongCorrect && !displayPet)) {
-      applyPetPosition(entity, player, target);
-    } else if (displayPet) {
-      Location next = forceSnap || strongCorrect
-          ? target
-          : PetMovementMath.interpolateDisplay(current, target, Math.sqrt(distanceSq));
-      applyPetPosition(entity, player, next);
-      target = next;
-    } else if (entity instanceof LivingEntity living && PetMovementMath.shouldSmoothMove(distanceSq, differentWorld)) {
-      living.setGravity(false);
-      Vector velocity = PetMovementMath.clampedVelocity(current, target, Math.sqrt(distanceSq), strongCorrect);
-      living.setVelocity(velocity);
+    // Only a big jump (player teleported, changed world, or fell far behind)
+    // snaps — everything else moves smoothly so it never reads as teleporting.
+    if (PetMovementMath.shouldForceSnap(distanceSq, differentWorld)) {
+      applyPetPosition(entity, player, desired);
+      return state.nextMoveTick().withLastTarget(desired);
     }
 
-    return state.nextMoveTick().withLastTarget(target);
+    if (displayPet) {
+      // Armor-stand display pets interpolate teleports smoothly client-side.
+      Location next = PetMovementMath.interpolateDisplay(current, desired, Math.sqrt(distanceSq));
+      applyPetPosition(entity, player, next);
+      return state.nextMoveTick().withLastTarget(next);
+    }
+
+    // Living pets glide toward the target with real velocity (so the client
+    // renders normal walking/flying with animation, not teleport jitter) and
+    // turn to face the direction of travel via setRotation, which rotates the
+    // entity without snapping its position the way a teleport would.
+    if (entity instanceof LivingEntity living) {
+      living.setGravity(false);
+      living.setVelocity(PetMovementMath.glideVelocity(current, desired));
+      living.setRotation(
+          PetMovementMath.faceYaw(current, desired, current.getYaw(), player.getLocation().getYaw()),
+          0f);
+    }
+    return state.nextMoveTick().withLastTarget(desired);
   }
 
   private void applyPetPosition(Entity entity, Player player, Location location) {

@@ -89,8 +89,9 @@ public record CosmeticsConfig(
 
   private static List<CosmeticOption> defaultOptions(CosmeticCategory category) {
     return switch (category) {
-      case PETS -> List.of(new CosmeticOption("pet-pack", category, "&aPets Pack", "BONE",
-          "realfiction.pets.pack", List.of("&7Pet AI is coming soon."), "", "", true));
+      // Real, selectable pets (no "coming soon" placeholder). The same builtin
+      // catalog is also merged in by PetCosmetics.mergeMissingBuiltins().
+      case PETS -> PetCosmetics.builtinOptions();
       case PARTICLES -> List.of(new CosmeticOption("emerald-aura", category, "&aEmerald Aura", "EMERALD",
           "realfiction.particles.vault", List.of("&7A soft lobby sparkle."), "", "HAPPY_VILLAGER", false));
       case TRAILS -> List.of(new CosmeticOption("cloud-trail", category, "&fCloud Trail", "FEATHER",

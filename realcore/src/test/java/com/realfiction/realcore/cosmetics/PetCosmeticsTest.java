@@ -1,6 +1,7 @@
 package com.realfiction.realcore.cosmetics;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -27,7 +28,9 @@ final class PetCosmeticsTest {
     assertTrue(pets.stream().anyMatch(option -> "tiny-dragon".equals(option.id())));
     assertTrue(pets.stream().anyMatch(option -> "liberty-eagle".equals(option.id())));
     assertTrue(pets.stream().anyMatch(option -> "bee-buzz".equals(option.id())));
-    assertTrue(pets.stream().anyMatch(option -> "pet-pack".equals(option.id()) && option.placeholder()));
+    // No legacy "Pet AI is coming soon" pack — every pet is real and selectable.
+    assertFalse(pets.stream().anyMatch(option -> "pet-pack".equals(option.id())));
+    assertFalse(pets.stream().anyMatch(CosmeticOption::placeholder));
   }
 
   @Test

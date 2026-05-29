@@ -81,6 +81,38 @@ final class PetMovementMathTest {
     assertTrue(dist < 0.35D);
   }
 
+  @Test
+  void glideStopsInsideArriveRadius() {
+    // Within ~0.28 blocks (< the 0.45 arrive radius) the pet holds still
+    // instead of buzzing back and forth.
+    Vector velocity = PetMovementMath.glideVelocity(locationAt(0, 64, 0), locationAt(0.2, 64, 0.2));
+    assertEquals(0.0, velocity.length(), 1e-9);
+  }
+
+  @Test
+  void glideCapsSpeedWhenFarAndPointsAtTarget() {
+    Vector velocity = PetMovementMath.glideVelocity(locationAt(0, 64, 0), locationAt(10, 64, 0));
+    assertEquals(0.6, velocity.length(), 1e-6); // capped at GLIDE_MAX_PER_TICK
+    assertTrue(velocity.getX() > 0); // heads toward the target
+  }
+
+  @Test
+  void glideEasesDownWhenClose() {
+    // 1 block away -> speed eases to len * GLIDE_EASE = 0.5 (below the cap),
+    // so it decelerates smoothly into the target.
+    Vector velocity = PetMovementMath.glideVelocity(locationAt(0, 64, 0), locationAt(1.0, 64, 0));
+    assertEquals(0.5, velocity.length(), 1e-6);
+  }
+
+  @Test
+  void faceYawEasesTowardTravelDirection() {
+    Location current = locationAt(0, 64, 0); // yaw 0
+    Location desired = locationAt(5, 64, 0); // travel toward +x -> yaw -90
+    float yaw = PetMovementMath.faceYaw(current, desired, current.getYaw(), 0f);
+    // Eased 40% of the way from 0 toward -90.
+    assertEquals(-36.0, yaw, 0.5);
+  }
+
   private static Location locationAt(double x, double y, double z) {
     return locationAt(x, y, z, 0f);
   }
