@@ -2,7 +2,9 @@
 
 import Image from "next/image"
 import Link from "next/link"
-import { Minus, Plus, ShieldCheck, ShoppingCart, Trash2 } from "lucide-react"
+import { Minus, Plus, ShoppingCart, Trash2 } from "lucide-react"
+
+import { CheckIcon } from "@/components/minecraft-icons"
 import { useMemo, useState } from "react"
 
 import { Badge } from "@/components/ui/badge"
@@ -274,7 +276,7 @@ export function Storefront() {
                             <ul className="grid gap-2 text-sm text-muted-foreground">
                               {product.details.map((detail) => (
                                 <li key={detail} className="flex gap-2">
-                                  <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-emerald-200" />
+                                  <CheckIcon className="mt-0.5 h-4 w-4 shrink-0" />
                                   <span>{detail}</span>
                                 </li>
                               ))}

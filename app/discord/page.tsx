@@ -1,7 +1,8 @@
 import type { Metadata } from "next"
 import Link from "next/link"
-import { ExternalLink, Radio, UsersRound } from "lucide-react"
+import { ExternalLink } from "lucide-react"
 
+import { BellIcon, SteveHeadIcon } from "@/components/minecraft-icons"
 import { Reveal } from "@/components/reveal"
 import { Button } from "@/components/ui/button"
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -37,7 +38,7 @@ export default function DiscordPage() {
         <div className="grid gap-5">
           <Card className="minecraft-card">
             <CardHeader>
-              <UsersRound className="h-5 w-5 text-amber-200" />
+              <SteveHeadIcon className="h-5 w-5" />
               <CardTitle>Online members</CardTitle>
               <CardDescription>
                 Discord widget integration is ready for a server widget ID or bot-backed member endpoint.
@@ -46,7 +47,7 @@ export default function DiscordPage() {
           </Card>
           <Card className="minecraft-card">
             <CardHeader>
-              <Radio className="h-5 w-5 text-emerald-200" />
+              <BellIcon className="h-5 w-5" />
               <CardTitle>Live network announcements</CardTitle>
               <CardDescription>
                 Updates, maintenance, launches, votes, and tournament cards can publish to web and Discord together.
