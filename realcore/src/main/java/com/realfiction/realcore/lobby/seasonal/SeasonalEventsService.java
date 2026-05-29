@@ -1,7 +1,9 @@
 package com.realfiction.realcore.lobby.seasonal;
 
 import com.realfiction.realcore.lobby.LobbyManager;
+import com.realfiction.realcore.luckperms.LuckPermsService;
 import com.realfiction.realcore.scheduler.RealCoreScheduler;
+import java.io.File;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
@@ -67,6 +69,20 @@ public final class SeasonalEventsService {
 
   public SeasonalCelebrationService celebration() {
     return celebration;
+  }
+
+  /**
+   * Forwards US 250 founding-grant config to the celebration service.
+   *
+   * Called by {@code RealCorePlugin} once both LobbyManager (this
+   * service's owner) AND LuckPermsService have finished booting — the
+   * plugin instantiates them in that order so they can't be wired at
+   * construction time. Safe to call with null arguments; the
+   * celebration service falls through to a logged-warning skip on the
+   * grant path when LuckPerms isn't available.
+   */
+  public void configureUs250Founding(LuckPermsService luckPerms, File pluginDataFolder) {
+    celebration.configureUs250Founding(luckPerms, pluginDataFolder);
   }
 
   public SeasonalEventRegistry registry() {

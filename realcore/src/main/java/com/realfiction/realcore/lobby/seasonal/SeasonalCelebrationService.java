@@ -2,8 +2,15 @@ package com.realfiction.realcore.lobby.seasonal;
 
 import com.realfiction.realcore.lobby.LobbyConfig;
 import com.realfiction.realcore.lobby.LobbyManager;
+import com.realfiction.realcore.luckperms.LuckPermsService;
 import com.realfiction.realcore.scheduler.RealCoreScheduler;
 import com.realfiction.realcore.scheduler.ScheduledTaskHandle;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.PrintWriter;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -16,6 +23,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.Supplier;
@@ -24,8 +33,10 @@ import java.util.logging.Logger;
 import org.bukkit.Bukkit;
 import org.bukkit.Color;
 import org.bukkit.Location;
+import org.bukkit.Particle;
 import org.bukkit.Sound;
 import org.bukkit.SoundCategory;
+import org.bukkit.World;
 import org.bukkit.entity.Player;
 
 /**
@@ -110,8 +121,11 @@ public final class SeasonalCelebrationService {
   static {
     BANNERS.put(SeasonalAmbienceTheme.INDEPENDENCE_DAY,
         new Banner("REALFICTION", "USA", Color.fromRGB(220, 32, 48), Color.fromRGB(28, 73, 209)));
+    // US 250: "250 YEARS" tagline (Phase 3 spec — the headline text for
+    // the America 250 anniversary celebration). The bitmap font already has
+    // every glyph needed: 2, 5, 0, space, Y, E, A, R, S.
     BANNERS.put(SeasonalAmbienceTheme.US250_INDEPENDENCE_DAY,
-        new Banner("REALFICTION", "USA 250", Color.WHITE, Color.fromRGB(28, 73, 209)));
+        new Banner("REALFICTION", "250 YEARS", Color.WHITE, Color.fromRGB(255, 215, 0)));
     BANNERS.put(SeasonalAmbienceTheme.MEMORIAL_DAY,
         new Banner("REALFICTION", "HONOR THEM", Color.WHITE, Color.fromRGB(28, 73, 209)));
     BANNERS.put(SeasonalAmbienceTheme.VETERANS_DAY,
@@ -185,6 +199,10 @@ public final class SeasonalCelebrationService {
     ));
   }
 
+  // === US 250 founding-permission constants ===
+  static final String US250_FOUNDING_PERMISSION = "realfiction.event.us250.founding";
+  static final String US250_FOUNDING_LEDGER_FILENAME = "us250-founders.txt";
+
   // === dependencies ===
   private final RealCoreScheduler scheduler;
   private final Supplier<LobbyManager> lobbySupplier;
@@ -205,10 +223,35 @@ public final class SeasonalCelebrationService {
    * midnight and the next zone's midnight is rare enough to accept a
    * duplicate.
    */
-  private final java.util.Set<String> firedAnthemKeys = ConcurrentHashMap.newKeySet();
+  private final Set<String> firedAnthemKeys = ConcurrentHashMap.newKeySet();
   private final Map<String, Integer> broadcastCycleIndex = new ConcurrentHashMap<>();
   private volatile boolean running;
   private volatile String lastFailure = "";
+
+  // === US 250 founding-permission state (Phase 3) ===
+  /**
+   * Optional LuckPerms reference for granting the founding permission.
+   * Injected post-construction via {@link #configureUs250Founding} once
+   * the plugin has finished booting LuckPerms (LuckPerms is created
+   * AFTER LobbyManager in RealCorePlugin, so it can't be constructor-
+   * injected here). If null, founding grants are skipped with a logged
+   * warning rather than failing the midnight tick.
+   */
+  private volatile LuckPermsService luckPerms;
+  /**
+   * Append-only ledger file: one UUID per line. Used to prove a player
+   * has already received the founding permission so a server restart or
+   * a second/third time-zone midnight tick doesn't re-grant.
+   */
+  private volatile File foundingLedgerFile;
+  /**
+   * In-memory mirror of the ledger file, loaded on {@link
+   * #configureUs250Founding} and updated atomically when we grant.
+   * Backed by {@link ConcurrentHashMap#newKeySet()} so the midnight
+   * tick (global scheduler thread) and the LuckPerms async callback
+   * (LuckPerms internal executor) can both touch it safely.
+   */
+  private final Set<UUID> foundingGranted = ConcurrentHashMap.newKeySet();
 
   public SeasonalCelebrationService(
       RealCoreScheduler scheduler,
@@ -274,6 +317,81 @@ public final class SeasonalCelebrationService {
 
   public String lastFailure() {
     return lastFailure;
+  }
+
+  /**
+   * Post-construction injection of the LuckPerms hook + plugin data
+   * folder used by the US 250 midnight prestige grant.
+   *
+   * The plugin boot order in {@code RealCorePlugin} is LobbyManager
+   * first, then LuckPerms — so we can't take these as constructor args.
+   * The plugin calls this once after both services are alive.
+   *
+   * Loads any existing entries from the founding ledger into the
+   * in-memory dedup set so a restart between time-zone midnight ticks
+   * (or between holidays) does NOT cause double-grants.
+   *
+   * Safe to call with {@code luckPerms = null} or {@code dataFolder =
+   * null} — the grant path skips with a logged warning rather than
+   * crashing the midnight tick.
+   */
+  public synchronized void configureUs250Founding(LuckPermsService luckPerms, File pluginDataFolder) {
+    this.luckPerms = luckPerms;
+    if (pluginDataFolder == null) {
+      this.foundingLedgerFile = null;
+      logger.info("US 250 founding ledger: plugin data folder null, persistence disabled");
+      return;
+    }
+    if (!pluginDataFolder.exists() && !pluginDataFolder.mkdirs()) {
+      logger.warning("US 250 founding ledger: could not create plugin data folder "
+          + pluginDataFolder.getPath());
+      this.foundingLedgerFile = null;
+      return;
+    }
+    this.foundingLedgerFile = new File(pluginDataFolder, US250_FOUNDING_LEDGER_FILENAME);
+    loadFoundingLedger();
+  }
+
+  private void loadFoundingLedger() {
+    File file = foundingLedgerFile;
+    if (file == null || !file.exists()) {
+      return;
+    }
+    try {
+      List<String> lines = Files.readAllLines(file.toPath(), StandardCharsets.UTF_8);
+      int loaded = 0;
+      for (String raw : lines) {
+        String line = raw.trim();
+        if (line.isEmpty() || line.startsWith("#")) {
+          continue;
+        }
+        try {
+          if (foundingGranted.add(UUID.fromString(line))) {
+            loaded++;
+          }
+        } catch (IllegalArgumentException ignore) {
+          logger.fine("US 250 founding ledger: skipping non-UUID line '" + line + "'");
+        }
+      }
+      logger.info("US 250 founding ledger loaded with " + loaded + " entries from " + file.getPath());
+    } catch (IOException error) {
+      logger.log(Level.WARNING, "Could not read US 250 founding ledger at " + file.getPath(), error);
+    }
+  }
+
+  private synchronized void appendToFoundingLedger(UUID uuid) {
+    File file = foundingLedgerFile;
+    if (file == null) {
+      return;
+    }
+    try (PrintWriter writer = new PrintWriter(
+        new FileOutputStream(file, true), true, StandardCharsets.UTF_8)) {
+      writer.println(uuid.toString());
+    } catch (IOException error) {
+      logger.log(Level.WARNING,
+          "Could not append " + uuid + " to US 250 founding ledger at " + file.getPath(),
+          error);
+    }
   }
 
   // === firework tick — distant ring of bursts at random sky locations ===
@@ -394,6 +512,189 @@ public final class SeasonalCelebrationService {
               + " localDate=" + localDate);
       announceAnthem(event, zone);
       playAnthemForAllLobbyPlayers();
+      // US 250 specifically gets the big midnight visual show + the
+      // founding-permission grant. Other patriotic events still get the
+      // anthem + announce above but skip the big show / grant.
+      if (event.ambienceTheme() == SeasonalAmbienceTheme.US250_INDEPENDENCE_DAY) {
+        runUs250MidnightBigShow(zone);
+        grantUs250FoundingToLobbyPlayers();
+      }
+    }
+  }
+
+  // === US 250 midnight big show ===
+
+  /**
+   * Crazy red/white/blue/gold lobby show stacked on top of the regular
+   * anthem path. Four expanding firework rings, a heavy patriotic dust
+   * storm, the REALFICTION / 250 YEARS banner force-painted, and a
+   * full-screen Title + ActionBar for every lobby player. All work
+   * dispatched through the scheduler — Folia safe.
+   */
+  private void runUs250MidnightBigShow(ZoneEntry zone) {
+    SeasonalShowOrigin origin = ambience.origin();
+    if (!origin.valid()) {
+      logger.warning("US 250 midnight big show skipped: no valid origin");
+      return;
+    }
+    Location anchor = origin.location();
+
+    sendUs250MidnightTitle(zone);
+
+    // Force-paint the REALFICTION / 250 YEARS sky banner immediately
+    // (do not wait for the next 60s banner tick).
+    SeasonalParticleTextRenderer.renderBanner(
+        scheduler, anchor,
+        "REALFICTION", "250 YEARS",
+        Color.fromRGB(220, 32, 48),  // red
+        Color.fromRGB(255, 215, 0)   // gold
+    );
+
+    // Four expanding firework rings: red/white/blue palette plus a
+    // gold-accent variant. Each ring delayed so they read as a
+    // ramping-up climax instead of one chaotic flash.
+    SeasonalEffectPalette patriotic = SeasonalEffectPalette.patriotic();
+    SeasonalEffectPalette gold = new SeasonalEffectPalette(
+        Color.fromRGB(255, 215, 0),
+        Color.fromRGB(220, 32, 48),
+        Color.fromRGB(28, 73, 209),
+        Color.WHITE,
+        org.bukkit.FireworkEffect.Type.STAR);
+
+    scheduleRingFor(anchor, 12, patriotic, 0L);
+    scheduleRingFor(anchor, 16, gold,      30L);   // +1.5s
+    scheduleRingFor(anchor, 20, patriotic, 60L);   // +3.0s
+    scheduleRingFor(anchor, 24, gold,      100L);  // +5.0s — climax
+
+    // Heavy patriotic dust storm at t=0.
+    schedulePatrioticParticleStorm(anchor);
+  }
+
+  private void scheduleRingFor(Location anchor, int count, SeasonalEffectPalette palette, long delayTicks) {
+    ScheduledTaskHandle handle = scheduler.runGlobalLater(
+        () -> fireworkShowService.launchRing(anchor, count, palette),
+        delayTicks);
+    if (handle == null) {
+      // Scheduler refused; fall back to immediate fire so we don't
+      // silently drop a ring.
+      fireworkShowService.launchRing(anchor, count, palette);
+    }
+  }
+
+  private void schedulePatrioticParticleStorm(Location anchor) {
+    scheduler.runGlobal(() -> {
+      World world = anchor.getWorld();
+      if (world == null) {
+        return;
+      }
+      ThreadLocalRandom random = ThreadLocalRandom.current();
+      // Big visible bursts above the spawn.
+      world.spawnParticle(Particle.FIREWORK, anchor.clone().add(0, 5, 0), 80, 8, 4, 8, 0.1);
+      world.spawnParticle(Particle.TOTEM_OF_UNDYING, anchor.clone().add(0, 4, 0), 40, 6, 3, 6, 0.05);
+
+      Particle.DustOptions red = new Particle.DustOptions(Color.fromRGB(220, 32, 48), 1.6f);
+      Particle.DustOptions white = new Particle.DustOptions(Color.WHITE, 1.6f);
+      Particle.DustOptions blue = new Particle.DustOptions(Color.fromRGB(28, 73, 209), 1.6f);
+      Particle.DustOptions gold = new Particle.DustOptions(Color.fromRGB(255, 215, 0), 1.4f);
+      for (int i = 0; i < 60; i++) {
+        double angle = random.nextDouble() * Math.PI * 2;
+        double radius = 4 + random.nextDouble() * 8;
+        double y = 2 + random.nextDouble() * 6;
+        Location point = anchor.clone().add(Math.cos(angle) * radius, y, Math.sin(angle) * radius);
+        Particle.DustOptions choice = switch (i % 4) {
+          case 0 -> red;
+          case 1 -> white;
+          case 2 -> blue;
+          default -> gold;
+        };
+        world.spawnParticle(Particle.DUST, point, 4, 0.3, 0.3, 0.3, 0, choice, true);
+      }
+    });
+  }
+
+  private void sendUs250MidnightTitle(ZoneEntry zone) {
+    LobbyManager lobby = lobbySupplier.get();
+    if (lobby == null) {
+      return;
+    }
+    LobbyConfig config = lobby.config();
+    String title = "§c§l✯ §e§lUS 250 §c§l✯";
+    String subtitle = "§f§l250 YEARS";
+    String actionBar = "§6§lMIDNIGHT §7— §f§lRealFiction§6§l celebrates §c§lAmerica's 250th §7("
+        + zone.label() + ")";
+    for (Player player : Bukkit.getOnlinePlayers()) {
+      if (player.getWorld() != null && config.isLobbyWorld(player.getWorld().getName())) {
+        scheduler.runForPlayer(player, () -> {
+          if (!player.isOnline()) {
+            return;
+          }
+          // Long fade-in / hold / fade-out so the title reads as the
+          // climax of the show, not a tooltip flash.
+          player.sendTitle(title, subtitle, 10, 100, 30);
+          player.sendActionBar(actionBar);
+        });
+      }
+    }
+  }
+
+  /**
+   * One-time LuckPerms prestige grant. Idempotent: dedup'd through both
+   * the in-memory {@link #foundingGranted} set AND the persisted
+   * {@link #foundingLedgerFile} so a restart between time-zone midnight
+   * ticks (or between event years) does NOT double-grant.
+   *
+   * The actual permission write goes through {@code LuckPermsService.
+   * grantPermission(uuid, permission, duration)} with {@code duration =
+   * null} — confirmed permanent (no expiry node attached).
+   *
+   * If LuckPerms isn't available (plugin not installed / not yet loaded)
+   * the call logs a warning and continues so the rest of the midnight
+   * show still fires.
+   */
+  private void grantUs250FoundingToLobbyPlayers() {
+    LuckPermsService perms = this.luckPerms;
+    if (perms == null || !perms.available()) {
+      logger.warning("US 250 founding grant skipped: LuckPerms not available");
+      return;
+    }
+    LobbyManager lobby = lobbySupplier.get();
+    if (lobby == null) {
+      return;
+    }
+    LobbyConfig config = lobby.config();
+    int newGrants = 0;
+    for (Player player : Bukkit.getOnlinePlayers()) {
+      if (player.getWorld() == null || !config.isLobbyWorld(player.getWorld().getName())) {
+        continue;
+      }
+      UUID uuid = player.getUniqueId();
+      // ConcurrentHashMap-backed set: add() returns false if already
+      // present so we won't try to write the ledger twice for the same
+      // UUID even under concurrent zone ticks.
+      if (!foundingGranted.add(uuid)) {
+        continue;
+      }
+      appendToFoundingLedger(uuid);
+      newGrants++;
+      String playerName = player.getName();
+      perms.grantPermission(uuid, US250_FOUNDING_PERMISSION, null)
+          .whenComplete((unused, error) -> {
+            if (error != null) {
+              logger.log(Level.WARNING,
+                  "US 250 founding grant failed for " + uuid + " (" + playerName + ")",
+                  error);
+              // Don't roll back the ledger — the failure could be
+              // transient and the player can be re-granted manually by
+              // an admin. Removing from the ledger would risk the next
+              // tick double-granting if LuckPerms recovers.
+            } else {
+              logger.info("US 250 founding permission granted to " + uuid + " (" + playerName + ")");
+            }
+          });
+    }
+    if (newGrants > 0) {
+      logger.info("US 250 midnight: granted " + US250_FOUNDING_PERMISSION + " to "
+          + newGrants + " player(s) this tick");
     }
   }
 

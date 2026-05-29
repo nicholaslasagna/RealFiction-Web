@@ -153,6 +153,15 @@ public final class RealCorePlugin extends JavaPlugin {
     pluginManager.registerEvents(new LobbyItemListener(lobbyManager), this);
     pluginManager.registerEvents(new MenuListener(lobbyManager.menuService()), this);
     lobbyManager.start();
+    // Phase 3 wiring: the seasonal celebration service can't take
+    // LuckPerms at construction (LobbyManager runs before
+    // LuckPermsService.create in reloadRealCore — actually after, but
+    // before this setup method finishes), so we forward LuckPerms +
+    // the plugin data folder once both are guaranteed to exist. Calling
+    // this with luckPermsService=null is safe; the service skips the
+    // founding-grant path with a logged warning rather than crashing.
+    lobbyManager.seasonalEventsService()
+        .configureUs250Founding(luckPermsService, getDataFolder());
     getLogger().info("RealCore lobby module loaded (" + lobbyManager.menuRegistry().count()
         + " menus, worlds: " + String.join(", ", lobbyManager.config().worlds()) + ").");
   }
