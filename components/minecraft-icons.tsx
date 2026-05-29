@@ -386,3 +386,62 @@ export function GrassBlockIcon({ size = 22, ...rest }: IconProps) {
     rest
   )
 }
+
+/** Written book — support / write to us. */
+export function BookIcon({ size = 22, ...rest }: IconProps) {
+  return pixelSvg(
+    size,
+    <>
+      {/* spine */}
+      <rect x="3" y="2" width="2" height="12" fill="#6f2a2a" />
+      {/* cover */}
+      <rect x="5" y="2" width="7" height="12" fill="#9a3b3b" />
+      <rect x="5" y="2" width="7" height="1" fill="#bd5a5a" />
+      {/* page edges (opening side) */}
+      <rect x="12" y="3" width="2" height="10" fill="#f1ead8" />
+      <rect x="13" y="3" width="1" height="10" fill="#cfc6ad" />
+      {/* gold binding bands */}
+      <rect x="6" y="5" width="5" height="1" fill="#f2c66d" />
+      <rect x="6" y="10" width="5" height="1" fill="#f2c66d" />
+      {/* outline */}
+      <rect x="3" y="2" width="1" height="12" fill="#3a1414" />
+      <rect x="3" y="2" width="9" height="1" fill="#3a1414" />
+      <rect x="3" y="13" width="9" height="1" fill="#3a1414" />
+      <rect x="12" y="13" width="2" height="1" fill="#3a1414" />
+    </>,
+    rest
+  )
+}
+
+/** Emerald — business / trade. */
+export function EmeraldIcon({ size = 22, ...rest }: IconProps) {
+  return pixelSvg(
+    size,
+    <>
+      {/* body */}
+      <rect x="6" y="2" width="4" height="1" fill="#34c878" />
+      <rect x="5" y="3" width="6" height="1" fill="#34c878" />
+      <rect x="4" y="4" width="8" height="6" fill="#34c878" />
+      <rect x="5" y="10" width="6" height="1" fill="#34c878" />
+      <rect x="6" y="11" width="4" height="1" fill="#34c878" />
+      <rect x="7" y="12" width="2" height="1" fill="#34c878" />
+      {/* light facet (top-left) */}
+      <rect x="5" y="3" width="3" height="1" fill="#7af0ac" />
+      <rect x="4" y="4" width="2" height="3" fill="#5fe89a" />
+      {/* dark facet (bottom-right) */}
+      <rect x="10" y="4" width="2" height="6" fill="#1f9e57" />
+      <rect x="8" y="10" width="3" height="1" fill="#1f9e57" />
+      {/* center seam + sparkle */}
+      <rect x="8" y="3" width="1" height="9" fill="#26a861" />
+      <rect x="6" y="5" width="1" height="1" fill="#ffffff" />
+      {/* outline */}
+      <rect x="6" y="1" width="4" height="1" fill="#10502e" />
+      <rect x="4" y="3" width="1" height="1" fill="#10502e" />
+      <rect x="11" y="3" width="1" height="1" fill="#10502e" />
+      <rect x="3" y="4" width="1" height="6" fill="#10502e" />
+      <rect x="12" y="4" width="1" height="6" fill="#10502e" />
+      <rect x="7" y="13" width="2" height="1" fill="#10502e" />
+    </>,
+    rest
+  )
+}

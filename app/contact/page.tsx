@@ -1,7 +1,7 @@
 import type { Metadata } from "next"
-import { Mail, MessageSquareWarning, ShieldCheck } from "lucide-react"
 
 import { ContactForm } from "@/components/contact-form"
+import { BookIcon, EmeraldIcon, SteveHeadIcon } from "@/components/minecraft-icons"
 import { Reveal } from "@/components/reveal"
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 
@@ -22,16 +22,16 @@ export default function ContactPage() {
           </p>
           <div className="mt-7 grid gap-4">
             {[
-              { title: "Support", value: "support@realfiction.live", icon: Mail },
-              { title: "Business", value: "business@realfiction.live", icon: ShieldCheck },
-              { title: "Account help", value: "Use the form with your username or order ID", icon: MessageSquareWarning }
+              { title: "Support", value: "support@realfiction.live", icon: BookIcon },
+              { title: "Business", value: "business@realfiction.live", icon: EmeraldIcon },
+              { title: "Account help", value: "Use the form with your username or order ID", icon: SteveHeadIcon }
             ].map((item) => {
               const Icon = item.icon
 
               return (
                 <Card key={item.title} className="minecraft-card">
                   <CardHeader>
-                    <Icon className="h-5 w-5 text-amber-200" />
+                    <Icon size={22} />
                     <CardTitle>{item.title}</CardTitle>
                     <CardDescription>{item.value}</CardDescription>
                   </CardHeader>
