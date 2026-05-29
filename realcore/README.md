@@ -39,7 +39,7 @@ mvn clean package
 The plugin jar is written to:
 
 ```text
-realcore/target/RealCore-0.1.0-SNAPSHOT.jar
+realcore/target/RealCore.jar
 ```
 
 For first staging deployment, follow:

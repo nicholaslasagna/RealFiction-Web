@@ -138,7 +138,7 @@ final class RewardDispatcherLedgerWriteTest {
     RecordingTransport transport = new RecordingTransport(response);
     VoteRewardLedgerWriteService writer = new VoteRewardLedgerWriteService(config, transport, Logger.getLogger("test"));
     RewardDispatcher dispatcher = new RewardDispatcher(
-        Logger.getLogger("test"), config, scheduler, new NoopLuckPerms(), null, writer);
+        Logger.getLogger("test"), config, scheduler, new NoopLuckPerms(), null, writer, null);
     return new Fixture(dispatcher, scheduler, transport, writer);
   }
 

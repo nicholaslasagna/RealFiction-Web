@@ -1,5 +1,6 @@
 package com.realfiction.realcore.lobby;
 
+import com.realfiction.realcore.lobby.seasonal.SeasonalEventsService;
 import com.realfiction.realcore.menu.MenuRegistry;
 import com.realfiction.realcore.menu.MenuService;
 import com.realfiction.realcore.proxy.ProxyService;
@@ -44,6 +45,7 @@ public final class LobbyManager {
   private final LobbyFlightService flightService;
   private final MenuService menuService;
   private final ScoreboardService scoreboardService;
+  private final SeasonalEventsService seasonalEventsService;
   private boolean started;
 
   public LobbyManager(JavaPlugin plugin, RealCoreScheduler scheduler, FileConfiguration initialConfig) {
@@ -57,6 +59,7 @@ public final class LobbyManager {
     this.flightService = new LobbyFlightService(scheduler);
     this.menuService = new MenuService(plugin, scheduler, proxyService, this::menuRegistry);
     this.scoreboardService = new ScoreboardService(plugin, scheduler, this::config);
+    this.seasonalEventsService = new SeasonalEventsService(scheduler, () -> this, plugin.getLogger());
   }
 
   public LobbyConfig config() {
@@ -87,6 +90,10 @@ public final class LobbyManager {
     return proxyService;
   }
 
+  public SeasonalEventsService seasonalEventsService() {
+    return seasonalEventsService;
+  }
+
   public void start() {
     if (started) {
       return;
@@ -95,6 +102,7 @@ public final class LobbyManager {
     if (config.enabled() && config.scoreboard().enabled()) {
       scoreboardService.start();
     }
+    seasonalEventsService.start();
     started = true;
   }
 
@@ -117,9 +125,11 @@ public final class LobbyManager {
         }
       });
     }
+    seasonalEventsService.reload();
   }
 
   public void shutdown() {
+    seasonalEventsService.stop();
     scoreboardService.stop();
     proxyService.unregister();
     started = false;

@@ -1,8 +1,15 @@
 package com.realfiction.realcore.command;
 
 import com.realfiction.realcore.RealCorePlugin;
+import com.realfiction.realcore.cosmetics.CosmeticsManager;
 import com.realfiction.realcore.config.RealCoreConfig;
+import com.realfiction.realcore.doctor.DoctorCheck;
+import com.realfiction.realcore.doctor.RealCoreDoctor;
+import com.realfiction.realcore.rewards.ProductPermissionResolver;
+import com.realfiction.realcore.rewards.RewardPollTelemetry;
+import com.realfiction.realcore.rewards.RewardPoller;
 import com.realfiction.realcore.lobby.LobbyManager;
+import com.realfiction.realcore.lobby.seasonal.SeasonalEventsService;
 import com.realfiction.realcore.playtime.PlaytimeTracker;
 import com.realfiction.realcore.scheduler.RealCoreScheduler;
 import com.realfiction.realcore.config.StatsConfig;
@@ -60,7 +67,7 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
   @Override
   public boolean onCommand(@NotNull CommandSender sender, @NotNull Command command, @NotNull String label, String[] args) {
     if ("cosmetics".equalsIgnoreCase(command.getName())) {
-      return handleCosmetics(sender);
+      return handleCosmetics(sender, args);
     }
 
     String sub = args.length >= 1 ? args[0].toLowerCase(java.util.Locale.ROOT) : "";
@@ -75,7 +82,9 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
       case "economy":
         return handleEconomy(sender, args);
       case "rewards":
-        return handleRewards(sender);
+        return handleRewards(sender, args);
+      case "doctor":
+        return handleDoctor(sender, args);
       case "link":
         return handleLink(sender, args);
       case "menu":
@@ -83,7 +92,9 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
       case "lobbies":
         return handleOpenMenu(sender, "lobby-selector");
       case "cosmetics":
-        return handleCosmetics(sender);
+        return handleCosmetics(sender, args);
+      case "seasonal":
+        return handleSeasonal(sender, args);
       case "spawn":
         return handleSpawn(sender);
       case "setspawn":
@@ -115,24 +126,226 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
     return true;
   }
 
-  private boolean handleRewards(CommandSender sender) {
+  private boolean handleRewards(CommandSender sender, String[] args) {
     if (!sender.hasPermission("realcore.admin")) {
       send(sender, ChatColor.RED + "You do not have permission to do that.");
       return true;
     }
-    send(sender, ChatColor.GOLD + "RealCore Reward Reliability");
-    send(sender, ChatColor.YELLOW + "Reward polling: " + statusText(plugin.rewardPollingActive()));
-    send(sender, ChatColor.YELLOW + "Locally delivered (ledger): " + ChatColor.WHITE + plugin.deliveredLedgerSize());
-    send(sender, ChatColor.YELLOW + "Pending acknowledgements: " + ChatColor.WHITE + plugin.pendingAckCount());
-    List<String> pending = plugin.pendingAckSummaries(10);
-    if (pending.isEmpty()) {
-      send(sender, ChatColor.GRAY + "No rewards awaiting acknowledgement.");
-    } else {
-      for (String line : pending) {
-        send(sender, ChatColor.GRAY + " - " + line);
+    String action = args.length >= 2 ? args[1].toLowerCase(Locale.ROOT) : "status";
+    return switch (action) {
+      case "pending" -> {
+        sendRewardPending(sender);
+        yield true;
       }
+      case "last" -> {
+        sendRewardLast(sender);
+        yield true;
+      }
+      case "retry" -> handleRewardRetry(sender, args);
+      default -> {
+        sendRewardStatus(sender);
+        yield true;
+      }
+    };
+  }
+
+  private boolean handleDoctor(CommandSender sender, String[] args) {
+    if (!sender.hasPermission("realcore.admin")) {
+      send(sender, ChatColor.RED + "You do not have permission to do that.");
+      return true;
+    }
+    String section = args.length >= 2 ? args[1].toLowerCase(Locale.ROOT) : "all";
+    boolean any = false;
+    if ("rewards".equals(section) || "all".equals(section)) {
+      send(sender, ChatColor.GOLD + "RealCore Doctor — Rewards");
+      for (DoctorCheck check : RealCoreDoctor.rewards(plugin)) {
+        send(sender, colorForDoctor(check.level()) + check.formatLine());
+      }
+      any = true;
+    }
+    if ("seasonal".equals(section) || "all".equals(section)) {
+      send(sender, ChatColor.GOLD + "RealCore Doctor — Seasonal");
+      for (DoctorCheck check : RealCoreDoctor.seasonal(plugin)) {
+        send(sender, colorForDoctor(check.level()) + check.formatLine());
+      }
+      any = true;
+    }
+    if (!any) {
+      send(sender, ChatColor.YELLOW + "Usage: /rf doctor [rewards|seasonal|all]");
     }
     return true;
+  }
+
+  private boolean handleSeasonal(CommandSender sender, String[] args) {
+    if (!sender.hasPermission("realcore.admin")) {
+      send(sender, ChatColor.RED + "You do not have permission to do that.");
+      return true;
+    }
+    LobbyManager lobby = plugin.lobbyManager();
+    if (lobby == null) {
+      send(sender, ChatColor.RED + "Lobby module is not loaded.");
+      return true;
+    }
+    SeasonalEventsService seasonal = lobby.seasonalEventsService();
+    String action = args.length >= 2 ? args[1].toLowerCase(Locale.ROOT) : "status";
+    return switch (action) {
+      case "preview" -> handleSeasonalPreview(sender, args, seasonal);
+      case "stoppreview" -> {
+        seasonal.stopPreview();
+        send(sender, ChatColor.GREEN + "Seasonal preview stopped (show lock and scheduled tasks cleared).");
+        yield true;
+      }
+      default -> {
+        sendSeasonalStatus(sender, seasonal);
+        yield true;
+      }
+    };
+  }
+
+  private boolean handleSeasonalPreview(CommandSender sender, String[] args, SeasonalEventsService seasonal) {
+    if (args.length < 3 || args[2].isBlank()) {
+      send(sender, ChatColor.YELLOW + "Usage: /rf seasonal preview <eventId>");
+      send(sender, ChatColor.GRAY + "Valid ids: " + com.realfiction.realcore.lobby.seasonal.SeasonalPreviewCatalog.validIdsMessage());
+      return true;
+    }
+    com.realfiction.realcore.lobby.seasonal.SeasonalPreviewController.PreviewStartResult result =
+        seasonal.preview(args[2], sender);
+    if (!result.success()) {
+      send(sender, ChatColor.RED + "Could not start seasonal preview: " + result.message() + ".");
+      return true;
+    }
+    send(sender, ChatColor.GREEN + result.message());
+    return true;
+  }
+
+  private void sendSeasonalStatus(CommandSender sender, SeasonalEventsService seasonal) {
+    SeasonalEventsService.SeasonalStatus status = seasonal.status();
+    send(sender, ChatColor.GOLD + "RealCore Seasonal");
+    send(sender, ChatColor.YELLOW + "Seasonal service loaded: " + ChatColor.WHITE + status.seasonalServiceLoaded());
+    send(sender, ChatColor.YELLOW + "Calendar active event: " + ChatColor.WHITE
+        + (status.calendarActiveEventId().isBlank() ? "none" : status.calendarActiveEventId()));
+    send(sender, ChatColor.YELLOW + "Effective event: " + ChatColor.WHITE
+        + (status.effectiveEventId().isBlank() ? "none" : status.effectiveEventId()));
+    send(sender, ChatColor.YELLOW + "Preview running: " + ChatColor.WHITE + status.previewRunning());
+    send(sender, ChatColor.YELLOW + "Preview id: " + ChatColor.WHITE
+        + (status.previewId().isBlank() ? "none" : status.previewId()));
+    send(sender, ChatColor.YELLOW + "Show lock running: " + ChatColor.WHITE + status.showLockRunning());
+    send(sender, ChatColor.YELLOW + "Ambience preview override: " + ChatColor.WHITE
+        + (status.ambiencePreviewEventId().isBlank() ? "none" : status.ambiencePreviewEventId()));
+    send(sender, ChatColor.YELLOW + "Spawn ambience running: " + ChatColor.WHITE + status.spawnAmbienceRunning());
+    send(sender, ChatColor.YELLOW + "Ambience theme: " + ChatColor.WHITE + status.ambienceTheme());
+    send(sender, ChatColor.YELLOW + "Configured lobby worlds: " + ChatColor.WHITE + status.configuredLobbyWorlds());
+    send(sender, ChatColor.YELLOW + "Loaded lobby worlds: " + ChatColor.WHITE + status.loadedLobbyWorlds());
+    send(sender, ChatColor.YELLOW + "Available worlds: " + ChatColor.GRAY + status.availableWorlds());
+    send(sender, ChatColor.YELLOW + "Resolved preview origin: " + ChatColor.WHITE + status.resolvedPreviewOrigin());
+    send(sender, ChatColor.YELLOW + "Last preview start: " + ChatColor.WHITE
+        + (status.lastPreviewStart().isBlank() ? "never" : status.lastPreviewStart()));
+    if (status.lastPreviewFailure() != null && !status.lastPreviewFailure().isBlank()) {
+      send(sender, ChatColor.YELLOW + "Last preview failure: " + ChatColor.RED + status.lastPreviewFailure());
+    }
+    send(sender, ChatColor.YELLOW + "Lobby players: " + ChatColor.WHITE + status.lobbyPlayerCount());
+    if (status.lastAmbienceFailure() != null && !status.lastAmbienceFailure().isBlank()) {
+      send(sender, ChatColor.YELLOW + "Last ambience issue: " + ChatColor.RED + status.lastAmbienceFailure());
+    }
+    send(sender, ChatColor.GRAY + "Registered events: " + status.registeredEvents());
+  }
+
+  private ChatColor colorForDoctor(com.realfiction.realcore.doctor.DoctorLevel level) {
+    return switch (level) {
+      case PASS -> ChatColor.GREEN;
+      case WARN -> ChatColor.YELLOW;
+      case FAIL -> ChatColor.RED;
+    };
+  }
+
+  private void sendRewardStatus(CommandSender sender) {
+    RealCoreConfig config = plugin.realCoreConfig();
+    RewardPoller poller = plugin.rewardPoller();
+    RewardPollTelemetry telemetry = poller == null ? null : poller.telemetry();
+
+    send(sender, ChatColor.GOLD + "RealCore Rewards Status");
+    send(sender, ChatColor.YELLOW + "Module rewards: "
+        + (config != null && config.modules().rewards() ? ChatColor.GREEN + "enabled" : ChatColor.RED + "disabled"));
+    send(sender, ChatColor.YELLOW + "Poller: " + statusText(plugin.rewardPollingActive()));
+    send(sender, ChatColor.YELLOW + "HMAC: "
+        + (config != null && config.hmacSecretConfigured() ? ChatColor.GREEN + "configured" : ChatColor.RED + "missing"));
+    send(sender, ChatColor.YELLOW + "Base URL: "
+        + ChatColor.WHITE + (config == null ? "unknown" : config.baseUrl()));
+    send(sender, ChatColor.YELLOW + "LuckPerms: " + statusText(plugin.luckPermsAvailable()));
+    send(sender, ChatColor.YELLOW + "Unsafe rewards: "
+        + (config != null && config.allowUnsafeRewards() ? ChatColor.RED + "allowed" : ChatColor.GREEN + "blocked"));
+    send(sender, ChatColor.YELLOW + "Product mappings: " + ChatColor.WHITE
+        + (config == null ? 0 : ProductPermissionResolver.effectiveMappings(config).size()));
+    send(sender, ChatColor.YELLOW + "Configured commands: " + ChatColor.WHITE + configuredRewardCommandCount(config));
+    send(sender, ChatColor.YELLOW + "Delivered (ledger): " + ChatColor.WHITE + plugin.deliveredLedgerSize());
+    send(sender, ChatColor.YELLOW + "Pending acks: " + ChatColor.WHITE + plugin.pendingAckCount());
+
+    if (telemetry != null) {
+      send(sender, ChatColor.YELLOW + "Last poll: " + ChatColor.WHITE
+          + (telemetry.lastPollAt() == null ? "never" : telemetry.lastPollAt()));
+      send(sender, ChatColor.YELLOW + "Last poll HTTP: " + ChatColor.WHITE + telemetry.lastPollHttpStatus());
+      send(sender, ChatColor.YELLOW + "Delivered count: " + ChatColor.WHITE + telemetry.deliveredCount());
+      send(sender, ChatColor.YELLOW + "Failed count: " + ChatColor.WHITE + telemetry.failedCount());
+      if (!telemetry.lastDeliveryFailure().isBlank()) {
+        send(sender, ChatColor.YELLOW + "Last failure: " + ChatColor.RED + telemetry.lastDeliveryFailure());
+      }
+      if (!telemetry.lastPollError().isBlank()) {
+        send(sender, ChatColor.YELLOW + "Last poll error: " + ChatColor.RED + telemetry.lastPollError());
+      }
+    }
+  }
+
+  private void sendRewardPending(CommandSender sender) {
+    send(sender, ChatColor.GOLD + "Pending reward acknowledgements (" + plugin.pendingAckCount() + ")");
+    List<String> pending = plugin.pendingAckSummaries(25);
+    if (pending.isEmpty()) {
+      send(sender, ChatColor.GRAY + "None.");
+      return;
+    }
+    for (String line : pending) {
+      send(sender, ChatColor.GRAY + " - " + line);
+    }
+  }
+
+  private void sendRewardLast(CommandSender sender) {
+    RewardPoller poller = plugin.rewardPoller();
+    RewardPollTelemetry telemetry = poller == null ? null : poller.telemetry();
+    send(sender, ChatColor.GOLD + "Last reward activity");
+    if (telemetry == null) {
+      send(sender, ChatColor.GRAY + "Poller not loaded.");
+      return;
+    }
+    send(sender, ChatColor.YELLOW + "Last reward id: " + ChatColor.WHITE + telemetry.lastDeliveredRewardId());
+    send(sender, ChatColor.YELLOW + "Last failure: " + ChatColor.WHITE + telemetry.lastDeliveryFailure());
+    send(sender, ChatColor.YELLOW + "Last poll error: " + ChatColor.WHITE + telemetry.lastPollError());
+  }
+
+  private boolean handleRewardRetry(CommandSender sender, String[] args) {
+    if (args.length < 3) {
+      send(sender, ChatColor.YELLOW + "Usage: /rf rewards retry <rewardId>");
+      return true;
+    }
+    String rewardId = args[2];
+    if (plugin.forceRetryRewardAck(rewardId)) {
+      send(sender, ChatColor.GREEN + "Queued immediate retry for rewardId=" + rewardId);
+    } else {
+      send(sender, ChatColor.RED + "No pending acknowledgement found for rewardId=" + rewardId);
+    }
+    return true;
+  }
+
+  private static int configuredRewardCommandCount(RealCoreConfig config) {
+    if (config == null) {
+      return 0;
+    }
+    int count = 0;
+    for (List<String> commands : config.commandsByRewardKey().values()) {
+      count += commands.size();
+    }
+    for (List<String> commands : config.commandsByProductSlug().values()) {
+      count += commands.size();
+    }
+    return count;
   }
 
   private boolean handleLink(CommandSender sender, String[] args) {
@@ -212,7 +425,15 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
     return true;
   }
 
-  private boolean handleCosmetics(CommandSender sender) {
+  private boolean handleCosmetics(CommandSender sender, String[] args) {
+    if (args.length >= 2 && "pets".equalsIgnoreCase(args[1])) {
+      if (!sender.hasPermission("realcore.admin")) {
+        send(sender, ChatColor.RED + "You do not have permission to do that.");
+        return true;
+      }
+      sendPetDiagnostics(sender);
+      return true;
+    }
     if (!(sender instanceof Player player)) {
       send(sender, "Only players can open cosmetics.");
       return true;
@@ -223,6 +444,22 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
     }
     plugin.cosmeticsManager().open(player);
     return true;
+  }
+
+  private void sendPetDiagnostics(CommandSender sender) {
+    CosmeticsManager cosmetics = plugin.cosmeticsManager();
+    if (cosmetics == null) {
+      send(sender, ChatColor.RED + "Cosmetics are not ready yet.");
+      return;
+    }
+    send(sender, ChatColor.GOLD + "RealCore Cosmetic Pets");
+    send(sender, ChatColor.YELLOW + "Definitions: " + ChatColor.WHITE + cosmetics.petDefinitionCount());
+    send(sender, ChatColor.YELLOW + "Active pets: " + ChatColor.WHITE + cosmetics.activePetCount());
+    send(sender, ChatColor.YELLOW + "Selected pets (online): " + ChatColor.WHITE + cosmetics.selectedPetCount());
+    send(sender, ChatColor.YELLOW + "Move interval: " + ChatColor.WHITE + cosmetics.petMoveTickPeriod() + " ticks");
+    String failure = cosmetics.lastPetSpawnFailure();
+    send(sender, ChatColor.YELLOW + "Last spawn failure: " + ChatColor.WHITE
+        + (failure == null || failure.isBlank() ? "none" : failure));
   }
 
   private boolean handleHelp(CommandSender sender, String label) {
@@ -281,9 +518,43 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
           + ChatColor.GRAY + " (" + lobby.menuRegistry().count() + ")");
     }
     send(sender, ChatColor.YELLOW + "Cosmetics: " + statusText(plugin.cosmeticsManager() != null));
+    appendCosmeticPetStatus(sender);
+    appendSeasonalStatus(sender);
     appendPlaytimeStatus(sender, config);
     appendNetworkStatsStatus(sender, config);
     appendEconomyStatus(sender);
+  }
+
+  private void appendSeasonalStatus(CommandSender sender) {
+    LobbyManager lobby = plugin.lobbyManager();
+    if (lobby == null || !lobby.config().enabled()) {
+      send(sender, ChatColor.YELLOW + "Seasonal ambience: " + ChatColor.GRAY + "lobby off");
+      return;
+    }
+    SeasonalEventsService.SeasonalStatus status = lobby.seasonalEventsService().status();
+    String active = status.previewRunning()
+        ? status.previewId() + " (cinematic preview)"
+        : (status.calendarActiveEventId().isBlank() ? "none" : status.calendarActiveEventId());
+    send(sender, ChatColor.YELLOW + "Seasonal: " + ChatColor.WHITE + active
+        + ChatColor.GRAY + ", show lock " + (status.showLockRunning() ? "on" : "off")
+        + ", ambience " + (status.spawnAmbienceRunning() ? "running" : "idle")
+        + ", theme " + status.ambienceTheme());
+  }
+
+  private void appendCosmeticPetStatus(CommandSender sender) {
+    CosmeticsManager cosmetics = plugin.cosmeticsManager();
+    if (cosmetics == null) {
+      send(sender, ChatColor.YELLOW + "Cosmetic pets: " + ChatColor.GRAY + "not loaded");
+      return;
+    }
+    String failure = cosmetics.lastPetSpawnFailure();
+    send(sender, ChatColor.YELLOW + "Cosmetic pets: " + ChatColor.WHITE + cosmetics.activePetCount() + " active"
+        + ChatColor.GRAY + " / " + cosmetics.petDefinitionCount() + " definitions"
+        + ChatColor.GRAY + ", " + cosmetics.selectedPetCount() + " selected online"
+        + ChatColor.GRAY + ", move every " + cosmetics.petMoveTickPeriod() + " ticks");
+    if (failure != null && !failure.isBlank()) {
+      send(sender, ChatColor.YELLOW + "Last pet spawn failure: " + ChatColor.RED + failure);
+    }
   }
 
   private void appendPlaytimeStatus(CommandSender sender, RealCoreConfig config) {
@@ -1468,6 +1739,8 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
         options.add("stats");
         options.add("economy");
         options.add("rewards");
+        options.add("seasonal");
+        options.add("doctor");
         options.add("reload");
         options.add("setspawn");
       }
@@ -1475,6 +1748,27 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
     }
     if (args.length == 2 && "stats".equalsIgnoreCase(args[0]) && sender.hasPermission("realcore.admin")) {
       return List.of("flush");
+    }
+    if (args.length == 2 && "rewards".equalsIgnoreCase(args[0]) && sender.hasPermission("realcore.admin")) {
+      return List.of("status", "pending", "last", "retry");
+    }
+    if (args.length == 2 && "doctor".equalsIgnoreCase(args[0]) && sender.hasPermission("realcore.admin")) {
+      return List.of("rewards", "seasonal", "all");
+    }
+    if (args.length == 2 && "seasonal".equalsIgnoreCase(args[0]) && sender.hasPermission("realcore.admin")) {
+      return List.of("status", "preview", "stoppreview");
+    }
+    if (args.length == 3 && "seasonal".equalsIgnoreCase(args[0])
+        && "preview".equalsIgnoreCase(args[1])
+        && sender.hasPermission("realcore.admin")) {
+      LobbyManager lobby = plugin.lobbyManager();
+      if (lobby == null) {
+        return List.of();
+      }
+      return com.realfiction.realcore.lobby.seasonal.SeasonalPreviewCatalog.validIds();
+    }
+    if (args.length == 2 && "cosmetics".equalsIgnoreCase(args[0]) && sender.hasPermission("realcore.admin")) {
+      return List.of("pets");
     }
     if (args.length == 2 && "economy".equalsIgnoreCase(args[0]) && sender.hasPermission("realcore.admin")) {
       return List.of("audit", "balance", "flush", "gameplay", "shadow", "syncfromdb", "test");

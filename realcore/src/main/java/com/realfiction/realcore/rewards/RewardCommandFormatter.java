@@ -6,6 +6,10 @@ import java.util.ArrayList;
 import java.util.List;
 
 final class RewardCommandFormatter {
+  static final java.util.Set<String> ALLOWED_PLACEHOLDERS = java.util.Set.of(
+      "player", "username", "uuid", "rewardKey", "rewardId", "quantity", "serverId", "productSlug", "voteSite"
+  );
+
   private RewardCommandFormatter() {
   }
 
@@ -25,7 +29,7 @@ final class RewardCommandFormatter {
   }
 
   static String applyPlaceholders(String command, RewardPayload reward, String serverId) {
-    String player = firstNonBlank(reward.minecraftUsername(), reward.minecraftUuid(), "unknown");
+    String player = RewardCommandSafety.safePlayerToken(reward);
     String uuid = firstNonBlank(reward.minecraftUuid(), "");
     String productSlug = reward.delivery == null ? "" : firstNonBlank(reward.delivery.productSlug, "");
     String voteSite = reward.delivery == null ? "" : firstNonBlank(reward.delivery.voteSite, "");

@@ -42,6 +42,7 @@ public final class RewardPoller {
   // operation from sending the same reward twice (no duplicate "Acknowledged").
   private final Set<String> ackInFlight = ConcurrentHashMap.newKeySet();
   private final RewardLedger ledger;
+  private final RewardPollTelemetry telemetry = new RewardPollTelemetry();
   private ScheduledTaskHandle taskHandle;
   // Observer for confirmed first-time deliveries. Used by VoteStatProducer to
   // count vote.standard rewards exactly once per real vote. Writes to the stat
@@ -87,6 +88,22 @@ public final class RewardPoller {
 
   public int deliveredLedgerSize() {
     return ledger.size();
+  }
+
+  public RewardPollTelemetry telemetry() {
+    return telemetry;
+  }
+
+  public boolean forceRetryAck(String rewardId) {
+    if (rewardId == null || rewardId.isBlank()) {
+      return false;
+    }
+    PendingAck pending = pendingAcks.get(rewardId);
+    if (pending == null) {
+      return false;
+    }
+    pending.nextRetryAtMillis = 0L;
+    return true;
   }
 
   /** Human-readable lines describing the rewards still awaiting acknowledgement. */
@@ -137,6 +154,7 @@ public final class RewardPoller {
 
     return apiClient.pollRewards(request)
         .thenCompose(response -> {
+          telemetry.recordPollSuccess(200);
           if (!running.get()) {
             return CompletableFuture.completedFuture(null);
           }
@@ -147,6 +165,11 @@ public final class RewardPoller {
             return CompletableFuture.completedFuture(null);
           }
           return deliverRewards(response);
+        })
+        .exceptionally(error -> {
+          int status = error instanceof PlatformApiException api ? api.statusCode() : 0;
+          telemetry.recordPollFailure(error, status);
+          return null;
         });
   }
 
@@ -155,10 +178,19 @@ public final class RewardPoller {
 
     // Deliver sequentially so the ledger is updated before the next reward runs.
     for (RewardPayload reward : response.rewards) {
-      chain = chain.thenCompose(ignored -> deliverOne(reward).thenAccept(result -> {
+      chain = chain.thenCompose(ignored -> deliverOne(reward).handle((result, error) -> {
+        if (error != null) {
+          plugin.getLogger().log(Level.WARNING, "Unexpected reward delivery error for id="
+              + (reward == null ? "unknown" : reward.id), error);
+          if (reward != null && reward.id != null) {
+            queueAck(RewardDeliveryResult.failed(reward.id, cleanMessage(error)).toAckDelivery());
+          }
+          return null;
+        }
         if (result != null) {
           queueAck(result.toAckDelivery());
         }
+        return null;
       }));
     }
 
@@ -214,16 +246,27 @@ public final class RewardPoller {
       plugin.getLogger().info("Claimed reward " + reward.rewardKey + " -> " + who + " (id=" + reward.id + ")");
     }
 
-    return dispatcher.dispatch(reward).thenApply(result -> {
-      if (result != null && result.delivered()) {
-        // Persist BEFORE the ack so a subsequent ack failure cannot cause a
-        // second execution on the next poll.
-        ledger.markDelivered(reward.id);
-        notifyDeliveryObserver(reward);
-        plugin.getLogger().info("Delivered reward " + reward.rewardKey + " -> " + who);
-      }
-      return result;
-    });
+    return dispatcher.dispatch(reward)
+        .thenApply(result -> {
+          if (result != null && result.delivered()) {
+            // Persist BEFORE the ack so a subsequent ack failure cannot cause a
+            // second execution on the next poll.
+            ledger.markDelivered(reward.id);
+            telemetry.recordDelivered(reward.id);
+            notifyDeliveryObserver(reward);
+            plugin.getLogger().info("Delivered reward " + reward.rewardKey + " -> " + who);
+          } else if (result != null) {
+            telemetry.recordFailed(reward.id, result.failureReason());
+          }
+          return result;
+        })
+        .exceptionally(error -> {
+          plugin.getLogger().log(Level.WARNING,
+              "Reward dispatch failed for id=" + reward.id + ": " + describeFailure(error), error);
+          RewardDeliveryResult failed = RewardDeliveryResult.failed(reward.id, cleanMessage(error));
+          telemetry.recordFailed(reward.id, failed.failureReason());
+          return failed;
+        });
   }
 
   /**
