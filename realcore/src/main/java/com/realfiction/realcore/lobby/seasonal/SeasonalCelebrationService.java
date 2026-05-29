@@ -34,8 +34,6 @@ import org.bukkit.Bukkit;
 import org.bukkit.Color;
 import org.bukkit.Location;
 import org.bukkit.Particle;
-import org.bukkit.Sound;
-import org.bukkit.SoundCategory;
 import org.bukkit.World;
 import org.bukkit.entity.Player;
 
@@ -94,25 +92,9 @@ public final class SeasonalCelebrationService {
       new ZoneEntry("PST/PDT", ZoneId.of("America/Los_Angeles"))
   );
 
-  // === Star-Spangled Banner opening phrase, transposed to fit the
-  // Minecraft note-block range (F#3..F#5 = pitch 0.5..2.0).
-  //   "Oh-oh, say can you see, by the dawn's early light..."
-  // delayTicks are relative to t=0 (the first note). ===
-  private static final List<AnthemNote> ANTHEM = List.of(
-      new AnthemNote(0,   0.707f),  // "Oh"      C4
-      new AnthemNote(10,  0.707f),  // "oh"      C4
-      new AnthemNote(22,  0.944f),  // "say"     F4
-      new AnthemNote(34,  1.189f),  // "can"     A4
-      new AnthemNote(46,  1.414f),  // "you"     C5
-      new AnthemNote(58,  1.888f),  // "see,"    F5  (climax)
-      new AnthemNote(82,  1.782f),  // "by"      E5
-      new AnthemNote(94,  1.587f),  // "the"     D5
-      new AnthemNote(106, 1.414f),  // "dawn's"  C5
-      new AnthemNote(118, 1.189f),  // "ear-"    A4
-      new AnthemNote(130, 0.944f),  // "-ly"     F4
-      new AnthemNote(142, 1.189f),  // "light"   A4
-      new AnthemNote(166, 0.944f)   // tail resolution F4
-  );
+  // The Star-Spangled Banner melody lives in SeasonalAnthem (shared with the
+  // preview controller so both the real midnight anthem and the admin preview
+  // play the exact same notes).
 
   // === per-theme banner copy + colors. Top line is always REALFICTION
   // so the brand stays anchored; bottom line is a short tagline using
@@ -732,15 +714,7 @@ public final class SeasonalCelebrationService {
   }
 
   private void schedulePlayerAnthem(Player player) {
-    for (AnthemNote note : ANTHEM) {
-      scheduler.runForPlayerLater(player, () -> {
-        if (!player.isOnline()) {
-          return;
-        }
-        player.playSound(player.getLocation(), Sound.BLOCK_NOTE_BLOCK_BELL,
-            SoundCategory.AMBIENT, 0.85f, note.pitch());
-      }, note.delayTicks());
-    }
+    SeasonalAnthem.schedule(scheduler, player, 0.85f);
   }
 
   // === helpers ===
@@ -779,10 +753,6 @@ public final class SeasonalCelebrationService {
         Collections.unmodifiableMap(new HashMap<>(broadcastCycleIndex)),
         firedAnthemKeys.size(),
         lastFailure);
-  }
-
-  /** A single note in the transposed Star-Spangled Banner opening phrase. */
-  private record AnthemNote(long delayTicks, float pitch) {
   }
 
   private record ZoneEntry(String label, ZoneId zoneId) {
