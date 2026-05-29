@@ -18,6 +18,16 @@ public final class PetMovementMath {
   static final double MAX_VELOCITY_PER_TICK = 0.42D;
   static final double STRONG_VELOCITY_PER_TICK = 0.58D;
 
+  // Smooth glide for living pets: they now physically move toward the follow
+  // point via velocity (so the client plays the walk/fly animation and lerps
+  // the motion) instead of teleporting once they drift past a few blocks.
+  // Speed eases with distance — fast catch-up far away, gentle as it arrives —
+  // and stops inside the arrive radius so it never jitters in place.
+  static final double GLIDE_EASE = 0.5D;             // fraction of the gap per tick
+  static final double GLIDE_MAX_PER_TICK = 0.6D;     // hard speed cap (blocks/tick)
+  static final double GLIDE_ARRIVE_DISTANCE = 0.45D; // within this: stop, hold still
+  static final double FACE_BLEND = 0.4D;             // how quickly the pet turns to face travel
+
   private PetMovementMath() {
   }
 
@@ -91,6 +101,33 @@ public final class PetMovementMath {
       return delta.multiply(maxSpeed / length);
     }
     return delta;
+  }
+
+  /**
+   * Eased glide velocity for a living pet following its target. Far away it
+   * moves at the speed cap (quick, smooth catch-up); as it nears the target the
+   * speed eases down; inside the arrive radius it returns zero so the pet holds
+   * still instead of buzzing back and forth. The entity moving under this
+   * velocity is what makes the client render normal walk/fly motion + animation.
+   */
+  public static Vector glideVelocity(Location current, Location desired) {
+    Vector delta = desired.toVector().subtract(current.toVector());
+    double length = delta.length();
+    if (length <= GLIDE_ARRIVE_DISTANCE) {
+      return new Vector(0, 0, 0);
+    }
+    double speed = Math.min(GLIDE_MAX_PER_TICK, length * GLIDE_EASE);
+    return delta.multiply(speed / length);
+  }
+
+  /**
+   * Yaw to render this tick: faces the direction of travel, eased from the
+   * current yaw so the pet turns smoothly (used with {@code setRotation}, which
+   * rotates the entity without snapping its position like a teleport would).
+   */
+  public static float faceYaw(Location current, Location desired, float currentYaw, float fallbackYaw) {
+    float target = resolveYaw(current, desired, fallbackYaw);
+    return lerpAngle(currentYaw, target, (float) FACE_BLEND);
   }
 
   public static float resolveYaw(Location current, Location target, float playerYaw) {

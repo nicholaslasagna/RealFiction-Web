@@ -47,7 +47,7 @@ public final class PetCosmetics {
     }
   }
 
-  static List<CosmeticOption> builtinOptions() {
+  public static List<CosmeticOption> builtinOptions() {
     return List.of(
         packPet("emerald-sprite", "&aEmerald Sprite", "ALLAY", CosmeticsConstants.PERM_PETS,
             List.of("&7A tiny magical green companion.", "&7Soft emerald sparkles.")),
@@ -74,18 +74,7 @@ public final class PetCosmetics {
         packPet("moon-moth", "&5Moon Moth", "PHANTOM_MEMBRANE", CosmeticsConstants.PERM_ATELIER,
             List.of("&7A gentle night moth.", "&7Soft purple glimmer.", "&dAtelier Exclusive")),
         packPet("liberty-eagle", "&cLiberty &fEagle &9250", "FEATHER", CosmeticsConstants.PERM_US250_FOUNDER,
-            List.of("&7Patriotic companion.", "&7Red, white, and blue trail.", "&cFounding 250 Exclusive")),
-        new CosmeticOption(
-            "pet-pack",
-            CosmeticCategory.PETS,
-            "&aPets Pack",
-            "BONE",
-            CosmeticsConstants.PERM_PETS,
-            List.of("&7Legacy pack entry — choose a companion below."),
-            "",
-            "",
-            true
-        )
+            List.of("&7Patriotic companion.", "&7Red, white, and blue trail.", "&cFounding 250 Exclusive"))
     );
   }
 
