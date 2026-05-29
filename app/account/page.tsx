@@ -6,21 +6,23 @@ import {
   CalendarDays,
   Clock,
   Gift,
-  Heart,
   MapPinned,
-  Palette,
-  Plane,
   Settings,
   Sparkles,
-  Star,
-  UserRound,
-  WandSparkles
+  UserRound
 } from "lucide-react"
 
 import { AccountAuthCard } from "@/components/account-auth-card"
 import { AccountEconomyCard } from "@/components/account-economy-card"
 import { AccountLinkCard } from "@/components/account-link-card"
 import { AccountSignOutButton } from "@/components/account-sign-out-button"
+import {
+  BoneIcon,
+  DyeIcon,
+  ElytraIcon,
+  FireworkRocketIcon,
+  NetherStarIcon
+} from "@/components/minecraft-icons"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -120,35 +122,35 @@ const perkCards = [
     title: "RealVIP",
     text: "Supporter flair, friendly extras, and community perks.",
     slugs: ["realvip", "real-supporter"],
-    icon: Star
+    icon: NetherStarIcon
   },
   {
     key: "flight",
     title: "Lobby Flight",
     text: "Fly in the lobby and explore spawn in style.",
     slugs: ["lobby-flight"],
-    icon: Plane
+    icon: ElytraIcon
   },
   {
     key: "pets",
     title: "Pets",
     text: "Bring a fun lobby companion with you.",
     slugs: ["realpets"],
-    icon: Heart
+    icon: BoneIcon
   },
   {
     key: "particles",
     title: "Particles",
     text: "Show off trails, auras, and sparkles.",
     slugs: ["particle-vault", "cosmetic-atelier"],
-    icon: WandSparkles
+    icon: FireworkRocketIcon
   },
   {
     key: "colors",
     title: "Username Colors",
     text: "Pick a name color that fits your style.",
     slugs: ["username-colors", "cosmetic-atelier"],
-    icon: Palette
+    icon: DyeIcon
   }
 ]
 
@@ -475,9 +477,9 @@ async function SignedInAccount() {
                   >
                     <CardHeader>
                       <div className="flex items-center justify-between gap-3">
-                        <div className="flex h-11 w-11 items-center justify-center rounded-md border border-amber-200/16 bg-black/24 text-amber-200">
-                          <Icon className="h-5 w-5" />
-                        </div>
+                        <span className="flex h-11 w-11 items-center justify-center border-2 border-[#00060e] bg-gradient-to-b from-[#1a2638] to-[#0a1424] shadow-[inset_0_2px_0_rgba(255,255,255,0.08),inset_0_-2px_0_rgba(0,0,0,0.3)]">
+                          <Icon size={22} />
+                        </span>
                         <Badge variant={unlocked ? "success" : "outline"}>
                           {unlocked ? "Owned" : "Locked"}
                         </Badge>
