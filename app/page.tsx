@@ -6,17 +6,9 @@ import { HomeAdventureGrid } from "@/components/home-adventure-grid"
 import { HomeDiscordCard } from "@/components/home-discord-card"
 import { HomeLiveMaps } from "@/components/home-live-maps"
 import { HomeNetworkInNumbers } from "@/components/home-network-in-numbers"
+import { HomePerksBand } from "@/components/home-perks-band"
 import { HomeVoteStreak } from "@/components/home-vote-streak"
 import { LivePlayerCount } from "@/components/live-player-count"
-import {
-  ArmorIcon,
-  BoneIcon,
-  ChestIcon,
-  DyeIcon,
-  ElytraIcon,
-  FireworkRocketIcon,
-  NetherStarIcon
-} from "@/components/minecraft-icons"
 
 /* ============================================================
    Inline icons — match the mockup's minimal SVG glyphs
@@ -89,16 +81,6 @@ const ADVENTURES = [
 
 // Each perk gets the same pixel-art Minecraft item used for its store
 // category, so the homepage row reads like a row of inventory slots.
-const SUPPORT_PERKS = [
-  { label: "Cosmetics", icon: ArmorIcon },
-  { label: "RealVIP", icon: NetherStarIcon },
-  { label: "Pets", icon: BoneIcon },
-  { label: "Particles", icon: FireworkRocketIcon },
-  { label: "Username colors", icon: DyeIcon },
-  { label: "Lobby flight", icon: ElytraIcon },
-  { label: "Gift cards", icon: ChestIcon }
-]
-
 export default function HomePage() {
   return (
     <>
@@ -173,19 +155,7 @@ export default function HomePage() {
           RealFiction support stays focused on style, identity, lobby fun, and community perks.
           No paid kits, no bought power, no shortcut around the rules.
         </p>
-        <div className="perks-band">
-          {SUPPORT_PERKS.map((p) => {
-            const Icon = p.icon
-            return (
-              <div key={p.label} className="perk">
-                <div className="slot">
-                  <Icon size={22} />
-                </div>
-                <div className="label">{p.label}</div>
-              </div>
-            )
-          })}
-        </div>
+        <HomePerksBand />
         <div style={{ textAlign: "center", marginTop: 40 }}>
           <Link className="mc-button mc-button--gold" href="/store">
             Visit the Store
