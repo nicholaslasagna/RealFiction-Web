@@ -1,23 +1,28 @@
+import type { ComponentType } from "react"
 import {
   BadgeCheck,
-  Boxes,
   Castle,
-  Crown,
-  Gift,
   MapPinned,
   Medal,
-  MessageCircle,
   Palette,
   PartyPopper,
   Pickaxe,
-  Plane,
   ShieldCheck,
   Swords,
   Trophy,
-  UserRound,
-  WandSparkles,
   Zap
 } from "lucide-react"
+
+import {
+  ArmorIcon,
+  BoneIcon,
+  ChestIcon,
+  CraftingTableIcon,
+  DyeIcon,
+  ElytraIcon,
+  FireworkRocketIcon,
+  NetherStarIcon
+} from "@/components/minecraft-icons"
 
 export type ProductCategory =
   | "supporter"
@@ -361,16 +366,16 @@ export const giftCards: GiftCard[] = [
 export const productCategories: Array<{
   id: ProductCategory | "all"
   label: string
-  icon: typeof Boxes
+  icon: ComponentType<{ className?: string; size?: number }>
 }> = [
-  { id: "all", label: "All", icon: Boxes },
-  { id: "supporter", label: "Supporter", icon: Crown },
-  { id: "cosmetics", label: "Cosmetics", icon: Palette },
-  { id: "pets", label: "Pets", icon: UserRound },
-  { id: "particles", label: "Particles", icon: WandSparkles },
-  { id: "identity", label: "Identity", icon: MessageCircle },
-  { id: "lobby", label: "Lobby", icon: Plane },
-  { id: "gift-cards", label: "Gift Cards", icon: Gift }
+  { id: "all", label: "All", icon: CraftingTableIcon },
+  { id: "supporter", label: "Supporter", icon: NetherStarIcon },
+  { id: "cosmetics", label: "Cosmetics", icon: ArmorIcon },
+  { id: "pets", label: "Pets", icon: BoneIcon },
+  { id: "particles", label: "Particles", icon: FireworkRocketIcon },
+  { id: "identity", label: "Identity", icon: DyeIcon },
+  { id: "lobby", label: "Lobby", icon: ElytraIcon },
+  { id: "gift-cards", label: "Gift Cards", icon: ChestIcon }
 ]
 
 export const voteSites = [

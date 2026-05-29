@@ -296,7 +296,7 @@ export function Storefront() {
         </div>
       </div>
 
-      <aside className="min-w-0 lg:sticky lg:top-28 lg:self-start">
+      <aside className="min-w-0 lg:sticky lg:top-24 lg:self-start lg:max-h-[calc(100vh-7rem)] lg:overflow-y-auto lg:overscroll-contain lg:pr-1">
         <Card className="minecraft-panel">
           <CardHeader>
             <CardTitle className="display-font flex items-center gap-2 text-3xl">
@@ -438,8 +438,12 @@ export function Storefront() {
             <p className="text-[11px] leading-5 text-muted-foreground">
               Cosmetic items only — no gameplay advantages. By placing an order you agree to
               our{" "}
-              <Link href="/rules" className="text-amber-200 underline-offset-2 hover:underline">
+              <Link href="/terms" className="text-amber-200 underline-offset-2 hover:underline">
                 Terms &amp; Refund Policy
+              </Link>{" "}
+              and{" "}
+              <Link href="/privacy" className="text-amber-200 underline-offset-2 hover:underline">
+                Privacy Policy
               </Link>
               . Prices in USD. Payments are securely processed by{" "}
               <span className="font-semibold text-slate-200">Stripe</span> (Card / Apple Pay /

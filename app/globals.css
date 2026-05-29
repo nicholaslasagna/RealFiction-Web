@@ -622,8 +622,26 @@ select {
   font-size: 15px;
   margin: 0 0 16px;
 }
+.rf-footer .legal-links {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px 22px;
+  padding-top: 24px;
+}
+.rf-footer .legal-links a {
+  font-family: "rf-light", sans-serif;
+  font-size: 13px;
+  color: rgb(196, 196, 196);
+  text-decoration: none;
+  transition: color 150ms ease;
+}
+.rf-footer .legal-links a:hover {
+  color: #f2c66d;
+  text-decoration: underline;
+}
 .rf-footer .copyright {
-  padding-top: 30px;
+  padding-top: 22px;
   font-size: 12px;
   font-family: "rf-light", sans-serif;
   color: rgb(160, 160, 160);
