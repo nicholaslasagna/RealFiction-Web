@@ -50,6 +50,7 @@ public final class CosmeticsPetService {
   private final Logger logger;
   private final Map<UUID, PetActiveState> activePets = new ConcurrentHashMap<>();
   private final PetRuntimeDiagnostics diagnostics = new PetRuntimeDiagnostics();
+  private final PetParticleSafeSpawner particleSpawner;
 
   private volatile CosmeticsConfig cosmeticsConfig;
   private volatile CosmeticsStorage cosmeticsStorage;
@@ -65,6 +66,7 @@ public final class CosmeticsPetService {
     this.scheduler = scheduler;
     this.lobbySupplier = lobbySupplier;
     this.logger = plugin.getLogger();
+    this.particleSpawner = new PetParticleSafeSpawner(this.logger);
   }
 
   public void bindCosmetics(CosmeticsConfig config, CosmeticsStorage storage) {
@@ -309,39 +311,65 @@ public final class CosmeticsPetService {
   }
 
   private void spawnAmbientParticle(Player owner, Location at, PetDefinition definition, int phase) {
-    if (at.getWorld() == null) {
+    World world = at.getWorld();
+    if (world == null) {
       return;
     }
     Particle particle = definition.ambientParticle();
-    if (particle == Particle.DUST && "liberty-eagle".equals(definition.id())) {
+    String petId = definition.id();
+    if (particle == Particle.DUST && "liberty-eagle".equals(petId)) {
       Color[] colors = {Color.RED, Color.WHITE, Color.BLUE};
       Color color = colors[Math.floorMod(phase, colors.length)];
-      at.getWorld().spawnParticle(
-          Particle.DUST,
-          at,
-          2,
-          0.12,
-          0.12,
-          0.12,
-          0.0,
-          new Particle.DustOptions(color, 0.9f),
-          true
+      particleSpawner.tryRun(petId, "DUST", "spawnAmbientParticle.liberty-eagle", () ->
+          world.spawnParticle(
+              Particle.DUST,
+              at,
+              2,
+              0.12,
+              0.12,
+              0.12,
+              0.0,
+              new Particle.DustOptions(color, 0.9f),
+              true
+          )
       );
       return;
     }
-    if (particle == Particle.HEART && "fox-friend".equals(definition.id()) && phase % 4 != 0) {
+    if (particle == Particle.HEART && "fox-friend".equals(petId) && phase % 4 != 0) {
       return;
     }
-    at.getWorld().spawnParticle(particle, at, 1, 0.08, 0.08, 0.08, 0.0, null, true);
+    particleSpawner.tryRun(petId, particle.name(), "spawnAmbientParticle.default", () ->
+        world.spawnParticle(particle, at, 1, 0.08, 0.08, 0.08, 0.0, null, true)
+    );
   }
 
+  /**
+   * Renders the trailing body sparkle for the Tiny Dragon pet.
+   *
+   * <p>Historical note: this previously used {@link Particle#PORTAL} for
+   * the second sparkle. As of Purpur 26.1.2 / Java 25, {@code PORTAL}
+   * began requiring a {@code Float} data argument, and passing {@code null}
+   * raised {@code IllegalArgumentException: missing required data class
+   * java.lang.Float} every tick on Lobby1. We swapped it for
+   * {@link Particle#END_ROD}, which is a no-data particle and which the
+   * pet registry already uses for the Dragon Whisperer pet — so the
+   * visual stays close to the original twinkle effect while we no longer
+   * depend on PORTAL's data contract. Both calls also go through the
+   * {@link PetParticleSafeSpawner} so any future particle-contract
+   * regression is caught and logged once, not every tick.
+   */
   private void spawnDragonBodyParticles(Player owner, Location headLocation) {
-    if (headLocation.getWorld() == null) {
+    World world = headLocation.getWorld();
+    if (world == null) {
       return;
     }
     Location body = headLocation.clone().subtract(0, 0.35, 0);
-    headLocation.getWorld().spawnParticle(Particle.DRAGON_BREATH, body, 2, 0.25, 0.08, 0.25, 0.01, null, true);
-    headLocation.getWorld().spawnParticle(Particle.PORTAL, body, 1, 0.15, 0.05, 0.15, 0.02, null, true);
+    particleSpawner.tryRun("tiny-dragon", "DRAGON_BREATH", "spawnDragonBodyParticles", () ->
+        world.spawnParticle(Particle.DRAGON_BREATH, body, 2, 0.25, 0.08, 0.25, 0.01, null, true)
+    );
+    particleSpawner.tryRun("tiny-dragon", "END_ROD", "spawnDragonBodyParticles", () ->
+        world.spawnParticle(Particle.END_ROD, body, 1, 0.15, 0.05, 0.15, 0.02, null, true)
+    );
   }
 
   private Entity spawnPet(Player owner, PetDefinition definition) {
