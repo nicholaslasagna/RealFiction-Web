@@ -196,6 +196,9 @@ public final class SeasonalPreviewController {
 
   private void renderThemedVisuals(SeasonalPreviewCatalog.PreviewSpec spec, Location anchor) {
     SeasonalEffectPalette palette = SeasonalEffectPalette.generic(spec.theme());
+    // Every preview paints a REALFICTION sky banner so the brand stays
+    // anchored regardless of theme; per-theme bottom line / particle FX
+    // layer on top of the brand line.
     switch (spec.theme()) {
       case US250_INDEPENDENCE_DAY, INDEPENDENCE_DAY, VETERANS_DAY, MEMORIAL_DAY -> {
         fireworkShowService.launchRing(anchor, 8, palette);
@@ -213,17 +216,40 @@ public final class SeasonalPreviewController {
         spawnColoredDustRibbon(anchor, Color.fromRGB(220, 20, 60), 12);
         spawnColoredDustRibbon(anchor, Color.fromRGB(0, 128, 0), 12);
         spawnColoredDustRibbon(anchor, Color.fromRGB(255, 215, 0), 12);
+        SeasonalParticleTextRenderer.renderBanner(
+            scheduler,
+            anchor,
+            "REALFICTION",
+            "MERRY",
+            Color.fromRGB(40, 175, 60),
+            Color.fromRGB(220, 32, 48)
+        );
       }
       case HALLOWEEN -> {
         spawnParticleRibbon(anchor, Particle.SMOKE, 30);
         spawnParticleRibbon(anchor, Particle.SOUL_FIRE_FLAME, 20);
         fireworkShowService.launchRing(anchor, 6, palette);
+        // Halloween theme: no two-line banner — the bitmap font doesn't have
+        // a W glyph for "HALLOWEEN", so we paint REALFICTION solo.
+        SeasonalParticleTextRenderer.renderLine(
+            scheduler, anchor, "REALFICTION", Color.fromRGB(255, 140, 0), 0);
       }
       case NEW_YEARS -> {
         fireworkShowService.launchRing(anchor, 10, palette);
-        SeasonalParticleTextRenderer.renderLine(scheduler, anchor, "2026", Color.fromRGB(255, 215, 0), 0);
+        SeasonalParticleTextRenderer.renderBanner(
+            scheduler,
+            anchor,
+            "REALFICTION",
+            "2026",
+            Color.fromRGB(255, 215, 0),
+            Color.WHITE
+        );
       }
-      default -> fireworkShowService.launchRing(anchor, 6, palette);
+      default -> {
+        fireworkShowService.launchRing(anchor, 6, palette);
+        SeasonalParticleTextRenderer.renderLine(
+            scheduler, anchor, "REALFICTION", Color.fromRGB(255, 215, 0), 0);
+      }
     }
   }
 
