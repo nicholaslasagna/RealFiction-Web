@@ -1,5 +1,7 @@
 package com.realfiction.realcore.cosmetics;
 
+import com.realfiction.realcore.cosmetics.pets.CosmeticsPetService;
+import com.realfiction.realcore.cosmetics.pets.PetCosmetics;
 import com.realfiction.realcore.item.ItemFactory;
 import com.realfiction.realcore.lobby.LobbyManager;
 import com.realfiction.realcore.scheduler.RealCoreScheduler;
@@ -26,6 +28,7 @@ public final class CosmeticsManager {
   private final Supplier<LobbyManager> lobbySupplier;
   private CosmeticsConfig config;
   private CosmeticsStorage storage;
+  private CosmeticsPetService petService;
   private ScheduledTaskHandle particleTask;
 
   public CosmeticsManager(Plugin plugin, RealCoreScheduler scheduler, Supplier<LobbyManager> lobbySupplier,
@@ -35,6 +38,7 @@ public final class CosmeticsManager {
     this.lobbySupplier = lobbySupplier;
     this.config = config;
     this.storage = new CosmeticsStorage(plugin.getDataFolder(), plugin.getLogger());
+    this.petService = new CosmeticsPetService(plugin, scheduler, lobbySupplier);
   }
 
   public void start() {
@@ -43,6 +47,12 @@ public final class CosmeticsManager {
       return;
     }
     particleTask = scheduler.runGlobalRepeating(this::tickParticles, 20L, 10L);
+    petService.bindCosmetics(config, storage);
+    petService.setEnabled(true);
+    petService.start();
+    for (Player player : Bukkit.getOnlinePlayers()) {
+      applyPlayerCosmetics(player);
+    }
   }
 
   public void stop() {
@@ -50,12 +60,35 @@ public final class CosmeticsManager {
       particleTask.cancel();
       particleTask = null;
     }
+    if (petService != null) {
+      petService.stop();
+    }
   }
 
   public void reload(CosmeticsConfig newConfig) {
     this.config = newConfig;
     this.storage.reload();
     start();
+  }
+
+  public int activePetCount() {
+    return petService == null ? 0 : petService.activePetCount();
+  }
+
+  public int petDefinitionCount() {
+    return PetCosmetics.definitionCount();
+  }
+
+  public int selectedPetCount() {
+    return petService == null ? 0 : petService.selectedPetCount();
+  }
+
+  public String lastPetSpawnFailure() {
+    return petService == null ? "" : petService.diagnostics().lastSpawnFailure();
+  }
+
+  public long petMoveTickPeriod() {
+    return petService == null ? 0L : petService.moveTickPeriod();
   }
 
   public boolean isLobbyFlightSelected(Player player) {
@@ -75,14 +108,45 @@ public final class CosmeticsManager {
       if (!player.isOnline()) {
         return;
       }
-      CosmeticSelection selection = storage.selection(player.getUniqueId());
+      CosmeticSelection raw = storage.selection(player.getUniqueId());
+      CosmeticsPermissions.SanitizeResult sanitized = CosmeticsPermissions.sanitize(player, config, raw);
+      if (sanitized.changed()) {
+        storage.save(player.getUniqueId(), sanitized.selection());
+      }
+      CosmeticSelection selection = sanitized.selection();
       CosmeticOption color = config.option(CosmeticCategory.USERNAME_COLORS, selection.usernameColor());
-      if (color != null && canUse(player, color) && color.colorCode() != null && !color.colorCode().isBlank()) {
+      if (color != null && CosmeticsPermissions.canUseOption(player, color) && color.colorCode() != null
+          && !color.colorCode().isBlank()) {
         player.setPlayerListName(Text.color(color.colorCode() + player.getName()));
       } else {
         player.setPlayerListName(player.getName());
       }
+      petService.apply(player, config, selection);
     });
+  }
+
+  public void onPlayerQuit(java.util.UUID playerId) {
+    if (petService != null) {
+      petService.onPlayerQuit(playerId);
+    }
+  }
+
+  /** Refreshes the cosmetics GUI when the player still has it open after entitlement changes. */
+  public void refreshGuiIfOpen(Player player) {
+    if (player == null || !player.isOnline() || !config.enabled()) {
+      return;
+    }
+    if (!(player.getOpenInventory().getTopInventory().getHolder() instanceof CosmeticsHolder holder)) {
+      return;
+    }
+    if (holder.view() == CosmeticsHolder.View.ROOT) {
+      open(player);
+      return;
+    }
+    CosmeticCategory category = holder.category();
+    if (category != null) {
+      scheduler.runForPlayer(player, () -> openCategoryNow(player, category));
+    }
   }
 
   public void handleClick(InventoryClickEvent event, CosmeticsHolder holder) {
@@ -124,7 +188,7 @@ public final class CosmeticsManager {
       if (settings == null || !settings.enabled()) {
         continue;
       }
-      boolean unlocked = canUseCategory(player, category, settings);
+      boolean unlocked = CosmeticsPermissions.canUseCategory(player, category, settings);
       inventory.setItem(entry.getValue(), icon(settings.material(), settings.displayName(),
           List.of(unlocked ? "&aUnlocked cosmetics inside." : "&cLocked. Visit the store to unlock."), unlocked, 1, player));
       actions.put(entry.getValue(), category.id());
@@ -141,7 +205,7 @@ public final class CosmeticsManager {
 
     int slot = 10;
     for (CosmeticOption option : config.options(category)) {
-      boolean unlocked = canUse(player, option);
+      boolean unlocked = CosmeticsPermissions.canUseOption(player, option);
       boolean selected = selected(player, option);
       inventory.setItem(slot, icon(option.material(), option.displayName(), lore(option, unlocked, selected),
           unlocked || selected, 1, player));
@@ -157,7 +221,7 @@ public final class CosmeticsManager {
   }
 
   private void select(Player player, CosmeticCategory category, CosmeticOption option) {
-    if (!canUse(player, option)) {
+    if (!CosmeticsPermissions.canUseOption(player, option)) {
       scheduler.send(player, ChatColor.RED + "You have not unlocked that cosmetic yet.");
       return;
     }
@@ -167,13 +231,8 @@ public final class CosmeticsManager {
     }
 
     CosmeticSelection current = storage.selection(player.getUniqueId());
-    CosmeticSelection next = switch (category) {
-      case USERNAME_COLORS -> current.withUsernameColor(option.id());
-      case PARTICLES -> current.withParticleAura(toggle(current.particleAura(), option.id()));
-      case TRAILS -> current.withTrail(toggle(current.trail(), option.id()));
-      case LOBBY_FLIGHT -> current.withLobbyFlight(!current.lobbyFlight());
-      case PETS -> current;
-    };
+    boolean alreadySelected = CosmeticsSelectionLogic.isSelected(current, category, option.id());
+    CosmeticSelection next = CosmeticsSelectionLogic.applySelection(current, category, option.id(), alreadySelected);
     storage.save(player.getUniqueId(), next);
     applyPlayerCosmetics(player);
     LobbyManager lobby = lobbySupplier.get();
@@ -197,10 +256,10 @@ public final class CosmeticsManager {
     CosmeticSelection selection = storage.selection(player.getUniqueId());
     CosmeticOption aura = config.option(CosmeticCategory.PARTICLES, selection.particleAura());
     CosmeticOption trail = config.option(CosmeticCategory.TRAILS, selection.trail());
-    if (aura != null && canUse(player, aura)) {
+    if (aura != null && CosmeticsPermissions.canUseOption(player, aura)) {
       spawnParticle(player, aura.particle(), 0.35D, 0.8D, 6);
     }
-    if (trail != null && canUse(player, trail)) {
+    if (trail != null && CosmeticsPermissions.canUseOption(player, trail)) {
       spawnParticle(player, trail.particle(), 0.15D, 0.1D, 4);
     }
   }
@@ -213,26 +272,9 @@ public final class CosmeticsManager {
     player.getWorld().spawnParticle(particle, player.getLocation().add(0.0D, yOffset, 0.0D), count, spread, spread, spread, 0.01D);
   }
 
-  private boolean canUseCategory(Player player, CosmeticCategory category, CosmeticsConfig.CategorySettings settings) {
-    if (category == CosmeticCategory.LOBBY_FLIGHT) {
-      return player.hasPermission("realfiction.lobby.flight");
-    }
-    return settings.permission() == null || settings.permission().isBlank() || player.hasPermission(settings.permission());
-  }
-
-  private boolean canUse(Player player, CosmeticOption option) {
-    return !option.requiresPermission() || player.hasPermission(option.permission());
-  }
-
   private boolean selected(Player player, CosmeticOption option) {
     CosmeticSelection selection = storage.selection(player.getUniqueId());
-    return switch (option.category()) {
-      case USERNAME_COLORS -> option.id().equals(selection.usernameColor());
-      case PARTICLES -> option.id().equals(selection.particleAura());
-      case TRAILS -> option.id().equals(selection.trail());
-      case LOBBY_FLIGHT -> selection.lobbyFlight();
-      case PETS -> false;
-    };
+    return CosmeticsSelectionLogic.isSelected(selection, option.category(), option.id());
   }
 
   private List<String> lore(CosmeticOption option, boolean unlocked, boolean selected) {
@@ -255,10 +297,6 @@ public final class CosmeticsManager {
       }
     }
     return item;
-  }
-
-  private String toggle(String current, String next) {
-    return next.equals(current) ? "" : next;
   }
 
   private Particle parseParticle(String name) {

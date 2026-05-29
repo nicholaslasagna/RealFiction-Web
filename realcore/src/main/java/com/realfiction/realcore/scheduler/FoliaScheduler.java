@@ -69,6 +69,20 @@ final class FoliaScheduler implements RealCoreScheduler {
   }
 
   @Override
+  public ScheduledTaskHandle runGlobalLater(Runnable task, long delayTicks) {
+    ScheduledTask scheduledTask = Bukkit.getGlobalRegionScheduler().runDelayed(
+        plugin,
+        ignored -> task.run(),
+        Math.max(0L, delayTicks)
+    );
+    tasks.add(scheduledTask);
+    return () -> {
+      scheduledTask.cancel();
+      tasks.remove(scheduledTask);
+    };
+  }
+
+  @Override
   public void runForPlayer(Player player, Runnable task) {
     player.getScheduler().run(plugin, ignored -> task.run(), () -> {
     });

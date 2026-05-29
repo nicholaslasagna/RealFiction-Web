@@ -1,5 +1,6 @@
 package com.realfiction.realcore.cosmetics;
 
+import com.realfiction.realcore.cosmetics.pets.PetCosmetics;
 import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.LinkedHashMap;
@@ -39,6 +40,7 @@ public record CosmeticsConfig(
     for (CosmeticCategory category : CosmeticCategory.values()) {
       options.put(category, parseOptions(config.getConfigurationSection("cosmetics.options." + category.id()), category));
     }
+    PetCosmetics.mergeMissingBuiltins(options);
 
     return new CosmeticsConfig(enabled, title, size, Map.copyOf(categories), Map.copyOf(options));
   }

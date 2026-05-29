@@ -3,9 +3,11 @@ package com.realfiction.realcore.rewards;
 import com.realfiction.realcore.RealCorePlugin;
 import com.realfiction.realcore.api.dto.RewardPayload;
 import com.realfiction.realcore.config.RealCoreConfig;
+import com.realfiction.realcore.cosmetics.CosmeticEntitlementNotifier;
 import com.realfiction.realcore.economy.VoteRewardLedgerShadowService;
 import com.realfiction.realcore.economy.VoteRewardLedgerWriteService;
 import com.realfiction.realcore.luckperms.LuckPermsService;
+import com.realfiction.realcore.rewards.ProductPermissionResolver.ResolveResult;
 import com.realfiction.realcore.scheduler.RealCoreScheduler;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -23,28 +25,42 @@ public final class RewardDispatcher {
   private final LuckPermsService luckPermsService;
   private final VoteRewardLedgerShadowService voteRewardLedgerShadowService;
   private final VoteRewardLedgerWriteService voteRewardLedgerWriteService;
+  private final CosmeticEntitlementNotifier entitlementNotifier;
 
   public RewardDispatcher(RealCorePlugin plugin, RealCoreConfig config, RealCoreScheduler scheduler,
                           LuckPermsService luckPermsService,
                           VoteRewardLedgerShadowService voteRewardLedgerShadowService,
-                          VoteRewardLedgerWriteService voteRewardLedgerWriteService) {
+                          VoteRewardLedgerWriteService voteRewardLedgerWriteService,
+                          CosmeticEntitlementNotifier entitlementNotifier) {
     this(plugin.getLogger(), config, scheduler, luckPermsService,
-        voteRewardLedgerShadowService, voteRewardLedgerWriteService);
+        voteRewardLedgerShadowService, voteRewardLedgerWriteService, entitlementNotifier);
   }
 
   RewardDispatcher(Logger logger, RealCoreConfig config, RealCoreScheduler scheduler,
                    LuckPermsService luckPermsService,
                    VoteRewardLedgerShadowService voteRewardLedgerShadowService,
-                   VoteRewardLedgerWriteService voteRewardLedgerWriteService) {
+                   VoteRewardLedgerWriteService voteRewardLedgerWriteService,
+                   CosmeticEntitlementNotifier entitlementNotifier) {
     this.logger = logger;
     this.config = config;
     this.scheduler = scheduler;
     this.luckPermsService = luckPermsService;
     this.voteRewardLedgerShadowService = voteRewardLedgerShadowService;
     this.voteRewardLedgerWriteService = voteRewardLedgerWriteService;
+    this.entitlementNotifier = entitlementNotifier;
   }
 
   public CompletableFuture<RewardDeliveryResult> dispatch(RewardPayload reward) {
+    try {
+      return dispatchInternal(reward);
+    } catch (RuntimeException error) {
+      logger.log(Level.WARNING, "Reward dispatch crashed for rewardId=" + (reward == null ? "unknown" : reward.id), error);
+      String id = reward == null || reward.id == null ? "unknown" : reward.id;
+      return CompletableFuture.completedFuture(RewardDeliveryResult.failed(id, cleanMessage(error)));
+    }
+  }
+
+  private CompletableFuture<RewardDeliveryResult> dispatchInternal(RewardPayload reward) {
     if (reward == null || reward.id == null || reward.id.isBlank()) {
       return CompletableFuture.completedFuture(RewardDeliveryResult.failed("unknown", "Reward payload was missing an id."));
     }
@@ -54,6 +70,8 @@ public final class RewardDispatcher {
     }
 
     if (!reward.delivery.safeReward && !config.allowUnsafeRewards()) {
+      logger.warning("Blocked unsafe reward id=" + reward.id + " rewardKey=" + reward.rewardKey
+          + " (allowUnsafeRewards=false).");
       return CompletableFuture.completedFuture(RewardDeliveryResult.failed(reward.id, "Unsafe reward rejected by RealCore."));
     }
 
@@ -63,30 +81,35 @@ public final class RewardDispatcher {
 
     List<CompletableFuture<Void>> tasks = new ArrayList<>();
     List<String> notificationCommands = new ArrayList<>();
-    String productSlug = reward.delivery.productSlug;
+    ResolveResult slugMapping = ProductPermissionResolver.resolve(config, reward, logger);
 
     if (hasLuckPermsPayload(reward)) {
       tasks.add(luckPermsService.apply(reward));
     }
 
-    String mappedPermission = productSlug == null ? null : config.productPermissions().get(productSlug);
-    if (mappedPermission != null && !mappedPermission.isBlank()) {
+    if (slugMapping.hasPermission()) {
       UUID uuid = parseUuid(reward.minecraftUuid());
       if (uuid == null) {
         return CompletableFuture.completedFuture(RewardDeliveryResult.failed(reward.id, "Reward target is missing a valid Minecraft UUID."));
       }
+      String permission = slugMapping.permission();
       if ("revoke".equalsIgnoreCase(reward.action())) {
-        tasks.add(luckPermsService.revokePermission(uuid, mappedPermission));
+        tasks.add(luckPermsService.revokePermission(uuid, permission));
       } else {
-        tasks.add(luckPermsService.grantPermission(uuid, mappedPermission, durationFor(reward)));
+        tasks.add(luckPermsService.grantPermission(uuid, permission, durationFor(reward)));
       }
     }
 
     List<String> rewardCommands = RewardCommandFormatter.commandsFor(config, reward);
+    RewardCommandSafety.SafetyResult commandSafety = RewardCommandSafety.validateCommands(config, reward, rewardCommands);
+    if (!commandSafety.allowed()) {
+      logger.warning("Blocked reward command for id=" + reward.id + ": " + commandSafety.reason());
+      return CompletableFuture.completedFuture(RewardDeliveryResult.failed(reward.id, commandSafety.reason()));
+    }
 
     for (String message : playerMessagesFor(reward)) {
-      String player = reward.minecraftUsername();
-      if (notBlank(player)) {
+      String player = RewardCommandSafety.safePlayerToken(reward);
+      if (notBlank(player) && !"unknown".equals(player)) {
         notificationCommands.add("tellraw " + player + " " + jsonText(message));
       }
     }
@@ -102,23 +125,28 @@ public final class RewardDispatcher {
     }
 
     if (shouldAttemptVoteRewardLedgerWrite(reward)) {
-      return dispatchWithVoteRewardLedgerWrite(reward, tasks, rewardCommands, notificationCommands);
+      return dispatchWithVoteRewardLedgerWrite(reward, tasks, commandSafety.commands(), notificationCommands, slugMapping);
     }
 
-    for (String command : rewardCommands) {
-      tasks.add(dispatchRewardCommand(command, reward));
+    for (String command : commandSafety.commands()) {
+      tasks.add(dispatchResolvedCommand(command));
     }
     for (String command : notificationCommands) {
       tasks.add(scheduler.dispatchConsoleCommand(command));
     }
 
     if (tasks.isEmpty()) {
+      if (slugMapping.source() == ProductPermissionResolver.Source.UNKNOWN) {
+        return CompletableFuture.completedFuture(RewardDeliveryResult.failed(reward.id,
+            "Unknown product slug with no configured handler: " + slugMapping.productSlug()));
+      }
       return CompletableFuture.completedFuture(RewardDeliveryResult.failed(reward.id, "No local handler is configured for this reward."));
     }
 
     return CompletableFuture.allOf(tasks.toArray(CompletableFuture[]::new))
         .thenApply(ignored -> {
           observeVoteRewardLedgerShadow(reward);
+          notifyEntitlementChanges(reward, slugMapping);
           return RewardDeliveryResult.delivered(reward.id);
         })
         .exceptionally(error -> RewardDeliveryResult.failed(reward.id, cleanFailure(error)));
@@ -154,11 +182,26 @@ public final class RewardDispatcher {
     return voteRewardLedgerWriteService != null && voteRewardLedgerWriteService.canAttempt(reward);
   }
 
+  private void notifyEntitlementChanges(RewardPayload reward, ResolveResult slugMapping) {
+    if (entitlementNotifier == null) {
+      return;
+    }
+    boolean granted = !"revoke".equalsIgnoreCase(reward.action());
+    if (slugMapping.hasPermission()) {
+      entitlementNotifier.onPermissionChange(reward, slugMapping.permission(), granted);
+    }
+    if (hasLuckPermsPayload(reward) && reward.delivery.luckPerms.permission != null
+        && !reward.delivery.luckPerms.permission.isBlank()) {
+      entitlementNotifier.onPermissionChange(reward, reward.delivery.luckPerms.permission.trim(), granted);
+    }
+  }
+
   private CompletableFuture<RewardDeliveryResult> dispatchWithVoteRewardLedgerWrite(
       RewardPayload reward,
       List<CompletableFuture<Void>> preLedgerTasks,
       List<String> fallbackCommands,
-      List<String> notificationCommands
+      List<String> notificationCommands,
+      ResolveResult slugMapping
   ) {
     CompletableFuture<Void> prerequisite = preLedgerTasks.isEmpty()
         ? CompletableFuture.completedFuture(null)
@@ -168,12 +211,12 @@ public final class RewardDispatcher {
         .thenCompose(ignored -> voteRewardLedgerWriteService.write(reward))
         .thenCompose(result -> {
           if (result.delivered()) {
-            return finishDeliveredReward(reward, notificationCommands);
+            return finishDeliveredReward(reward, notificationCommands, slugMapping);
           }
           if (!voteRewardLedgerWriteService.fallbackCommandsEnabled()) {
             return CompletableFuture.completedFuture(RewardDeliveryResult.failed(reward.id, result.failureReason()));
           }
-          return runFallbackCommands(reward, fallbackCommands, notificationCommands, result.failureReason());
+          return runFallbackCommands(reward, fallbackCommands, notificationCommands, slugMapping, result.failureReason());
         })
         .exceptionally(error -> RewardDeliveryResult.failed(reward.id, cleanFailure(error)));
   }
@@ -182,9 +225,15 @@ public final class RewardDispatcher {
       RewardPayload reward,
       List<String> fallbackCommands,
       List<String> notificationCommands,
+      ResolveResult slugMapping,
       String reason
   ) {
-    if (fallbackCommands.isEmpty()) {
+    RewardCommandSafety.SafetyResult safety = RewardCommandSafety.validateCommands(config, reward, fallbackCommands);
+    if (!safety.allowed()) {
+      logger.warning("Blocked vote fallback command for id=" + reward.id + ": " + safety.reason());
+      return CompletableFuture.completedFuture(RewardDeliveryResult.failed(reward.id, safety.reason()));
+    }
+    if (safety.commands().isEmpty()) {
       return CompletableFuture.completedFuture(RewardDeliveryResult.failed(
           reward.id,
           "Vote reward ledger write failed and no fallback commands are configured: " + reason
@@ -194,17 +243,18 @@ public final class RewardDispatcher {
     logger.warning("Vote reward ledger fallback commands running: rewardKey=" + reward.rewardKey
         + " rewardId=" + reward.id + " reason=" + reason);
     List<CompletableFuture<Void>> tasks = new ArrayList<>();
-    for (String command : fallbackCommands) {
-      tasks.add(dispatchRewardCommand(command, reward));
+    for (String command : safety.commands()) {
+      tasks.add(dispatchResolvedCommand(command));
     }
     return CompletableFuture.allOf(tasks.toArray(CompletableFuture[]::new))
-        .thenCompose(ignored -> finishDeliveredReward(reward, notificationCommands))
+        .thenCompose(ignored -> finishDeliveredReward(reward, notificationCommands, slugMapping))
         .exceptionally(error -> RewardDeliveryResult.failed(reward.id, cleanFailure(error)));
   }
 
   private CompletableFuture<RewardDeliveryResult> finishDeliveredReward(
       RewardPayload reward,
-      List<String> notificationCommands
+      List<String> notificationCommands,
+      ResolveResult slugMapping
   ) {
     List<CompletableFuture<Void>> notificationTasks = new ArrayList<>();
     for (String command : notificationCommands) {
@@ -218,12 +268,13 @@ public final class RewardDispatcher {
         logger.warning("Vote reward ledger notification command failed after delivery: " + cleanMessage(error));
       }
       observeVoteRewardLedgerShadow(reward);
+      notifyEntitlementChanges(reward, slugMapping);
       return RewardDeliveryResult.delivered(reward.id);
     });
   }
 
-  private CompletableFuture<Void> dispatchRewardCommand(String command, RewardPayload reward) {
-    return scheduler.dispatchConsoleCommand(RewardCommandFormatter.applyPlaceholders(command, reward, config.serverId()));
+  private CompletableFuture<Void> dispatchResolvedCommand(String command) {
+    return scheduler.dispatchConsoleCommand(command);
   }
 
   private boolean allowedRewardKey(String rewardKey) {

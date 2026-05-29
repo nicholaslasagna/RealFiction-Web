@@ -7,6 +7,7 @@ import com.realfiction.realcore.command.RealFictionCommand;
 import com.realfiction.realcore.config.RealCoreConfig;
 import com.realfiction.realcore.cosmetics.CosmeticsConfig;
 import com.realfiction.realcore.cosmetics.CosmeticsListener;
+import com.realfiction.realcore.cosmetics.CosmeticEntitlementNotifier;
 import com.realfiction.realcore.cosmetics.CosmeticsManager;
 import com.realfiction.realcore.economy.EconomyProductionStartupAudit;
 import com.realfiction.realcore.economy.EconomyService;
@@ -176,8 +177,16 @@ public final class RealCorePlugin extends JavaPlugin {
       voteRewardLedgerShadowService = new VoteRewardLedgerShadowService(realCoreConfig, getLogger());
       voteRewardLedgerWriteService = new VoteRewardLedgerWriteService(
           realCoreConfig, apiClient::postEconomyTransactions, getLogger());
+      CosmeticEntitlementNotifier entitlementNotifier = new CosmeticEntitlementNotifier(
+          this, scheduler, this::cosmeticsManager, this::lobbyManager);
       RewardDispatcher dispatcher = new RewardDispatcher(
-          this, realCoreConfig, scheduler, luckPermsService, voteRewardLedgerShadowService, voteRewardLedgerWriteService);
+          this,
+          realCoreConfig,
+          scheduler,
+          luckPermsService,
+          voteRewardLedgerShadowService,
+          voteRewardLedgerWriteService,
+          entitlementNotifier);
       accountLinkService = new AccountLinkService(this, realCoreConfig, scheduler, apiClient);
       rewardPoller = new RewardPoller(this, realCoreConfig, scheduler, apiClient, dispatcher);
       gameplaySyncLogger = new GameplaySyncLogger(getLogger());
@@ -278,6 +287,14 @@ public final class RealCorePlugin extends JavaPlugin {
 
   public List<String> pendingAckSummaries(int limit) {
     return rewardPoller == null ? List.of() : rewardPoller.pendingAckSummaries(limit);
+  }
+
+  public RewardPoller rewardPoller() {
+    return rewardPoller;
+  }
+
+  public boolean forceRetryRewardAck(String rewardId) {
+    return rewardPoller != null && rewardPoller.forceRetryAck(rewardId);
   }
 
   public RealCoreScheduler scheduler() {

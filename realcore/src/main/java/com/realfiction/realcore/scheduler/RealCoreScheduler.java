@@ -22,6 +22,16 @@ public interface RealCoreScheduler extends AutoCloseable {
 
   void runGlobal(Runnable task);
 
+  /**
+   * Runs a one-shot synchronous task on the global/main region after a tick delay.
+   * Paper/Folia schedulers honor {@code delayTicks}; other implementations may run immediately.
+   */
+  default ScheduledTaskHandle runGlobalLater(Runnable task, long delayTicks) {
+    runGlobal(task);
+    return () -> {
+    };
+  }
+
   void runForPlayer(Player player, Runnable task);
 
   /** Runs a player-context task after a tick delay (Folia: player scheduler). */

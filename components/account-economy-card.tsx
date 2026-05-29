@@ -7,19 +7,30 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 
-type EconomyPayload = {
-  linked: boolean
-  minecraftUuid: string | null
-  minecraftUsername: string | null
-  balanceMinor: string
-  scale: number
+/**
+ * "Your Balance" card on the account page.
+ *
+ * This shows the player's USD **store credit** — real-money website credit
+ * that the player can use at the /store checkout. Funded by redeeming gift
+ * cards (see /api/account/giftcard/redeem) and refunds; spent by store
+ * checkout when "pay with balance" is selected.
+ *
+ * It is NOT the in-game economy balance (SMP coins / Factions money). Those
+ * live in /api/account/economy and are shown elsewhere in-game and on
+ * leaderboards.
+ */
+
+type StoreCreditPayload = {
+  balanceCents: number
+  currency: string
   updatedAt: string | null
 }
 
 type LoadState =
-  | { status: "loading"; data?: never; error?: never }
-  | { status: "ready"; data: EconomyPayload; error?: never }
-  | { status: "error"; data?: never; error: string }
+  | { status: "loading"; data?: never; error?: never; transient?: never }
+  | { status: "ready"; data: StoreCreditPayload; error?: never; transient?: never }
+  | { status: "empty"; data?: never; error?: never; transient?: never }
+  | { status: "error"; data?: never; error: string; transient?: never }
 
 type RedeemState =
   | { status: "idle" }
@@ -27,31 +38,22 @@ type RedeemState =
   | { status: "success"; message: string }
   | { status: "error"; message: string }
 
-function formatBalance(balanceMinor: string, scale: number) {
-  const safeScale = BigInt(Math.max(1, scale || 100))
-  let amount: bigint
-
-  try {
-    amount = BigInt(balanceMinor || "0")
-  } catch {
-    amount = 0n
-  }
-
-  const negative = amount < 0n
-  const absolute = negative ? -amount : amount
-  const dollars = absolute / safeScale
-  const cents = absolute % safeScale
-
-  // Group thousands in the integer part for readability (12,345.67).
-  const dollarsStr = dollars.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",")
-  return `${negative ? "-" : ""}$${dollarsStr}.${cents.toString().padStart(2, "0")}`
+/**
+ * USD formatter. Renders "$1,234.56" with thousands separators.
+ */
+function formatCents(cents: number) {
+  const negative = cents < 0
+  const abs = Math.abs(cents)
+  const dollars = Math.trunc(abs / 100)
+  const remainder = abs - dollars * 100
+  const dollarsStr = dollars.toLocaleString("en-US")
+  return `${negative ? "-" : ""}$${dollarsStr}.${String(remainder).padStart(2, "0")}`
 }
 
 function formatDate(value: string | null) {
   if (!value) {
     return "Not yet"
   }
-
   return new Intl.DateTimeFormat("en-US", {
     month: "short",
     day: "numeric",
@@ -60,11 +62,11 @@ function formatDate(value: string | null) {
 }
 
 /**
- * Minecraft-style "emerald" icon for the balance card.
- * Pixel diamond/emerald shape that matches the in-game economy currency
- * visual better than a generic lucide-react Coins icon.
+ * Minecraft-style "gold ingot" icon. Pixel-art, fits the storefront / real
+ * money framing better than a coins/emerald icon (emerald was reading as
+ * the in-game economy currency).
  */
-function EmeraldIcon({ size = 28 }: { size?: number }) {
+function GoldIngotIcon({ size = 24 }: { size?: number }) {
   return (
     <svg
       width={size}
@@ -73,25 +75,21 @@ function EmeraldIcon({ size = 28 }: { size?: number }) {
       shapeRendering="crispEdges"
       aria-hidden
     >
-      {/* Outer dark border */}
-      <rect x="6" y="1" width="4" height="1" fill="#0a3d22" />
-      <rect x="4" y="2" width="8" height="1" fill="#0a3d22" />
-      <rect x="2" y="3" width="12" height="2" fill="#0a3d22" />
-      <rect x="1" y="5" width="14" height="6" fill="#0a3d22" />
-      <rect x="2" y="11" width="12" height="2" fill="#0a3d22" />
-      <rect x="4" y="13" width="8" height="1" fill="#0a3d22" />
-      <rect x="6" y="14" width="4" height="1" fill="#0a3d22" />
-      {/* Bright emerald body */}
-      <rect x="7" y="2" width="2" height="1" fill="#50d68a" />
-      <rect x="5" y="3" width="6" height="1" fill="#3eb336" />
-      <rect x="3" y="4" width="10" height="1" fill="#3eb336" />
-      <rect x="2" y="5" width="12" height="6" fill="#3eb336" />
-      <rect x="3" y="11" width="10" height="1" fill="#318e2a" />
-      <rect x="5" y="12" width="6" height="1" fill="#318e2a" />
-      <rect x="7" y="13" width="2" height="1" fill="#318e2a" />
-      {/* Highlight (top-left) */}
-      <rect x="5" y="4" width="1" height="2" fill="#9be8a9" />
-      <rect x="4" y="5" width="2" height="1" fill="#9be8a9" />
+      {/* dark outer outline */}
+      <rect x="3" y="4" width="10" height="1" fill="#5a3d09" />
+      <rect x="2" y="5" width="12" height="1" fill="#5a3d09" />
+      <rect x="2" y="11" width="12" height="1" fill="#5a3d09" />
+      <rect x="3" y="12" width="10" height="1" fill="#5a3d09" />
+      <rect x="2" y="5" width="1" height="6" fill="#5a3d09" />
+      <rect x="13" y="5" width="1" height="6" fill="#5a3d09" />
+      {/* gold body */}
+      <rect x="3" y="5" width="10" height="6" fill="#f2c66d" />
+      {/* highlight top edge */}
+      <rect x="4" y="5" width="8" height="1" fill="#ffe9a8" />
+      <rect x="3" y="6" width="1" height="1" fill="#ffe9a8" />
+      {/* shadow bottom edge */}
+      <rect x="3" y="10" width="10" height="1" fill="#c68f1e" />
+      <rect x="12" y="6" width="1" height="4" fill="#c68f1e" />
     </svg>
   )
 }
@@ -106,31 +104,40 @@ export function AccountEconomyCard() {
   const loadBalance = useCallback(async () => {
     setState({ status: "loading" })
     try {
-      const response = await fetch("/api/account/economy", {
+      const response = await fetch("/api/account/store-credit", {
         method: "GET",
         headers: { Accept: "application/json" },
         cache: "no-store"
       })
-      const body = (await response.json().catch(() => null)) as Partial<EconomyPayload> & { error?: string } | null
+      if (response.status === 503) {
+        // Migration hasn't landed in the target DB yet — show the empty
+        // state and the redemption CTA so the user sees a clear path
+        // forward without a scary error banner.
+        setState({ status: "empty" })
+        return
+      }
+      const body = (await response.json().catch(() => null)) as
+        | (Partial<StoreCreditPayload> & { error?: string })
+        | null
 
       if (!response.ok) {
-        setState({ status: "error", error: body?.error ?? "Could not load your balance." })
+        setState({ status: "error", error: body?.error ?? "Could not load your store credit." })
         return
       }
 
       setState({
         status: "ready",
         data: {
-          linked: Boolean(body?.linked),
-          minecraftUuid: body?.minecraftUuid ?? null,
-          minecraftUsername: body?.minecraftUsername ?? null,
-          balanceMinor: String(body?.balanceMinor ?? "0"),
-          scale: typeof body?.scale === "number" ? body.scale : 100,
+          balanceCents:
+            typeof body?.balanceCents === "number" && Number.isFinite(body.balanceCents)
+              ? Math.trunc(body.balanceCents)
+              : 0,
+          currency: typeof body?.currency === "string" ? body.currency : "USD",
           updatedAt: body?.updatedAt ?? null
         }
       })
     } catch {
-      setState({ status: "error", error: "Could not load your balance." })
+      setState({ status: "error", error: "Could not load your store credit." })
     }
   }, [])
 
@@ -140,8 +147,6 @@ export function AccountEconomyCard() {
 
   useEffect(() => {
     if (showRedeem) {
-      // Focus the code field when the form opens, but only after the next
-      // paint so the autofocus doesn't fight the layout animation.
       const id = window.setTimeout(() => codeInputRef.current?.focus(), 40)
       return () => window.clearTimeout(id)
     }
@@ -166,7 +171,7 @@ export function AccountEconomyCard() {
       if (response.ok) {
         setRedeem({
           status: "success",
-          message: body?.message ?? "Gift card redeemed — balance updated."
+          message: body?.message ?? "Gift card redeemed — store credit updated."
         })
         setCode("")
         void loadBalance()
@@ -185,19 +190,18 @@ export function AccountEconomyCard() {
     }
   }
 
-  const ready = state.status === "ready" ? state.data : null
-  const linked = ready?.linked ?? false
-
   return (
     <Card className="minecraft-card border-amber-200/18">
       <CardHeader>
         <div className="flex items-start justify-between gap-3">
           <div>
             <CardTitle className="display-font text-3xl">Your Balance</CardTitle>
-            <CardDescription>Only you can see this.</CardDescription>
+            <CardDescription>
+              Store credit you can spend at checkout. Only you can see this.
+            </CardDescription>
           </div>
           <span className="flex h-11 w-11 items-center justify-center border-2 border-[#00060e] bg-gradient-to-b from-[#1a2638] to-[#0a1424] shadow-[inset_0_2px_0_rgba(255,255,255,0.08),inset_0_-2px_0_rgba(0,0,0,0.3)]">
-            <EmeraldIcon size={22} />
+            <GoldIngotIcon size={22} />
           </span>
         </div>
       </CardHeader>
@@ -219,42 +223,32 @@ export function AccountEconomyCard() {
           </div>
         ) : null}
 
-        {ready ? (
-          linked ? (
-            <div className="rounded-lg border border-emerald-300/16 bg-black/24 p-4">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <div className="font-mono text-4xl font-semibold text-amber-100">
-                    {formatBalance(ready.balanceMinor, ready.scale)}
-                  </div>
-                  <p className="mt-2 text-sm text-muted-foreground">
-                    For {ready.minecraftUsername ?? "your linked player"}
-                  </p>
-                </div>
-                <span
-                  className="border border-emerald-300/40 bg-emerald-300/10 px-2 py-1 text-[10px] uppercase tracking-[0.14em] text-emerald-200"
-                  style={{ fontFamily: "rf-bold, sans-serif" }}
-                >
-                  Linked
-                </span>
-              </div>
-              <p className="mt-4 text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                Updated {formatDate(ready.updatedAt)}
-              </p>
+        {state.status === "ready" ? (
+          <div className="rounded-lg border border-emerald-300/16 bg-black/24 p-4">
+            <div className="font-mono text-4xl font-semibold text-amber-100">
+              {formatCents(state.data.balanceCents)}
             </div>
-          ) : (
-            <div className="rounded-lg border border-white/10 bg-black/24 p-4">
-              <p className="font-semibold text-white">Link Minecraft to see your balance.</p>
-              <p className="mt-2 text-sm text-muted-foreground">
-                Once linked, your RealFiction balance will show up here.
-              </p>
-            </div>
-          )
+            <p className="mt-2 text-sm text-muted-foreground">
+              Available at the storefront checkout.
+            </p>
+            <p className="mt-4 text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+              Updated {formatDate(state.data.updatedAt)}
+            </p>
+          </div>
         ) : null}
 
-        {/* Gift card redemption — visible whether linked or not, since you
-            might want to redeem first and link after. */}
-        {ready ? (
+        {state.status === "empty" ? (
+          <div className="rounded-lg border border-white/10 bg-black/24 p-4">
+            <div className="font-mono text-4xl font-semibold text-amber-100">$0.00</div>
+            <p className="mt-2 text-sm text-muted-foreground">
+              No store credit yet. Redeem a gift card to add credit to your account.
+            </p>
+          </div>
+        ) : null}
+
+        {/* Gift card redemption — visible in every state so a player can
+            top up at any time. */}
+        {state.status !== "loading" && state.status !== "error" ? (
           <div className="rounded-lg border border-amber-200/16 bg-black/16 p-4">
             {showRedeem ? (
               <form onSubmit={submitRedeem} className="space-y-3">
@@ -312,7 +306,7 @@ export function AccountEconomyCard() {
                 <div>
                   <p className="font-semibold text-white">Have a gift card?</p>
                   <p className="text-sm text-muted-foreground">
-                    Redeem a code to add credit to your account.
+                    Redeem a code to add real-money credit to your account.
                   </p>
                 </div>
                 <Button

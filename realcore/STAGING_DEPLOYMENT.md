@@ -15,7 +15,7 @@ mvn -q -f realcore/pom.xml clean package
 Jar path:
 
 ```text
-realcore/target/RealCore-0.1.0-SNAPSHOT.jar
+realcore/target/RealCore.jar
 ```
 
 ## 2. Generate the Shared HMAC Secret
@@ -44,13 +44,13 @@ REALCORE_ALLOW_SHARED_SECRET=false
 Stop the backend server first, then copy:
 
 ```text
-realcore/target/RealCore-0.1.0-SNAPSHOT.jar
+realcore/target/RealCore.jar
 ```
 
 to:
 
 ```text
-<Lobby1 server folder>/plugins/RealCore-0.1.0-SNAPSHOT.jar
+<Lobby1 server folder>/plugins/RealCore.jar
 ```
 
 Start Lobby1 once so the config is created:

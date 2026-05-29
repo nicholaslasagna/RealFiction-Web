@@ -30,7 +30,8 @@ public final class CosmeticsStorage {
         data.getString(root + ".usernameColor", ""),
         data.getString(root + ".particleAura", ""),
         data.getString(root + ".trail", ""),
-        data.getBoolean(root + ".lobbyFlight", true)
+        data.getString(root + ".selectedPet", ""),
+        data.getBoolean(root + ".lobbyFlight", false)
     );
   }
 
@@ -39,6 +40,7 @@ public final class CosmeticsStorage {
     data.set(root + ".usernameColor", selection.usernameColor());
     data.set(root + ".particleAura", selection.particleAura());
     data.set(root + ".trail", selection.trail());
+    data.set(root + ".selectedPet", selection.selectedPet());
     data.set(root + ".lobbyFlight", selection.lobbyFlight());
     try {
       data.save(file);
