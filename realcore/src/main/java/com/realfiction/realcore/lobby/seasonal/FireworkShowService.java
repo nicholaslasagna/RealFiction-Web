@@ -18,6 +18,16 @@ public final class FireworkShowService {
   }
 
   public void launchRing(Location origin, int count, SeasonalEffectPalette palette) {
+    launchRing(origin, count, palette, SeasonalShowArea.RING_HEIGHT);
+  }
+
+  /**
+   * Launches a ring of fireworks {@code heightOffset} blocks above the origin.
+   * The height keeps the blast clear of players — rings used to detonate at
+   * {@code +1.2}, basically head height, which dealt firework damage to anyone
+   * standing near the lobby spawn.
+   */
+  public void launchRing(Location origin, int count, SeasonalEffectPalette palette, double heightOffset) {
     if (origin == null || origin.getWorld() == null || count <= 0) {
       return;
     }
@@ -26,7 +36,7 @@ public final class FireworkShowService {
       for (int i = 0; i < count; i++) {
         double angle = (Math.PI * 2 * i) / count;
         double radius = 10 + (i % 3) * 2.5D;
-        Location pad = origin.clone().add(Math.cos(angle) * radius, 1.2D, Math.sin(angle) * radius);
+        Location pad = origin.clone().add(Math.cos(angle) * radius, heightOffset, Math.sin(angle) * radius);
         spawnFirework(world, pad, palette);
       }
     });
