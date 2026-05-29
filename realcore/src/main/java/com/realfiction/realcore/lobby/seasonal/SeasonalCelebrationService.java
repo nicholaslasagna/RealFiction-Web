@@ -14,10 +14,8 @@ import java.nio.file.Files;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.Month;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -77,13 +75,11 @@ public final class SeasonalCelebrationService {
   private static final long BROADCAST_PERIOD_TICKS = 7200L;      // ~6 min
   private static final long MIDNIGHT_CHECK_PERIOD_TICKS = 600L;  // ~30s
 
-  // === distant firework geometry ===
-  private static final int FIREWORK_MIN_DISTANCE = 55;
-  private static final int FIREWORK_MAX_DISTANCE = 110;
+  // === firework volume per ambient tick ===
+  // Position/height are contained to the lobby corridor by SeasonalShowArea
+  // (fireworks used to spawn 55–110 blocks out, off in the distance).
   private static final int FIREWORK_MIN_COUNT = 3;
   private static final int FIREWORK_MAX_COUNT = 7;
-  private static final int FIREWORK_SKY_OFFSET_MIN = 20;
-  private static final int FIREWORK_SKY_OFFSET_MAX = 38;
 
   // === US time zones that get the anthem at midnight ===
   private static final List<ZoneEntry> US_MIDNIGHT_ZONES = List.of(
@@ -92,9 +88,9 @@ public final class SeasonalCelebrationService {
       new ZoneEntry("PST/PDT", ZoneId.of("America/Los_Angeles"))
   );
 
-  // The Star-Spangled Banner melody lives in SeasonalAnthem (shared with the
-  // preview controller so both the real midnight anthem and the admin preview
-  // play the exact same notes).
+  // Midnight songs (Star-Spangled Banner, Jingle Bells) live in
+  // SeasonalSongbook — shared with the preview controller so both the real
+  // midnight show and the admin preview play the exact same melodies.
 
   // === per-theme banner copy + colors. Top line is always REALFICTION
   // so the brand stays anchored; bottom line is a short tagline using
@@ -376,7 +372,7 @@ public final class SeasonalCelebrationService {
     }
   }
 
-  // === firework tick — distant ring of bursts at random sky locations ===
+  // === firework tick — overhead bursts spread across the lobby corridor ===
   private void fireworksTick() {
     SeasonalEventDefinition event = ambience.effectiveEvent(LocalDate.now());
     if (event == null) {
@@ -392,19 +388,18 @@ public final class SeasonalCelebrationService {
     ThreadLocalRandom random = ThreadLocalRandom.current();
     int count = FIREWORK_MIN_COUNT + random.nextInt(FIREWORK_MAX_COUNT - FIREWORK_MIN_COUNT + 1);
     for (int i = 0; i < count; i++) {
-      double angle = random.nextDouble() * Math.PI * 2;
-      double distance = FIREWORK_MIN_DISTANCE
-          + random.nextDouble() * (FIREWORK_MAX_DISTANCE - FIREWORK_MIN_DISTANCE);
-      double skyOffset = FIREWORK_SKY_OFFSET_MIN
-          + random.nextDouble() * (FIREWORK_SKY_OFFSET_MAX - FIREWORK_SKY_OFFSET_MIN);
-      Location pad = anchor.clone().add(
-          Math.cos(angle) * distance,
-          skyOffset,
-          Math.sin(angle) * distance
-      );
-      // Each burst goes through the scheduler internally — FireworkShowService
-      // already dispatches via runGlobal, so this loop is Folia-safe.
-      fireworkShowService.burstAt(pad, palette);
+      // Bursts land inside the show disc (within 24 blocks of the corridor
+      // center, z -178..-124) at a safe overhead height — visible above the
+      // lobby, never off in the distance, and high enough to never damage
+      // players. Staggered ~0.2s apart so it reads as a rolling fireworks
+      // show instead of one chaotic flash. Folia-safe via the scheduler.
+      Location pad = SeasonalShowArea.randomFireworkPad(anchor, random);
+      long delay = i * 4L;
+      ScheduledTaskHandle handle =
+          scheduler.runGlobalLater(() -> fireworkShowService.burstAt(pad, palette), delay);
+      if (handle == null) {
+        fireworkShowService.burstAt(pad, palette);
+      }
     }
   }
 
@@ -421,7 +416,9 @@ public final class SeasonalCelebrationService {
     Banner banner = BANNERS.getOrDefault(
         event.ambienceTheme(),
         new Banner("REALFICTION", null, Color.fromRGB(255, 215, 0), Color.WHITE));
-    Location anchor = origin.location();
+    // Paint the sky banner over the middle of the walkable corridor so it
+    // reads overhead the play area, within the navigable z bounds.
+    Location anchor = SeasonalShowArea.center(origin.location());
     if (banner.bottom() == null) {
       SeasonalParticleTextRenderer.renderLine(scheduler, anchor, banner.top(), banner.topColor(), 0.0D);
       return;
@@ -461,10 +458,10 @@ public final class SeasonalCelebrationService {
   // === midnight tick — check each US zone, fire the anthem at 00:00 ===
   private void midnightTick() {
     SeasonalEventDefinition event = ambience.effectiveEvent(LocalDate.now());
-    if (event == null || !isAnthemTheme(event.ambienceTheme())) {
+    if (event == null || !SeasonalSongbook.hasSong(event.ambienceTheme())) {
       return;
     }
-    LocalDate peak = anthemPeakDay(event.ambienceTheme(), LocalDate.now().getYear());
+    LocalDate peak = SeasonalSongbook.peakDay(event.ambienceTheme(), LocalDate.now().getYear());
     if (peak == null) {
       return;
     }
@@ -490,13 +487,13 @@ public final class SeasonalCelebrationService {
         continue;
       }
       logger.log(Level.INFO,
-          "Seasonal anthem firing for event=" + event.id() + " zone=" + zone.label()
+          "Seasonal song firing for event=" + event.id() + " zone=" + zone.label()
               + " localDate=" + localDate);
-      announceAnthem(event, zone);
-      playAnthemForAllLobbyPlayers();
+      announceSong(event, zone);
+      playSongForAllLobbyPlayers(SeasonalSongbook.songFor(event.ambienceTheme()));
       // US 250 specifically gets the big midnight visual show + the
-      // founding-permission grant. Other patriotic events still get the
-      // anthem + announce above but skip the big show / grant.
+      // founding-permission grant. Other song holidays still get the
+      // song + announce above but skip the big show / grant.
       if (event.ambienceTheme() == SeasonalAmbienceTheme.US250_INDEPENDENCE_DAY) {
         runUs250MidnightBigShow(zone);
         grantUs250FoundingToLobbyPlayers();
@@ -519,14 +516,17 @@ public final class SeasonalCelebrationService {
       logger.warning("US 250 midnight big show skipped: no valid origin");
       return;
     }
-    Location anchor = origin.location();
+    // Center the whole show in the middle of the walkable corridor so the
+    // rings, banner, and dust storm sit overhead the play area and inside the
+    // navigable z bounds (-178..-124), never off in the distance.
+    Location show = SeasonalShowArea.center(origin.location());
 
     sendUs250MidnightTitle(zone);
 
     // Force-paint the REALFICTION / 250 YEARS sky banner immediately
     // (do not wait for the next 60s banner tick).
     SeasonalParticleTextRenderer.renderBanner(
-        scheduler, anchor,
+        scheduler, show,
         "REALFICTION", "250 YEARS",
         Color.fromRGB(220, 32, 48),  // red
         Color.fromRGB(255, 215, 0)   // gold
@@ -543,36 +543,38 @@ public final class SeasonalCelebrationService {
         Color.WHITE,
         org.bukkit.FireworkEffect.Type.STAR);
 
-    scheduleRingFor(anchor, 12, patriotic, 0L);
-    scheduleRingFor(anchor, 16, gold,      30L);   // +1.5s
-    scheduleRingFor(anchor, 20, patriotic, 60L);   // +3.0s
-    scheduleRingFor(anchor, 24, gold,      100L);  // +5.0s — climax
+    scheduleRingFor(show, 12, patriotic, 0L);
+    scheduleRingFor(show, 16, gold,      30L);   // +1.5s
+    scheduleRingFor(show, 20, patriotic, 60L);   // +3.0s
+    scheduleRingFor(show, 24, gold,      100L);  // +5.0s — climax
 
     // Heavy patriotic dust storm at t=0.
-    schedulePatrioticParticleStorm(anchor);
+    schedulePatrioticParticleStorm(show);
   }
 
-  private void scheduleRingFor(Location anchor, int count, SeasonalEffectPalette palette, long delayTicks) {
+  private void scheduleRingFor(Location center, int count, SeasonalEffectPalette palette, long delayTicks) {
+    // Rings detonate at a safe overhead height (SeasonalShowArea.RING_HEIGHT)
+    // — they used to burst at +1.2, basically head height, and hurt players.
     ScheduledTaskHandle handle = scheduler.runGlobalLater(
-        () -> fireworkShowService.launchRing(anchor, count, palette),
+        () -> fireworkShowService.launchRing(center, count, palette, SeasonalShowArea.RING_HEIGHT),
         delayTicks);
     if (handle == null) {
       // Scheduler refused; fall back to immediate fire so we don't
       // silently drop a ring.
-      fireworkShowService.launchRing(anchor, count, palette);
+      fireworkShowService.launchRing(center, count, palette, SeasonalShowArea.RING_HEIGHT);
     }
   }
 
-  private void schedulePatrioticParticleStorm(Location anchor) {
-    scheduler.runGlobal(() -> {
-      World world = anchor.getWorld();
+  private void schedulePatrioticParticleStorm(Location center) {
+    scheduler.runGlobal(() -> SeasonalEffectGuard.run("us250-dust-storm", () -> {
+      World world = center.getWorld();
       if (world == null) {
         return;
       }
       ThreadLocalRandom random = ThreadLocalRandom.current();
-      // Big visible bursts above the spawn.
-      world.spawnParticle(Particle.FIREWORK, anchor.clone().add(0, 5, 0), 80, 8, 4, 8, 0.1);
-      world.spawnParticle(Particle.TOTEM_OF_UNDYING, anchor.clone().add(0, 4, 0), 40, 6, 3, 6, 0.05);
+      // Big visible bursts above the middle of the corridor.
+      world.spawnParticle(Particle.FIREWORK, center.clone().add(0, 5, 0), 80, 8, 4, 8, 0.1);
+      world.spawnParticle(Particle.TOTEM_OF_UNDYING, center.clone().add(0, 4, 0), 40, 6, 3, 6, 0.05);
 
       Particle.DustOptions red = new Particle.DustOptions(Color.fromRGB(220, 32, 48), 1.6f);
       Particle.DustOptions white = new Particle.DustOptions(Color.WHITE, 1.6f);
@@ -582,7 +584,7 @@ public final class SeasonalCelebrationService {
         double angle = random.nextDouble() * Math.PI * 2;
         double radius = 4 + random.nextDouble() * 8;
         double y = 2 + random.nextDouble() * 6;
-        Location point = anchor.clone().add(Math.cos(angle) * radius, y, Math.sin(angle) * radius);
+        Location point = center.clone().add(Math.cos(angle) * radius, y, Math.sin(angle) * radius);
         Particle.DustOptions choice = switch (i % 4) {
           case 0 -> red;
           case 1 -> white;
@@ -591,7 +593,7 @@ public final class SeasonalCelebrationService {
         };
         world.spawnParticle(Particle.DUST, point, 4, 0.3, 0.3, 0.3, 0, choice, true);
       }
-    });
+    }));
   }
 
   private void sendUs250MidnightTitle(ZoneEntry zone) {
@@ -680,13 +682,14 @@ public final class SeasonalCelebrationService {
     }
   }
 
-  private void announceAnthem(SeasonalEventDefinition event, ZoneEntry zone) {
+  private void announceSong(SeasonalEventDefinition event, ZoneEntry zone) {
     LobbyManager lobby = lobbySupplier.get();
     if (lobby == null) {
       return;
     }
     LobbyConfig config = lobby.config();
-    String message = "§e§lRealFiction §7| §6§lThe National Anthem§r §6"
+    String song = SeasonalSongbook.songName(event.ambienceTheme());
+    String message = "§e§lRealFiction §7| §6§l" + song + "§r §6"
         + "rings out as midnight strikes §f" + zone.label() + "§6 — "
         + "happy " + displayName(event) + ".";
     for (Player player : Bukkit.getOnlinePlayers()) {
@@ -696,44 +699,23 @@ public final class SeasonalCelebrationService {
     }
   }
 
-  private void playAnthemForAllLobbyPlayers() {
+  private void playSongForAllLobbyPlayers(List<SeasonalSongbook.Note> song) {
+    if (song == null) {
+      return;
+    }
     LobbyManager lobby = lobbySupplier.get();
     if (lobby == null) {
       return;
     }
     LobbyConfig config = lobby.config();
-    List<Player> audience = new ArrayList<>();
     for (Player player : Bukkit.getOnlinePlayers()) {
       if (player.getWorld() != null && config.isLobbyWorld(player.getWorld().getName())) {
-        audience.add(player);
+        SeasonalSongbook.schedule(scheduler, player, 0.85f, song);
       }
     }
-    for (Player player : audience) {
-      schedulePlayerAnthem(player);
-    }
-  }
-
-  private void schedulePlayerAnthem(Player player) {
-    SeasonalAnthem.schedule(scheduler, player, 0.85f);
   }
 
   // === helpers ===
-
-  static boolean isAnthemTheme(SeasonalAmbienceTheme theme) {
-    return theme == SeasonalAmbienceTheme.INDEPENDENCE_DAY
-        || theme == SeasonalAmbienceTheme.US250_INDEPENDENCE_DAY
-        || theme == SeasonalAmbienceTheme.MEMORIAL_DAY
-        || theme == SeasonalAmbienceTheme.VETERANS_DAY;
-  }
-
-  static LocalDate anthemPeakDay(SeasonalAmbienceTheme theme, int year) {
-    return switch (theme) {
-      case INDEPENDENCE_DAY, US250_INDEPENDENCE_DAY -> LocalDate.of(year, Month.JULY, 4);
-      case VETERANS_DAY -> LocalDate.of(year, Month.NOVEMBER, 11);
-      case MEMORIAL_DAY -> HolidayDateRules.memorialDay(year);
-      default -> null;
-    };
-  }
 
   private static String displayName(SeasonalEventDefinition event) {
     if (event == null || event.displayName() == null || event.displayName().isBlank()) {

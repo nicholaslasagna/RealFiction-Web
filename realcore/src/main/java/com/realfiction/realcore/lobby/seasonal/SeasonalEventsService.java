@@ -25,6 +25,12 @@ public final class SeasonalEventsService {
    * ambience service whenever the lobby module is enabled.
    */
   private final SeasonalCelebrationService celebration;
+  /**
+   * Holds the lobby sky at a holiday-appropriate time of day (noon by default,
+   * ramping toward each holiday's sun position as it approaches). Lobby worlds
+   * only — gameplay worlds keep their natural cycle.
+   */
+  private final SeasonalSkyService sky;
 
   public SeasonalEventsService(
       RealCoreScheduler scheduler,
@@ -37,6 +43,7 @@ public final class SeasonalEventsService {
     this.ambience = new SeasonalSpawnAmbienceService(scheduler, lobbySupplier, registry);
     this.preview = new SeasonalPreviewController(scheduler, lobbySupplier, ambience, logger);
     this.celebration = new SeasonalCelebrationService(scheduler, lobbySupplier, ambience, logger);
+    this.sky = new SeasonalSkyService(scheduler, lobbySupplier, ambience, logger);
   }
 
   public void start() {
@@ -46,24 +53,30 @@ public final class SeasonalEventsService {
     }
     ambience.start();
     celebration.start();
+    sky.start();
   }
 
   public void stop() {
     preview.stopPreview();
     celebration.stop();
     ambience.stop();
+    sky.stop();
   }
 
   public void reload() {
     preview.stopPreview();
     ambience.reload();
     celebration.reload();
+    sky.reload();
     LobbyManager lobby = lobbySupplier.get();
     if (lobby != null && lobby.config().enabled() && !ambience.running()) {
       ambience.start();
     }
     if (lobby != null && lobby.config().enabled() && !celebration.running()) {
       celebration.start();
+    }
+    if (lobby != null && lobby.config().enabled() && !sky.running()) {
+      sky.start();
     }
   }
 

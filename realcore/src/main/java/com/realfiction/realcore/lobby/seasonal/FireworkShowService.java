@@ -18,6 +18,16 @@ public final class FireworkShowService {
   }
 
   public void launchRing(Location origin, int count, SeasonalEffectPalette palette) {
+    launchRing(origin, count, palette, SeasonalShowArea.RING_HEIGHT);
+  }
+
+  /**
+   * Launches a ring of fireworks {@code heightOffset} blocks above the origin.
+   * The height keeps the blast clear of players — rings used to detonate at
+   * {@code +1.2}, basically head height, which dealt firework damage to anyone
+   * standing near the lobby spawn.
+   */
+  public void launchRing(Location origin, int count, SeasonalEffectPalette palette, double heightOffset) {
     if (origin == null || origin.getWorld() == null || count <= 0) {
       return;
     }
@@ -26,7 +36,7 @@ public final class FireworkShowService {
       for (int i = 0; i < count; i++) {
         double angle = (Math.PI * 2 * i) / count;
         double radius = 10 + (i % 3) * 2.5D;
-        Location pad = origin.clone().add(Math.cos(angle) * radius, 1.2D, Math.sin(angle) * radius);
+        Location pad = origin.clone().add(Math.cos(angle) * radius, heightOffset, Math.sin(angle) * radius);
         spawnFirework(world, pad, palette);
       }
     });
@@ -40,18 +50,22 @@ public final class FireworkShowService {
   }
 
   private static void spawnFirework(World world, Location location, SeasonalEffectPalette palette) {
-    Firework firework = world.spawn(location, Firework.class);
-    FireworkMeta meta = firework.getFireworkMeta();
-    meta.addEffect(FireworkEffect.builder()
-        .withColor(palette.primary(), palette.secondary(), palette.accent())
-        .withFade(palette.sparkle())
-        .with(palette.burstType())
-        .flicker(true)
-        .trail(true)
-        .build());
-    meta.setPower(1);
-    firework.setFireworkMeta(meta);
-    firework.detonate();
+    // Guarded so a single bad spawn (e.g. world unloading mid-tick) can never
+    // throw out of the scheduler tick or spam the console.
+    SeasonalEffectGuard.run("firework-spawn", () -> {
+      Firework firework = world.spawn(location, Firework.class);
+      FireworkMeta meta = firework.getFireworkMeta();
+      meta.addEffect(FireworkEffect.builder()
+          .withColor(palette.primary(), palette.secondary(), palette.accent())
+          .withFade(palette.sparkle())
+          .with(palette.burstType())
+          .flicker(true)
+          .trail(true)
+          .build());
+      meta.setPower(1);
+      firework.setFireworkMeta(meta);
+      firework.detonate();
+    });
   }
 
   public static void playCountdownSound(Player player, int number) {
