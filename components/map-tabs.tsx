@@ -1,9 +1,10 @@
 "use client"
 
 import Image from "next/image"
-import { ExternalLink, MapPinned } from "lucide-react"
+import { ExternalLink } from "lucide-react"
 import { useState } from "react"
 
+import { MapItemIcon } from "@/components/minecraft-icons"
 import { Button } from "@/components/ui/button"
 import { mapEndpoints } from "@/lib/data"
 import { cn } from "@/lib/utils"
@@ -74,7 +75,7 @@ export function MapTabs() {
 
             <div className="relative flex flex-col items-center gap-5 px-6 py-16 text-center md:py-24">
               <span className="rounded-xl border border-amber-200/25 bg-black/45 p-3.5 shadow-lg">
-                <MapPinned className="h-7 w-7 text-amber-200" />
+                <MapItemIcon className="h-7 w-7" />
               </span>
               <div>
                 <h3 className="display-font text-2xl font-semibold text-white">Opens in a new tab</h3>
