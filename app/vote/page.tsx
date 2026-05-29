@@ -1,8 +1,9 @@
 import type { Metadata } from "next"
 import Link from "next/link"
 import Image from "next/image"
-import { ArrowUpRight, CalendarDays } from "lucide-react"
+import { ArrowUpRight } from "lucide-react"
 
+import { ClockIcon } from "@/components/minecraft-icons"
 import { Reveal } from "@/components/reveal"
 import { VoteCountdown } from "@/components/vote-countdown"
 import { Badge } from "@/components/ui/badge"
@@ -109,7 +110,7 @@ export default function VotePage() {
               {voteMilestones.map((milestone) => (
                 <div key={milestone.votes} className="rounded-lg border border-amber-200/14 bg-black/24 p-4">
                   <div className="flex items-center gap-2">
-                    <CalendarDays className="h-4 w-4 text-emerald-200" />
+                    <ClockIcon className="h-4 w-4" />
                     <div className="font-mono text-2xl font-semibold text-amber-100">{milestone.votes}</div>
                   </div>
                   <div className="mt-1 text-sm text-muted-foreground">{milestone.reward}</div>

@@ -386,3 +386,166 @@ export function GrassBlockIcon({ size = 22, ...rest }: IconProps) {
     rest
   )
 }
+
+/** Written book — support / write to us. */
+export function BookIcon({ size = 22, ...rest }: IconProps) {
+  return pixelSvg(
+    size,
+    <>
+      {/* spine */}
+      <rect x="3" y="2" width="2" height="12" fill="#6f2a2a" />
+      {/* cover */}
+      <rect x="5" y="2" width="7" height="12" fill="#9a3b3b" />
+      <rect x="5" y="2" width="7" height="1" fill="#bd5a5a" />
+      {/* page edges (opening side) */}
+      <rect x="12" y="3" width="2" height="10" fill="#f1ead8" />
+      <rect x="13" y="3" width="1" height="10" fill="#cfc6ad" />
+      {/* gold binding bands */}
+      <rect x="6" y="5" width="5" height="1" fill="#f2c66d" />
+      <rect x="6" y="10" width="5" height="1" fill="#f2c66d" />
+      {/* outline */}
+      <rect x="3" y="2" width="1" height="12" fill="#3a1414" />
+      <rect x="3" y="2" width="9" height="1" fill="#3a1414" />
+      <rect x="3" y="13" width="9" height="1" fill="#3a1414" />
+      <rect x="12" y="13" width="2" height="1" fill="#3a1414" />
+    </>,
+    rest
+  )
+}
+
+/** Emerald — business / trade. */
+export function EmeraldIcon({ size = 22, ...rest }: IconProps) {
+  return pixelSvg(
+    size,
+    <>
+      {/* body */}
+      <rect x="6" y="2" width="4" height="1" fill="#34c878" />
+      <rect x="5" y="3" width="6" height="1" fill="#34c878" />
+      <rect x="4" y="4" width="8" height="6" fill="#34c878" />
+      <rect x="5" y="10" width="6" height="1" fill="#34c878" />
+      <rect x="6" y="11" width="4" height="1" fill="#34c878" />
+      <rect x="7" y="12" width="2" height="1" fill="#34c878" />
+      {/* light facet (top-left) */}
+      <rect x="5" y="3" width="3" height="1" fill="#7af0ac" />
+      <rect x="4" y="4" width="2" height="3" fill="#5fe89a" />
+      {/* dark facet (bottom-right) */}
+      <rect x="10" y="4" width="2" height="6" fill="#1f9e57" />
+      <rect x="8" y="10" width="3" height="1" fill="#1f9e57" />
+      {/* center seam + sparkle */}
+      <rect x="8" y="3" width="1" height="9" fill="#26a861" />
+      <rect x="6" y="5" width="1" height="1" fill="#ffffff" />
+      {/* outline */}
+      <rect x="6" y="1" width="4" height="1" fill="#10502e" />
+      <rect x="4" y="3" width="1" height="1" fill="#10502e" />
+      <rect x="11" y="3" width="1" height="1" fill="#10502e" />
+      <rect x="3" y="4" width="1" height="6" fill="#10502e" />
+      <rect x="12" y="4" width="1" height="6" fill="#10502e" />
+      <rect x="7" y="13" width="2" height="1" fill="#10502e" />
+    </>,
+    rest
+  )
+}
+
+/** Lime check — "included" bullets. */
+export function CheckIcon({ size = 22, ...rest }: IconProps) {
+  return pixelSvg(
+    size,
+    <>
+      {/* short arm (down to the tip) */}
+      <rect x="3" y="6" width="2" height="2" fill="#54cf7e" />
+      <rect x="4" y="7" width="2" height="2" fill="#54cf7e" />
+      <rect x="5" y="8" width="2" height="2" fill="#54cf7e" />
+      {/* tip */}
+      <rect x="6" y="9" width="2" height="2" fill="#54cf7e" />
+      {/* long arm (up to the top-right) */}
+      <rect x="7" y="7" width="2" height="2" fill="#54cf7e" />
+      <rect x="8" y="6" width="2" height="2" fill="#54cf7e" />
+      <rect x="9" y="5" width="2" height="2" fill="#54cf7e" />
+      <rect x="10" y="4" width="2" height="2" fill="#54cf7e" />
+      <rect x="11" y="3" width="2" height="2" fill="#54cf7e" />
+      {/* highlight + shadow */}
+      <rect x="11" y="3" width="2" height="1" fill="#8fe6ac" />
+      <rect x="6" y="11" width="2" height="1" fill="#2f8a52" />
+    </>,
+    rest
+  )
+}
+
+/** Filled map — the live maps page. */
+export function MapItemIcon({ size = 22, ...rest }: IconProps) {
+  return pixelSvg(
+    size,
+    <>
+      {/* leather border */}
+      <rect x="1" y="1" width="14" height="14" fill="#9c7b3f" />
+      {/* parchment */}
+      <rect x="2" y="2" width="12" height="12" fill="#e8d8ad" />
+      <rect x="2" y="2" width="12" height="1" fill="#f3e8c6" />
+      <rect x="2" y="13" width="12" height="1" fill="#c9b07a" />
+      {/* terrain marks */}
+      <rect x="3" y="4" width="3" height="2" fill="#82c06d" />
+      <rect x="9" y="4" width="3" height="3" fill="#6fa8d0" />
+      <rect x="4" y="9" width="3" height="2" fill="#82c06d" />
+      <rect x="9" y="10" width="3" height="2" fill="#caa86a" />
+      {/* red location marker */}
+      <rect x="7" y="6" width="2" height="2" fill="#d2433f" />
+      <rect x="7" y="8" width="1" height="1" fill="#a12f2c" />
+    </>,
+    rest
+  )
+}
+
+/** Bell — network announcements. */
+export function BellIcon({ size = 22, ...rest }: IconProps) {
+  return pixelSvg(
+    size,
+    <>
+      {/* wood mount bar */}
+      <rect x="2" y="2" width="12" height="1" fill="#7a5530" />
+      {/* loop */}
+      <rect x="7" y="3" width="2" height="1" fill="#caa23f" />
+      {/* dome */}
+      <rect x="6" y="4" width="4" height="1" fill="#f2c66d" />
+      <rect x="5" y="5" width="6" height="2" fill="#f2c66d" />
+      {/* body */}
+      <rect x="4" y="7" width="8" height="3" fill="#f2c66d" />
+      {/* flared rim */}
+      <rect x="3" y="10" width="10" height="1" fill="#f2c66d" />
+      <rect x="3" y="11" width="10" height="1" fill="#c68f1e" />
+      {/* clapper */}
+      <rect x="7" y="12" width="2" height="2" fill="#8a6a2a" />
+      {/* highlight + shadow */}
+      <rect x="5" y="5" width="1" height="5" fill="#ffe9a8" />
+      <rect x="10" y="5" width="1" height="5" fill="#c68f1e" />
+    </>,
+    rest
+  )
+}
+
+/** Clock — daily streak milestones. */
+export function ClockIcon({ size = 22, ...rest }: IconProps) {
+  return pixelSvg(
+    size,
+    <>
+      {/* gold ring */}
+      <rect x="5" y="2" width="6" height="1" fill="#f2c66d" />
+      <rect x="5" y="13" width="6" height="1" fill="#f2c66d" />
+      <rect x="2" y="5" width="1" height="6" fill="#f2c66d" />
+      <rect x="13" y="5" width="1" height="6" fill="#f2c66d" />
+      <rect x="3" y="3" width="2" height="2" fill="#f2c66d" />
+      <rect x="11" y="3" width="2" height="2" fill="#f2c66d" />
+      <rect x="3" y="11" width="2" height="2" fill="#f2c66d" />
+      <rect x="11" y="11" width="2" height="2" fill="#f2c66d" />
+      {/* face */}
+      <rect x="4" y="4" width="8" height="8" fill="#f3ead2" />
+      {/* hands */}
+      <rect x="7" y="5" width="2" height="3" fill="#3a3a3a" />
+      <rect x="8" y="8" width="3" height="2" fill="#3a3a3a" />
+      {/* center pin */}
+      <rect x="7" y="7" width="2" height="2" fill="#c4292d" />
+      {/* ring highlight */}
+      <rect x="5" y="2" width="3" height="1" fill="#ffe9a8" />
+    </>,
+    rest
+  )
+}

@@ -8,6 +8,15 @@ import { HomeLiveMaps } from "@/components/home-live-maps"
 import { HomeNetworkInNumbers } from "@/components/home-network-in-numbers"
 import { HomeVoteStreak } from "@/components/home-vote-streak"
 import { LivePlayerCount } from "@/components/live-player-count"
+import {
+  ArmorIcon,
+  BoneIcon,
+  ChestIcon,
+  DyeIcon,
+  ElytraIcon,
+  FireworkRocketIcon,
+  NetherStarIcon
+} from "@/components/minecraft-icons"
 
 /* ============================================================
    Inline icons — match the mockup's minimal SVG glyphs
@@ -17,25 +26,6 @@ function DiscordIcon({ width = 16, height = 16, className }: { width?: number; h
   return (
     <svg viewBox="0 0 24 24" fill="currentColor" width={width} height={height} className={className} aria-hidden>
       <path d="M19.7 5.3A18.3 18.3 0 0 0 15.2 4l-.3.6c1.6.4 3 1 4.2 1.8a13.8 13.8 0 0 0-13.8 0c1.2-.7 2.6-1.4 4.2-1.8L9.2 4a18.3 18.3 0 0 0-4.5 1.3C2.4 8.7 1.8 12.1 2.1 15.4a18.5 18.5 0 0 0 5.6 2.8c.5-.7.9-1.4 1.2-2.2-.7-.3-1.4-.7-2-1.1.2-.1.4-.3.5-.4a13.1 13.1 0 0 0 11.3 0c.2.1.3.3.5.4-.6.4-1.3.8-2 1.1.3.8.7 1.5 1.2 2.2a18.5 18.5 0 0 0 5.6-2.8c.4-3.8-.6-7.2-3.3-10.1ZM8.7 13.5c-1.1 0-2-1-2-2.2s.9-2.3 2-2.3 2 1 2 2.3-.9 2.2-2 2.2Zm6.6 0c-1.1 0-2-1-2-2.2s.9-2.3 2-2.3 2 1 2 2.3-.9 2.2-2 2.2Z" />
-    </svg>
-  )
-}
-
-function GemIcon({ width = 18, height = 18 }: { width?: number; height?: number }) {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      width={width}
-      height={height}
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden
-    >
-      <path d="M6 4h12l4 6-10 10L2 10l4-6z" />
-      <path d="M2 10h20M9 4l3 6 3-6" />
     </svg>
   )
 }
@@ -97,14 +87,16 @@ const ADVENTURES = [
   }
 ]
 
+// Each perk gets the same pixel-art Minecraft item used for its store
+// category, so the homepage row reads like a row of inventory slots.
 const SUPPORT_PERKS = [
-  "Cosmetics",
-  "RealVIP",
-  "Pets",
-  "Particles",
-  "Username colors",
-  "Lobby flight",
-  "Gift cards"
+  { label: "Cosmetics", icon: ArmorIcon },
+  { label: "RealVIP", icon: NetherStarIcon },
+  { label: "Pets", icon: BoneIcon },
+  { label: "Particles", icon: FireworkRocketIcon },
+  { label: "Username colors", icon: DyeIcon },
+  { label: "Lobby flight", icon: ElytraIcon },
+  { label: "Gift cards", icon: ChestIcon }
 ]
 
 export default function HomePage() {
@@ -182,14 +174,17 @@ export default function HomePage() {
           No paid kits, no bought power, no shortcut around the rules.
         </p>
         <div className="perks-band">
-          {SUPPORT_PERKS.map((p) => (
-            <div key={p} className="perk">
-              <div className="slot">
-                <GemIcon />
+          {SUPPORT_PERKS.map((p) => {
+            const Icon = p.icon
+            return (
+              <div key={p.label} className="perk">
+                <div className="slot">
+                  <Icon size={22} />
+                </div>
+                <div className="label">{p.label}</div>
               </div>
-              <div className="label">{p}</div>
-            </div>
-          ))}
+            )
+          })}
         </div>
         <div style={{ textAlign: "center", marginTop: 40 }}>
           <Link className="mc-button mc-button--gold" href="/store">
