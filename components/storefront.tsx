@@ -5,7 +5,7 @@ import Link from "next/link"
 import { Minus, Plus, ShoppingCart, Trash2 } from "lucide-react"
 
 import { CheckIcon } from "@/components/minecraft-icons"
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -65,6 +65,21 @@ export function Storefront() {
   const [minecraftUsername, setMinecraftUsername] = useState("")
   const [giftRecipient, setGiftRecipient] = useState("")
   const [checkoutState, setCheckoutState] = useState<string | null>(null)
+
+  // Deep link: /store#<category> (e.g. from the homepage perk cards)
+  // pre-selects that category filter. Runs on mount and on hash changes.
+  useEffect(() => {
+    const valid = new Set(productCategories.map((c) => c.id as string))
+    function applyHash() {
+      const hash = window.location.hash.replace(/^#/, "")
+      if (hash && valid.has(hash)) {
+        setCategory(hash as ProductCategory | "all")
+      }
+    }
+    applyHash()
+    window.addEventListener("hashchange", applyHash)
+    return () => window.removeEventListener("hashchange", applyHash)
+  }, [])
 
   const sections = useMemo(
     () =>
