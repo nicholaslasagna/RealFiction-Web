@@ -262,11 +262,21 @@ select {
 }
 .rf-nav ul {
   list-style: none;
-  display: flex;
+  /* Hidden on phones/tablets — the hamburger handles navigation there.
+     Only the desktop nav (>=1280px, matching the component's xl: utilities)
+     shows the inline links. This custom rule used to force display:flex and
+     out-specified Tailwind's `hidden`, so the links never collapsed on
+     mobile and overlapped the hamburger. */
+  display: none;
   margin: 0;
   padding: 0;
   align-items: center;
   gap: 4px;
+}
+@media (min-width: 1280px) {
+  .rf-nav ul {
+    display: flex;
+  }
 }
 .rf-nav ul a {
   font-family: "rf-bold", sans-serif;
