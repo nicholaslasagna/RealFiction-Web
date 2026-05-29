@@ -1,15 +1,11 @@
 import type { Metadata } from "next"
 import Image from "next/image"
 import Link from "next/link"
+import type { ComponentType } from "react"
 import {
-  ArrowLeft,
   CalendarDays,
   Clock,
-  Gift,
-  MapPinned,
-  Settings,
-  Sparkles,
-  UserRound
+  Gift
 } from "lucide-react"
 
 import { AccountAuthCard } from "@/components/account-auth-card"
@@ -18,10 +14,14 @@ import { AccountLinkCard } from "@/components/account-link-card"
 import { AccountSignOutButton } from "@/components/account-sign-out-button"
 import {
   BoneIcon,
+  CompassIcon,
   DyeIcon,
   ElytraIcon,
   FireworkRocketIcon,
-  NetherStarIcon
+  GearIcon,
+  GrassBlockIcon,
+  NetherStarIcon,
+  SteveHeadIcon
 } from "@/components/minecraft-icons"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -384,7 +384,7 @@ export default async function AccountPage() {
                 className="inline-flex items-center gap-2 rounded-md border border-white/12 bg-black/24 px-3 py-2 text-sm font-semibold text-muted-foreground backdrop-blur transition hover:border-amber-200/35 hover:text-amber-100"
                 href="/account/settings"
               >
-                <Settings className="h-4 w-4" />
+                <GearIcon className="h-4 w-4" />
                 Settings
               </Link>
             ) : null}
@@ -393,7 +393,7 @@ export default async function AccountPage() {
               className="inline-flex items-center gap-2 rounded-md border border-white/12 bg-black/24 px-3 py-2 text-sm font-semibold text-muted-foreground backdrop-blur transition hover:border-amber-200/35 hover:text-amber-100"
               href="/"
             >
-              <ArrowLeft className="h-4 w-4" />
+              <CompassIcon className="h-4 w-4" />
               Home
             </Link>
           </div>
@@ -541,10 +541,10 @@ async function SignedInAccount() {
                 <CardTitle className="display-font text-3xl">Account Snapshot</CardTitle>
                 <CardDescription>No pay-to-win. Just cosmetics, style, and cozy extras.</CardDescription>
               </CardHeader>
-              <CardContent className="space-y-3 text-sm text-muted-foreground">
-                <SnapshotLine icon={UserRound} label="Minecraft" value={verifiedLink?.minecraft_username ?? "Not linked yet"} />
-                <SnapshotLine icon={Sparkles} label="Perks owned" value={`${ownedCount} of ${perkCards.length}`} />
-                <SnapshotLine icon={MapPinned} label="Main server" value="realfiction.live" />
+              <CardContent className="space-y-2.5 text-sm text-muted-foreground">
+                <SnapshotLine icon={SteveHeadIcon} label="Minecraft" value={verifiedLink?.minecraft_username ?? "Not linked yet"} />
+                <SnapshotLine icon={NetherStarIcon} label="Perks owned" value={`${ownedCount} of ${perkCards.length}`} />
+                <SnapshotLine icon={GrassBlockIcon} label="Main server" value="realfiction.live" />
               </CardContent>
             </Card>
           </aside>
@@ -568,17 +568,19 @@ function SnapshotLine({
   label,
   value
 }: {
-  icon: typeof UserRound
+  icon: ComponentType<{ className?: string; size?: number }>
   label: string
   value: string
 }) {
   return (
-    <div className="flex items-center justify-between gap-4 rounded-md border border-white/10 bg-white/[0.035] px-3 py-3">
-      <span className="flex items-center gap-2 text-slate-200">
-        <Icon className="h-4 w-4 text-amber-200" />
+    <div className="flex items-center justify-between gap-3 rounded-md border border-white/10 bg-white/[0.035] px-3 py-2.5">
+      <span className="flex shrink-0 items-center gap-2.5 font-medium text-slate-200">
+        <span className="flex h-5 w-5 shrink-0 items-center justify-center">
+          <Icon className="h-4 w-4" />
+        </span>
         {label}
       </span>
-      <span className="min-w-0 truncate text-right">{value}</span>
+      <span className="min-w-0 truncate text-right text-slate-300">{value}</span>
     </div>
   )
 }

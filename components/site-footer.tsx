@@ -15,6 +15,11 @@ export function SiteFooter() {
       <p className="email">business@realfiction.live</p>
       <h4>General Support:</h4>
       <p className="email">support@realfiction.live</p>
+      <nav className="legal-links" aria-label="Legal">
+        <a href="/privacy">Privacy Policy</a>
+        <a href="/terms">Terms &amp; Refund</a>
+        <a href="/rules">Rules</a>
+      </nav>
       <p className="copyright">
         © 2026 RealFiction · Not affiliated with Mojang or Microsoft.
       </p>

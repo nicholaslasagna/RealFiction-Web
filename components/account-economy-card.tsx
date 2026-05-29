@@ -231,9 +231,11 @@ export function AccountEconomyCard() {
             <p className="mt-2 text-sm text-muted-foreground">
               Available at the storefront checkout.
             </p>
-            <p className="mt-4 text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-              Updated {formatDate(state.data.updatedAt)}
-            </p>
+            {state.data.updatedAt ? (
+              <p className="mt-4 text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                Updated {formatDate(state.data.updatedAt)}
+              </p>
+            ) : null}
           </div>
         ) : null}
 
@@ -302,14 +304,15 @@ export function AccountEconomyCard() {
                 ) : null}
               </form>
             ) : (
-              <div className="flex items-center justify-between gap-3">
+              <div className="space-y-3">
                 <div>
                   <p className="font-semibold text-white">Have a gift card?</p>
-                  <p className="text-sm text-muted-foreground">
+                  <p className="mt-1 text-sm text-muted-foreground">
                     Redeem a code to add real-money credit to your account.
                   </p>
                 </div>
                 <Button
+                  className="w-full"
                   type="button"
                   variant="outline"
                   onClick={() => {
