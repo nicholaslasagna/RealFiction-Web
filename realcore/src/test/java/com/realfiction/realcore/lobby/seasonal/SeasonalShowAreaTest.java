@@ -36,16 +36,21 @@ final class SeasonalShowAreaTest {
   }
 
   @Test
-  void fireworkPadsStayInsideTheCorridorAtSafeHeight() {
+  void fireworkPadsStayInsideTheShowDiscAtSafeHeight() {
     Location anchor = anchor();
+    Location center = SeasonalShowArea.center(anchor);
     ThreadLocalRandom random = ThreadLocalRandom.current();
     for (int i = 0; i < 5000; i++) {
       Location pad = SeasonalShowArea.randomFireworkPad(anchor, random);
 
+      // Inside the show disc (within SHOW_RADIUS of the corridor center).
+      double dx = pad.getX() - center.getX();
+      double dz = pad.getZ() - center.getZ();
+      assertTrue(Math.hypot(dx, dz) <= SeasonalShowArea.SHOW_RADIUS + 1e-6,
+          "pad outside the show disc: dist=" + Math.hypot(dx, dz));
+      // And always inside the walkable corridor on Z.
       assertTrue(pad.getZ() >= SeasonalShowArea.Z_MIN && pad.getZ() <= SeasonalShowArea.Z_MAX,
           "z out of corridor: " + pad.getZ());
-      assertTrue(Math.abs(pad.getX() - anchor.getX()) <= SeasonalShowArea.X_HALF_WIDTH + 1e-6,
-          "x outside the lobby width: " + pad.getX());
 
       double height = pad.getY() - anchor.getY();
       assertTrue(height >= SeasonalShowArea.FIREWORK_HEIGHT_MIN - 1e-6
@@ -57,11 +62,12 @@ final class SeasonalShowAreaTest {
   }
 
   @Test
-  void centeredRingsStayInsideTheCorridor() {
+  void centeredRingsStayInsideTheShowDiscAndCorridor() {
     // The big-show rings reach a max radius of 15 (10 + (i % 3) * 2.5) around
-    // the corridor center. Both extremes must stay within the z bounds.
+    // the corridor center — inside the show disc and within the z bounds.
     double maxRingRadius = 15.0D;
     double center = SeasonalShowArea.centerZ();
+    assertTrue(maxRingRadius <= SeasonalShowArea.SHOW_RADIUS, "rings exceed the show disc");
     assertTrue(center - maxRingRadius >= SeasonalShowArea.Z_MIN,
         "ring near edge would cross z-min");
     assertTrue(center + maxRingRadius <= SeasonalShowArea.Z_MAX,

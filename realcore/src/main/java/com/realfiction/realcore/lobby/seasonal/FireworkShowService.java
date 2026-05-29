@@ -50,18 +50,22 @@ public final class FireworkShowService {
   }
 
   private static void spawnFirework(World world, Location location, SeasonalEffectPalette palette) {
-    Firework firework = world.spawn(location, Firework.class);
-    FireworkMeta meta = firework.getFireworkMeta();
-    meta.addEffect(FireworkEffect.builder()
-        .withColor(palette.primary(), palette.secondary(), palette.accent())
-        .withFade(palette.sparkle())
-        .with(palette.burstType())
-        .flicker(true)
-        .trail(true)
-        .build());
-    meta.setPower(1);
-    firework.setFireworkMeta(meta);
-    firework.detonate();
+    // Guarded so a single bad spawn (e.g. world unloading mid-tick) can never
+    // throw out of the scheduler tick or spam the console.
+    SeasonalEffectGuard.run("firework-spawn", () -> {
+      Firework firework = world.spawn(location, Firework.class);
+      FireworkMeta meta = firework.getFireworkMeta();
+      meta.addEffect(FireworkEffect.builder()
+          .withColor(palette.primary(), palette.secondary(), palette.accent())
+          .withFade(palette.sparkle())
+          .with(palette.burstType())
+          .flicker(true)
+          .trail(true)
+          .build());
+      meta.setPower(1);
+      firework.setFireworkMeta(meta);
+      firework.detonate();
+    });
   }
 
   public static void playCountdownSound(Player player, int number) {

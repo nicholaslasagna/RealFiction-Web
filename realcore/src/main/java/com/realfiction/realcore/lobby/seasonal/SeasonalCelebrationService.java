@@ -14,10 +14,8 @@ import java.nio.file.Files;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.Month;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -34,8 +32,6 @@ import org.bukkit.Bukkit;
 import org.bukkit.Color;
 import org.bukkit.Location;
 import org.bukkit.Particle;
-import org.bukkit.Sound;
-import org.bukkit.SoundCategory;
 import org.bukkit.World;
 import org.bukkit.entity.Player;
 
@@ -92,25 +88,9 @@ public final class SeasonalCelebrationService {
       new ZoneEntry("PST/PDT", ZoneId.of("America/Los_Angeles"))
   );
 
-  // === Star-Spangled Banner opening phrase, transposed to fit the
-  // Minecraft note-block range (F#3..F#5 = pitch 0.5..2.0).
-  //   "Oh-oh, say can you see, by the dawn's early light..."
-  // delayTicks are relative to t=0 (the first note). ===
-  private static final List<AnthemNote> ANTHEM = List.of(
-      new AnthemNote(0,   0.707f),  // "Oh"      C4
-      new AnthemNote(10,  0.707f),  // "oh"      C4
-      new AnthemNote(22,  0.944f),  // "say"     F4
-      new AnthemNote(34,  1.189f),  // "can"     A4
-      new AnthemNote(46,  1.414f),  // "you"     C5
-      new AnthemNote(58,  1.888f),  // "see,"    F5  (climax)
-      new AnthemNote(82,  1.782f),  // "by"      E5
-      new AnthemNote(94,  1.587f),  // "the"     D5
-      new AnthemNote(106, 1.414f),  // "dawn's"  C5
-      new AnthemNote(118, 1.189f),  // "ear-"    A4
-      new AnthemNote(130, 0.944f),  // "-ly"     F4
-      new AnthemNote(142, 1.189f),  // "light"   A4
-      new AnthemNote(166, 0.944f)   // tail resolution F4
-  );
+  // Midnight songs (Star-Spangled Banner, Jingle Bells) live in
+  // SeasonalSongbook — shared with the preview controller so both the real
+  // midnight show and the admin preview play the exact same melodies.
 
   // === per-theme banner copy + colors. Top line is always REALFICTION
   // so the brand stays anchored; bottom line is a short tagline using
@@ -408,12 +388,18 @@ public final class SeasonalCelebrationService {
     ThreadLocalRandom random = ThreadLocalRandom.current();
     int count = FIREWORK_MIN_COUNT + random.nextInt(FIREWORK_MAX_COUNT - FIREWORK_MIN_COUNT + 1);
     for (int i = 0; i < count; i++) {
-      // Bursts land inside the walkable corridor (z -178..-124), spread across
-      // it horizontally, at a safe overhead height — visible above the lobby
-      // instead of far off in the distance, and high enough to never damage
-      // players. Each burst dispatches via runGlobal, so this loop is Folia-safe.
+      // Bursts land inside the show disc (within 24 blocks of the corridor
+      // center, z -178..-124) at a safe overhead height — visible above the
+      // lobby, never off in the distance, and high enough to never damage
+      // players. Staggered ~0.2s apart so it reads as a rolling fireworks
+      // show instead of one chaotic flash. Folia-safe via the scheduler.
       Location pad = SeasonalShowArea.randomFireworkPad(anchor, random);
-      fireworkShowService.burstAt(pad, palette);
+      long delay = i * 4L;
+      ScheduledTaskHandle handle =
+          scheduler.runGlobalLater(() -> fireworkShowService.burstAt(pad, palette), delay);
+      if (handle == null) {
+        fireworkShowService.burstAt(pad, palette);
+      }
     }
   }
 
@@ -472,10 +458,10 @@ public final class SeasonalCelebrationService {
   // === midnight tick — check each US zone, fire the anthem at 00:00 ===
   private void midnightTick() {
     SeasonalEventDefinition event = ambience.effectiveEvent(LocalDate.now());
-    if (event == null || !isAnthemTheme(event.ambienceTheme())) {
+    if (event == null || !SeasonalSongbook.hasSong(event.ambienceTheme())) {
       return;
     }
-    LocalDate peak = anthemPeakDay(event.ambienceTheme(), LocalDate.now().getYear());
+    LocalDate peak = SeasonalSongbook.peakDay(event.ambienceTheme(), LocalDate.now().getYear());
     if (peak == null) {
       return;
     }
@@ -501,13 +487,13 @@ public final class SeasonalCelebrationService {
         continue;
       }
       logger.log(Level.INFO,
-          "Seasonal anthem firing for event=" + event.id() + " zone=" + zone.label()
+          "Seasonal song firing for event=" + event.id() + " zone=" + zone.label()
               + " localDate=" + localDate);
-      announceAnthem(event, zone);
-      playAnthemForAllLobbyPlayers();
+      announceSong(event, zone);
+      playSongForAllLobbyPlayers(SeasonalSongbook.songFor(event.ambienceTheme()));
       // US 250 specifically gets the big midnight visual show + the
-      // founding-permission grant. Other patriotic events still get the
-      // anthem + announce above but skip the big show / grant.
+      // founding-permission grant. Other song holidays still get the
+      // song + announce above but skip the big show / grant.
       if (event.ambienceTheme() == SeasonalAmbienceTheme.US250_INDEPENDENCE_DAY) {
         runUs250MidnightBigShow(zone);
         grantUs250FoundingToLobbyPlayers();
@@ -580,7 +566,7 @@ public final class SeasonalCelebrationService {
   }
 
   private void schedulePatrioticParticleStorm(Location center) {
-    scheduler.runGlobal(() -> {
+    scheduler.runGlobal(() -> SeasonalEffectGuard.run("us250-dust-storm", () -> {
       World world = center.getWorld();
       if (world == null) {
         return;
@@ -607,7 +593,7 @@ public final class SeasonalCelebrationService {
         };
         world.spawnParticle(Particle.DUST, point, 4, 0.3, 0.3, 0.3, 0, choice, true);
       }
-    });
+    }));
   }
 
   private void sendUs250MidnightTitle(ZoneEntry zone) {
@@ -696,13 +682,14 @@ public final class SeasonalCelebrationService {
     }
   }
 
-  private void announceAnthem(SeasonalEventDefinition event, ZoneEntry zone) {
+  private void announceSong(SeasonalEventDefinition event, ZoneEntry zone) {
     LobbyManager lobby = lobbySupplier.get();
     if (lobby == null) {
       return;
     }
     LobbyConfig config = lobby.config();
-    String message = "§e§lRealFiction §7| §6§lThe National Anthem§r §6"
+    String song = SeasonalSongbook.songName(event.ambienceTheme());
+    String message = "§e§lRealFiction §7| §6§l" + song + "§r §6"
         + "rings out as midnight strikes §f" + zone.label() + "§6 — "
         + "happy " + displayName(event) + ".";
     for (Player player : Bukkit.getOnlinePlayers()) {
@@ -712,52 +699,23 @@ public final class SeasonalCelebrationService {
     }
   }
 
-  private void playAnthemForAllLobbyPlayers() {
+  private void playSongForAllLobbyPlayers(List<SeasonalSongbook.Note> song) {
+    if (song == null) {
+      return;
+    }
     LobbyManager lobby = lobbySupplier.get();
     if (lobby == null) {
       return;
     }
     LobbyConfig config = lobby.config();
-    List<Player> audience = new ArrayList<>();
     for (Player player : Bukkit.getOnlinePlayers()) {
       if (player.getWorld() != null && config.isLobbyWorld(player.getWorld().getName())) {
-        audience.add(player);
+        SeasonalSongbook.schedule(scheduler, player, 0.85f, song);
       }
-    }
-    for (Player player : audience) {
-      schedulePlayerAnthem(player);
-    }
-  }
-
-  private void schedulePlayerAnthem(Player player) {
-    for (AnthemNote note : ANTHEM) {
-      scheduler.runForPlayerLater(player, () -> {
-        if (!player.isOnline()) {
-          return;
-        }
-        player.playSound(player.getLocation(), Sound.BLOCK_NOTE_BLOCK_BELL,
-            SoundCategory.AMBIENT, 0.85f, note.pitch());
-      }, note.delayTicks());
     }
   }
 
   // === helpers ===
-
-  static boolean isAnthemTheme(SeasonalAmbienceTheme theme) {
-    return theme == SeasonalAmbienceTheme.INDEPENDENCE_DAY
-        || theme == SeasonalAmbienceTheme.US250_INDEPENDENCE_DAY
-        || theme == SeasonalAmbienceTheme.MEMORIAL_DAY
-        || theme == SeasonalAmbienceTheme.VETERANS_DAY;
-  }
-
-  static LocalDate anthemPeakDay(SeasonalAmbienceTheme theme, int year) {
-    return switch (theme) {
-      case INDEPENDENCE_DAY, US250_INDEPENDENCE_DAY -> LocalDate.of(year, Month.JULY, 4);
-      case VETERANS_DAY -> LocalDate.of(year, Month.NOVEMBER, 11);
-      case MEMORIAL_DAY -> HolidayDateRules.memorialDay(year);
-      default -> null;
-    };
-  }
 
   private static String displayName(SeasonalEventDefinition event) {
     if (event == null || event.displayName() == null || event.displayName().isBlank()) {
@@ -777,10 +735,6 @@ public final class SeasonalCelebrationService {
         Collections.unmodifiableMap(new HashMap<>(broadcastCycleIndex)),
         firedAnthemKeys.size(),
         lastFailure);
-  }
-
-  /** A single note in the transposed Star-Spangled Banner opening phrase. */
-  private record AnthemNote(long delayTicks, float pitch) {
   }
 
   private record ZoneEntry(String label, ZoneId zoneId) {

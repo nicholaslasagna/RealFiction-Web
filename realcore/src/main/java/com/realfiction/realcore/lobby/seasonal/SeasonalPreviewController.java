@@ -18,6 +18,7 @@ import org.bukkit.Color;
 import org.bukkit.Location;
 import org.bukkit.Particle;
 import org.bukkit.Sound;
+import org.bukkit.SoundCategory;
 import org.bukkit.World;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
@@ -153,8 +154,15 @@ public final class SeasonalPreviewController {
     scheduleDelayed(() -> runCountdown(anchor, 0), COUNTDOWN_TICKS * 3);
     scheduleDelayed(() -> launchMainBurst(spec, anchor), COUNTDOWN_TICKS * 4);
     scheduleDelayed(() -> renderThemedVisuals(spec, anchor), COUNTDOWN_TICKS * 6);
+    // Play the holiday's real song (The Star-Spangled Banner for patriotic
+    // events, Jingle Bells for Christmas) so admins hear exactly what fires at
+    // midnight — instead of the old placeholder scale.
+    List<SeasonalSongbook.Note> song = SeasonalSongbook.songFor(spec.theme());
+    if (song != null) {
+      scheduleDelayed(() -> playSongForAudience(anchor, song), COUNTDOWN_TICKS * 8);
+    }
     if (spec.midnightPreview()) {
-      scheduleDelayed(() -> runMidnightMelody(anchor), COUNTDOWN_TICKS * 10);
+      scheduleDelayed(() -> runMidnightVisuals(anchor), COUNTDOWN_TICKS * 10);
     }
     scheduleDelayed(() -> finishPreview(spec.canonicalId()), PREVIEW_END_TICKS);
   }
@@ -253,20 +261,29 @@ public final class SeasonalPreviewController {
     }
   }
 
-  private void runMidnightMelody(Location anchor) {
-    int[] notes = {0, 2, 4, 5, 7, 9, 11, 12};
-    for (int i = 0; i < notes.length; i++) {
-      int note = notes[i];
-      long delay = COUNTDOWN_TICKS * i * 2;
+  /**
+   * Plays a song (anthem / Jingle Bells) for everyone in the preview audience.
+   * Each note is dispatched through {@link #scheduleDelayed} so it is tracked
+   * as a preview task and gets cancelled by {@code /rf seasonal stoppreview}.
+   */
+  private void playSongForAudience(Location anchor, List<SeasonalSongbook.Note> song) {
+    for (SeasonalSongbook.Note note : song) {
+      float pitch = note.pitch();
       scheduleDelayed(() -> {
         for (Player player : audience(anchor)) {
           scheduler.runForPlayer(player, () -> {
-            float pitch = (float) Math.pow(2, (note - 12) / 12.0);
-            player.playSound(player.getLocation(), Sound.BLOCK_NOTE_BLOCK_BELL, 0.35f, pitch);
+            if (!player.isOnline()) {
+              return;
+            }
+            player.playSound(player.getLocation(), Sound.BLOCK_NOTE_BLOCK_BELL,
+                SoundCategory.AMBIENT, 0.8f, pitch);
           });
         }
-      }, delay);
+      }, note.delayTicks());
     }
+  }
+
+  private void runMidnightVisuals(Location anchor) {
     SeasonalParticleTextRenderer.renderBanner(
         scheduler,
         anchor,
