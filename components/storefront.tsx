@@ -85,9 +85,21 @@ export function Storefront() {
       if (!info) {
         return null
       }
-      return { slug: item.slug, name: info.name, quantity: item.quantity, total: info.priceCents * item.quantity }
+      return {
+        slug: item.slug,
+        name: info.name,
+        quantity: item.quantity,
+        total: info.priceCents * item.quantity,
+        consumable: info.consumable
+      }
     })
-    .filter(Boolean) as Array<{ slug: string; name: string; quantity: number; total: number }>
+    .filter(Boolean) as Array<{
+    slug: string
+    name: string
+    quantity: number
+    total: number
+    consumable: boolean
+  }>
 
   const total = cartLines.reduce((sum, item) => sum + item.total, 0)
 
@@ -341,7 +353,12 @@ export function Storefront() {
                   Add a supporter rank, cosmetics, particles, pets, lobby perks, or gift cards.
                 </div>
               ) : (
-                cartLines.map((item) => (
+                cartLines.map((item) => {
+                  // Subscriptions / perks are one-per-account (max 1); gift
+                  // cards stack up to 25. Mirrors the cap in changeQuantity().
+                  const max = item.consumable ? 25 : 1
+                  const atMax = item.quantity >= max
+                  return (
                   <div key={item.slug} className="rounded-lg border border-amber-200/14 bg-black/24 p-3">
                     <div className="flex items-start justify-between gap-3">
                       <div>
@@ -371,15 +388,25 @@ export function Storefront() {
                       </span>
                       <button
                         aria-label={`Increase ${item.name}`}
-                        className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-amber-200/30 bg-black/40 text-amber-100 transition hover:border-amber-200/60 hover:bg-amber-200/10 disabled:opacity-40"
+                        className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-amber-200/30 bg-black/40 text-amber-100 transition hover:border-amber-200/60 hover:bg-amber-200/10 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-amber-200/30 disabled:hover:bg-black/40"
                         onClick={() => changeQuantity(item.slug, 1)}
+                        disabled={atMax}
+                        title={atMax ? (item.consumable ? "Max 25 per order" : "Only one per account") : undefined}
                         type="button"
                       >
                         <Plus className="h-4 w-4" aria-hidden />
                       </button>
                     </div>
+                    {atMax ? (
+                      <p className="mt-2 text-xs text-muted-foreground">
+                        {item.consumable
+                          ? "That's the most you can add to one order (25)."
+                          : "Just one of these per account — it's a perk, not a stackable item."}
+                      </p>
+                    ) : null}
                   </div>
-                ))
+                  )
+                })
               )}
             </div>
 

@@ -125,6 +125,9 @@ export function SiteHeader() {
       </ul>
 
       <div className="hidden shrink-0 items-center gap-2 xl:flex">
+        <Link href="/store" className="mc-button mc-button--gold mc-button--sm">
+          Store
+        </Link>
         {signedIn ? (
           <div className="relative" ref={accountRef}>
             <button
@@ -178,9 +181,6 @@ export function SiteHeader() {
             Sign in
           </Link>
         )}
-        <Link href="/store" className="mc-button mc-button--gold mc-button--sm">
-          Store
-        </Link>
       </div>
 
       {/* Mobile hamburger toggle — visible below xl (under 1280px) */}

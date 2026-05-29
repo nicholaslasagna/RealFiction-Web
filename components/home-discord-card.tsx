@@ -41,9 +41,9 @@ async function fetchDiscordCounts(): Promise<DiscordInvite> {
   }
 }
 
-function DiscordWordmark({ size = 56 }: { size?: number }) {
+function DiscordWordmark({ size = 56, color = "#5865f2" }: { size?: number; color?: string }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="#5865f2" aria-hidden>
+    <svg width={size} height={size} viewBox="0 0 24 24" fill={color} aria-hidden>
       <path d="M19.7 5.3A18.3 18.3 0 0 0 15.2 4l-.3.6c1.6.4 3 1 4.2 1.8a13.8 13.8 0 0 0-13.8 0c1.2-.7 2.6-1.4 4.2-1.8L9.2 4a18.3 18.3 0 0 0-4.5 1.3C2.4 8.7 1.8 12.1 2.1 15.4a18.5 18.5 0 0 0 5.6 2.8c.5-.7.9-1.4 1.2-2.2-.7-.3-1.4-.7-2-1.1.2-.1.4-.3.5-.4a13.1 13.1 0 0 0 11.3 0c.2.1.3.3.5.4-.6.4-1.3.8-2 1.1.3.8.7 1.5 1.2 2.2a18.5 18.5 0 0 0 5.6-2.8c.4-3.8-.6-7.2-3.3-10.1ZM8.7 13.5c-1.1 0-2-1-2-2.2s.9-2.3 2-2.3 2 1 2 2.3-.9 2.2-2 2.2Zm6.6 0c-1.1 0-2-1-2-2.2s.9-2.3 2-2.3 2 1 2 2.3-.9 2.2-2 2.2Z" />
     </svg>
   )
@@ -110,7 +110,10 @@ export async function HomeDiscordCard() {
           style={{ marginTop: 28 }}
         >
           <span style={{ display: "inline-flex", marginRight: 4 }}>
-            <DiscordWordmark size={16} />
+            {/* currentColor = the button's white label, so the mark stays
+                visible against the blurple background (it used to be the
+                same #5865f2 as the button and only showed on hover). */}
+            <DiscordWordmark size={16} color="currentColor" />
           </span>
           Join Discord
         </Link>
