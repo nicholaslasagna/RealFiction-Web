@@ -549,3 +549,93 @@ export function ClockIcon({ size = 22, ...rest }: IconProps) {
     rest
   )
 }
+
+/** Sealed letter — account email. */
+export function MailIcon({ size = 22, ...rest }: IconProps) {
+  return pixelSvg(
+    size,
+    <>
+      {/* border */}
+      <rect x="2" y="4" width="12" height="8" fill="#8a7748" />
+      {/* paper face */}
+      <rect x="3" y="5" width="10" height="6" fill="#efe4c6" />
+      {/* flap panel (lighter) */}
+      <rect x="4" y="5" width="7" height="1" fill="#f6efda" />
+      <rect x="5" y="6" width="5" height="1" fill="#f6efda" />
+      <rect x="6" y="7" width="3" height="1" fill="#f6efda" />
+      {/* flap seam (closed V) */}
+      <rect x="3" y="5" width="2" height="1" fill="#c7b079" />
+      <rect x="4" y="6" width="2" height="1" fill="#c7b079" />
+      <rect x="5" y="7" width="2" height="1" fill="#c7b079" />
+      <rect x="6" y="8" width="2" height="1" fill="#c7b079" />
+      <rect x="11" y="5" width="2" height="1" fill="#c7b079" />
+      <rect x="10" y="6" width="2" height="1" fill="#c7b079" />
+      <rect x="9" y="7" width="2" height="1" fill="#c7b079" />
+      <rect x="8" y="8" width="2" height="1" fill="#c7b079" />
+      {/* bottom shadow */}
+      <rect x="3" y="10" width="10" height="1" fill="#d8c79b" />
+    </>,
+    rest
+  )
+}
+
+/** Gold key — account password. */
+export function KeyIcon({ size = 22, ...rest }: IconProps) {
+  return pixelSvg(
+    size,
+    <>
+      {/* bow — closed ring */}
+      <rect x="2" y="5" width="3" height="1" fill="#f2c14e" />
+      <rect x="1" y="6" width="1" height="3" fill="#f2c14e" />
+      <rect x="5" y="6" width="1" height="3" fill="#f2c14e" />
+      <rect x="2" y="9" width="3" height="1" fill="#f2c14e" />
+      {/* shaft */}
+      <rect x="6" y="6" width="7" height="2" fill="#f2c14e" />
+      {/* teeth */}
+      <rect x="10" y="8" width="1" height="2" fill="#f2c14e" />
+      <rect x="12" y="8" width="1" height="2" fill="#f2c14e" />
+      {/* highlights */}
+      <rect x="2" y="5" width="3" height="1" fill="#ffe9a8" />
+      <rect x="6" y="6" width="7" height="1" fill="#ffe9a8" />
+      {/* shadow */}
+      <rect x="2" y="9" width="3" height="1" fill="#cf9a2b" />
+      <rect x="6" y="7" width="7" height="1" fill="#cf9a2b" />
+    </>,
+    rest
+  )
+}
+
+/** Shield — two-step verification / account security. */
+export function ShieldIcon({ size = 22, ...rest }: IconProps) {
+  return pixelSvg(
+    size,
+    <>
+      {/* dark border silhouette */}
+      <rect x="3" y="2" width="10" height="1" fill="#3f2a12" />
+      <rect x="2" y="3" width="12" height="5" fill="#3f2a12" />
+      <rect x="3" y="8" width="10" height="1" fill="#3f2a12" />
+      <rect x="4" y="9" width="8" height="1" fill="#3f2a12" />
+      <rect x="5" y="10" width="6" height="1" fill="#3f2a12" />
+      <rect x="6" y="11" width="4" height="1" fill="#3f2a12" />
+      <rect x="7" y="12" width="2" height="1" fill="#3f2a12" />
+      {/* wood face */}
+      <rect x="3" y="3" width="10" height="5" fill="#a06a33" />
+      <rect x="4" y="8" width="8" height="1" fill="#a06a33" />
+      <rect x="5" y="9" width="6" height="1" fill="#a06a33" />
+      <rect x="6" y="10" width="4" height="1" fill="#a06a33" />
+      <rect x="7" y="11" width="2" height="1" fill="#a06a33" />
+      {/* top + left edge highlight */}
+      <rect x="3" y="3" width="10" height="1" fill="#bb853f" />
+      <rect x="3" y="3" width="1" height="4" fill="#b07a37" />
+      {/* wood grain */}
+      <rect x="5" y="4" width="3" height="1" fill="#8a5a2b" />
+      <rect x="9" y="8" width="2" height="1" fill="#8a5a2b" />
+      {/* central iron boss (diamond) */}
+      <rect x="7" y="5" width="2" height="1" fill="#e3cf9b" />
+      <rect x="6" y="6" width="4" height="2" fill="#e3cf9b" />
+      <rect x="7" y="8" width="2" height="1" fill="#e3cf9b" />
+      <rect x="7" y="6" width="2" height="1" fill="#f3e6bd" />
+    </>,
+    rest
+  )
+}

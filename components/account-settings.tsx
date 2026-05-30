@@ -1,7 +1,8 @@
 "use client"
 
-import { KeyRound, Mail, ShieldCheck, Smartphone } from "lucide-react"
 import { FormEvent, ReactNode, useEffect, useState } from "react"
+
+import { CheckIcon, KeyIcon, MailIcon, ShieldIcon, SteveHeadIcon } from "@/components/minecraft-icons"
 
 import { AccountLinkCard } from "@/components/account-link-card"
 import { Button } from "@/components/ui/button"
@@ -42,12 +43,12 @@ export function AccountSettings({
 }
 
 function SettingsSection({
-  icon: Icon,
+  icon,
   title,
   description,
   children
 }: {
-  icon: typeof Mail
+  icon: ReactNode
   title: string
   description: string
   children: ReactNode
@@ -55,8 +56,8 @@ function SettingsSection({
   return (
     <section className="minecraft-card rounded-lg p-6 md:p-7">
       <div className="flex items-start gap-3">
-        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md border border-amber-200/16 bg-black/24 text-amber-200">
-          <Icon className="h-5 w-5" />
+        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md border border-amber-200/16 bg-black/24">
+          {icon}
         </div>
         <div>
           <h2 className="display-font text-2xl font-semibold text-white">{title}</h2>
@@ -120,7 +121,11 @@ function EmailSection({ currentEmail }: { currentEmail: string }) {
   }
 
   return (
-    <SettingsSection icon={Mail} title="Email" description="Change the email used for sign-in and notifications.">
+    <SettingsSection
+      icon={<MailIcon size={26} />}
+      title="Email"
+      description="Change the email used for sign-in and notifications."
+    >
       <p className="mb-4 text-sm text-muted-foreground">
         Current: <span className="font-semibold text-slate-200">{currentEmail}</span>
       </p>
@@ -176,7 +181,11 @@ function PasswordSection() {
   }
 
   return (
-    <SettingsSection icon={KeyRound} title="Password" description="Set a new password for your account.">
+    <SettingsSection
+      icon={<KeyIcon size={26} />}
+      title="Password"
+      description="Set a new password for your account."
+    >
       <form className="grid gap-3 sm:grid-cols-2" onSubmit={submit}>
         <Input
           autoComplete="new-password"
@@ -220,7 +229,7 @@ function MinecraftSection({
 }) {
   return (
     <SettingsSection
-      icon={ShieldCheck}
+      icon={<SteveHeadIcon size={26} />}
       title="Minecraft account"
       description="Link or change your Minecraft username. Changing it needs a quick in-game reverify."
     >
@@ -339,7 +348,7 @@ function TwoFactorSection() {
 
   return (
     <SettingsSection
-      icon={Smartphone}
+      icon={<ShieldIcon size={26} />}
       title="Two-step verification"
       description="Protect sign-in with a code from an authenticator app (Google Authenticator, Authy, 1Password)."
     >
@@ -384,7 +393,7 @@ function TwoFactorSection() {
       ) : status === "on" ? (
         <div className="grid gap-4">
           <p className="inline-flex w-fit items-center gap-2 rounded-md border border-emerald-300/25 bg-emerald-400/10 px-3 py-2 text-sm font-semibold text-emerald-100">
-            <ShieldCheck className="h-4 w-4" /> Two-step verification is on
+            <CheckIcon size={16} /> Two-step verification is on
           </p>
           <Button className="w-fit" disabled={busy} onClick={disable} type="button" variant="outline">
             {busy ? "Turning off..." : "Turn off"}
