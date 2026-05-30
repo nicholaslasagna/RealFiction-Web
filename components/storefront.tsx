@@ -58,11 +58,17 @@ function savePercent(product: SubscriptionProduct, priceCents: number, months: D
   return Math.round((1 - priceCents / full) * 100)
 }
 
-export function Storefront() {
+export function Storefront({
+  signedIn,
+  linkedUsername
+}: {
+  signedIn: boolean
+  linkedUsername: string | null
+}) {
   const [category, setCategory] = useState<ProductCategory | "all">("all")
   const [cart, setCart] = useState<CartItem[]>([])
   const [selectedMonths, setSelectedMonths] = useState<Record<string, DurationMonths>>({})
-  const [minecraftUsername, setMinecraftUsername] = useState("")
+  const [isGift, setIsGift] = useState(false)
   const [giftRecipient, setGiftRecipient] = useState("")
   const [checkoutState, setCheckoutState] = useState<string | null>(null)
   const cartRef = useRef<HTMLElement>(null)
@@ -119,6 +125,13 @@ export function Storefront() {
 
   const total = cartLines.reduce((sum, item) => sum + item.total, 0)
 
+  // Checkout eligibility. A normal purchase delivers to the buyer's linked
+  // account; a gift delivers to a valid recipient username. The server enforces
+  // all of this too — these gates just keep the UI honest.
+  const validRecipient = /^[A-Za-z0-9_]{3,16}$/.test(giftRecipient.trim())
+  const deliveryReady = isGift ? validRecipient : Boolean(linkedUsername)
+  const canCheckout = signedIn && cartLines.length > 0 && deliveryReady
+
   function changeQuantity(slug: string, delta: number) {
     setCart((current) => {
       const info = skuIndex.get(slug)
@@ -157,8 +170,8 @@ export function Storefront() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           provider,
-          minecraftUsername: minecraftUsername || undefined,
-          giftRecipient: giftRecipient || undefined,
+          isGift,
+          giftRecipient: isGift ? giftRecipient.trim() || undefined : undefined,
           items: cart.map((item) => ({ productId: item.slug, quantity: item.quantity }))
         })
       })
@@ -350,32 +363,53 @@ export function Storefront() {
             <CardDescription>Pay with Card, Apple Pay, Google Pay, or PayPal.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-5">
-            <div className="grid gap-3">
-              <label className="grid gap-2 text-sm font-medium">
-                Your Minecraft username
-                <Input
-                  autoComplete="username"
-                  placeholder="Your in-game name"
-                  value={minecraftUsername}
-                  onChange={(event) => setMinecraftUsername(event.target.value)}
-                />
-                <span className="text-xs font-normal text-muted-foreground">
-                  This is where rewards get delivered.
-                </span>
-              </label>
-              <label className="grid gap-2 text-sm font-medium">
-                Send as a gift?{" "}
-                <span className="font-normal text-muted-foreground">(optional)</span>
-                <Input
-                  placeholder="Their Minecraft username"
-                  value={giftRecipient}
-                  onChange={(event) => setGiftRecipient(event.target.value)}
-                />
-                <span className="text-xs font-normal text-muted-foreground">
-                  Leave blank to deliver to your own account.
-                </span>
-              </label>
-            </div>
+            {!signedIn ? (
+              <div className="rounded-lg border border-amber-200/18 bg-black/24 p-4">
+                <div className="text-sm font-semibold text-white">Delivery</div>
+                <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                  Sign in to checkout and deliver rewards safely.
+                </p>
+              </div>
+            ) : (
+              <div className="rounded-lg border border-amber-200/14 bg-black/24 p-4">
+                <div className="text-sm font-semibold text-white">{isGift ? "Gift delivery" : "Delivery"}</div>
+
+                {isGift ? (
+                  <label className="mt-3 grid gap-2 text-sm font-medium">
+                    Their Minecraft username
+                    <Input
+                      autoComplete="off"
+                      placeholder="Recipient Minecraft username"
+                      value={giftRecipient}
+                      aria-invalid={giftRecipient.trim().length > 0 && !validRecipient}
+                      onChange={(event) => setGiftRecipient(event.target.value)}
+                    />
+                    <span className="text-xs font-normal text-muted-foreground">
+                      Enter the Minecraft username that should receive this gift.
+                    </span>
+                  </label>
+                ) : linkedUsername ? (
+                  <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                    Delivering to your linked Minecraft account:{" "}
+                    <span className="font-semibold text-emerald-200">{linkedUsername}</span>
+                  </p>
+                ) : (
+                  <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                    Link your Minecraft account before checkout so rewards know where to go.
+                  </p>
+                )}
+
+                <label className="mt-3 flex cursor-pointer items-center gap-2 text-sm font-medium text-slate-200">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 accent-amber-400"
+                    checked={isGift}
+                    onChange={(event) => setIsGift(event.target.checked)}
+                  />
+                  Send as gift
+                </label>
+              </div>
+            )}
 
             <div className="grid gap-3">
               {cartLines.length === 0 ? (
@@ -445,35 +479,50 @@ export function Storefront() {
               <strong className="font-mono text-xl text-amber-100">{formatCurrency(total)}</strong>
             </div>
 
-            <div className="grid gap-2">
-              <Button
-                aria-label="Checkout — pay with card, Apple Pay, or Google Pay"
-                className="flex-col"
-                disabled={cartLines.length === 0}
-                onClick={() => checkout("stripe")}
-                type="button"
-              >
-                <span>Checkout</span>
-                {/* What Stripe Checkout accepts — card networks + the wallets. */}
-                <span className="flex items-center justify-center gap-1.5">
-                  <PayMark src="/images/payments/visa.svg" label="Visa" />
-                  <PayMark src="/images/payments/mastercard.svg" label="Mastercard" />
-                  <PayMark src="/images/payments/amex.svg" label="American Express" />
-                  <PayMark src="/images/payments/apple-pay.svg" label="Apple Pay" />
-                  <PayMark src="/images/payments/google-pay.svg" label="Google Pay" />
-                </span>
+            {!signedIn ? (
+              <Button asChild className="w-full">
+                <Link href="/account">Sign in to checkout</Link>
               </Button>
-              <Button
-                aria-label="Pay with PayPal"
-                disabled={cartLines.length === 0}
-                onClick={() => checkout("paypal")}
-                type="button"
-                variant="outline"
-              >
-                Pay with
-                <PayMark src="/images/payments/paypal.svg" label="PayPal" />
+            ) : !isGift && !linkedUsername ? (
+              <Button asChild className="w-full" variant="outline">
+                <Link href="/account">Link Minecraft account</Link>
               </Button>
-            </div>
+            ) : (
+              <div className="grid gap-2">
+                <Button
+                  aria-label="Checkout — pay with card, Apple Pay, or Google Pay"
+                  className="flex-col"
+                  disabled={!canCheckout}
+                  onClick={() => checkout("stripe")}
+                  type="button"
+                >
+                  <span>Checkout</span>
+                  {/* What Stripe Checkout accepts — card networks + the wallets. */}
+                  <span className="flex items-center justify-center gap-1.5">
+                    <PayMark src="/images/payments/visa.svg" label="Visa" />
+                    <PayMark src="/images/payments/mastercard.svg" label="Mastercard" />
+                    <PayMark src="/images/payments/amex.svg" label="American Express" />
+                    <PayMark src="/images/payments/apple-pay.svg" label="Apple Pay" />
+                    <PayMark src="/images/payments/google-pay.svg" label="Google Pay" />
+                  </span>
+                </Button>
+                <Button
+                  aria-label="Pay with PayPal"
+                  disabled={!canCheckout}
+                  onClick={() => checkout("paypal")}
+                  type="button"
+                  variant="outline"
+                >
+                  Pay with
+                  <PayMark src="/images/payments/paypal.svg" label="PayPal" />
+                </Button>
+                {isGift && !validRecipient ? (
+                  <p className="text-xs text-muted-foreground">
+                    Enter the recipient&apos;s Minecraft username to continue.
+                  </p>
+                ) : null}
+              </div>
+            )}
 
             {checkoutState ? (
               <p

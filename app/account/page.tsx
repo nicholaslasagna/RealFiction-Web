@@ -17,6 +17,7 @@ import {
   CompassIcon,
   DyeIcon,
   ElytraIcon,
+  EmeraldIcon,
   FireworkRocketIcon,
   GearIcon,
   GrassBlockIcon,
@@ -77,6 +78,7 @@ type OrderRow = {
   currency: string
   created_at: string
   paid_at: string | null
+  gifted_to_minecraft_username?: string | null
   order_items?: OrderItemRow[] | null
 }
 
@@ -118,11 +120,21 @@ type AccountData = {
 
 const perkCards = [
   {
-    key: "supporter",
+    // RealSupporter is the higher supporter tier and includes RealVIP-level
+    // benefits, so owning it lights up both cards; RealVIP alone lights up only
+    // RealVIP.
+    key: "vip",
     title: "RealVIP",
     text: "Supporter flair, friendly extras, and community perks.",
     slugs: ["realvip", "real-supporter"],
     icon: NetherStarIcon
+  },
+  {
+    key: "supporter",
+    title: "RealSupporter",
+    text: "Top supporter flair, Discord sync, cosmetic drops, and profile style.",
+    slugs: ["real-supporter"],
+    icon: EmeraldIcon
   },
   {
     key: "flight",
@@ -208,8 +220,8 @@ function orderLabel(status: string) {
 
 function rewardLabel(status: string) {
   const labels: Record<string, string> = {
-    pending: "Waiting",
-    processing: "On the way",
+    pending: "Queued for delivery",
+    processing: "Waiting for player login",
     delivered: "Delivered",
     failed: "Needs help",
     cancelled: "Cancelled"
@@ -294,16 +306,21 @@ async function getAccountData(): Promise<AccountData> {
         .select("id,entitlement_key,status,expires_at,products(slug,name,category)")
         .eq("status", "active")
         .order("created_at", { ascending: false }),
+      // Only real purchases — abandoned pre-payment orders (status "pending"/
+      // "draft") and cancelled ones never reached checkout, so they aren't
+      // shown here (the live cart on the store page is where in-progress items
+      // live).
       supabase
         .from("orders")
-        .select("id,status,total_cents,currency,created_at,paid_at,order_items(quantity,product_snapshot)")
+        .select("id,status,total_cents,currency,created_at,paid_at,gifted_to_minecraft_username,order_items(quantity,product_snapshot)")
+        .in("status", ["paid", "fulfilled", "refunded", "chargeback"])
         .order("created_at", { ascending: false })
-        .limit(6),
+        .limit(50),
       supabase
         .from("reward_queue")
         .select("id,source,reward_key,status,created_at,delivered_at,failed_at,payload")
         .order("created_at", { ascending: false })
-        .limit(6),
+        .limit(50),
       supabase
         .from("vote_streaks")
         .select("current_streak,longest_streak,monthly_votes,total_votes,last_vote_at,minecraft_username")
@@ -379,6 +396,13 @@ export default async function AccountPage() {
             />
           </Link>
           <div className="flex items-center gap-2">
+            <Link
+              className="inline-flex items-center gap-2 rounded-md border border-white/12 bg-black/24 px-3 py-2 text-sm font-semibold text-muted-foreground backdrop-blur transition hover:border-amber-200/35 hover:text-amber-100"
+              href="/"
+            >
+              <CompassIcon className="h-4 w-4" />
+              Home
+            </Link>
             {user ? (
               <Link
                 className="inline-flex items-center gap-2 rounded-md border border-white/12 bg-black/24 px-3 py-2 text-sm font-semibold text-muted-foreground backdrop-blur transition hover:border-amber-200/35 hover:text-amber-100"
@@ -388,13 +412,6 @@ export default async function AccountPage() {
                 Settings
               </Link>
             ) : null}
-            <Link
-              className="inline-flex items-center gap-2 rounded-md border border-white/12 bg-black/24 px-3 py-2 text-sm font-semibold text-muted-foreground backdrop-blur transition hover:border-amber-200/35 hover:text-amber-100"
-              href="/"
-            >
-              <CompassIcon className="h-4 w-4" />
-              Home
-            </Link>
             {user ? <AccountSignOutButton /> : null}
           </div>
         </header>
@@ -493,8 +510,8 @@ async function SignedInAccount() {
             </section>
 
             <div className="grid gap-6 xl:grid-cols-2">
-              <RecentPurchases orders={data.orders} />
-              <RecentRewards rewards={data.rewards} />
+              <AllPurchases orders={data.orders} />
+              <AllRewards rewards={data.rewards} />
             </div>
           </section>
 
@@ -585,40 +602,49 @@ function SnapshotLine({
   )
 }
 
-function RecentPurchases({ orders }: { orders: OrderRow[] }) {
+function AllPurchases({ orders }: { orders: OrderRow[] }) {
   return (
     <Card className="minecraft-card">
       <CardHeader>
-        <CardTitle className="display-font text-3xl">Recent Purchases</CardTitle>
+        <CardTitle className="display-font text-3xl">All Purchases</CardTitle>
         <CardDescription>Thanks for supporting RealFiction.</CardDescription>
       </CardHeader>
-      <CardContent className="space-y-3">
+      <CardContent>
         {orders.length ? (
-          orders.map((order) => {
-            const firstItem = order.order_items?.[0]
-            const itemName = firstItem?.product_snapshot?.name ?? "Store item"
-            const moreItems = Math.max((order.order_items?.length ?? 1) - 1, 0)
+          <div className="max-h-[24rem] space-y-3 overflow-y-auto pr-1">
+            {orders.map((order) => {
+              const firstItem = order.order_items?.[0]
+              const itemName = firstItem?.product_snapshot?.name ?? "Store item"
+              const moreItems = Math.max((order.order_items?.length ?? 1) - 1, 0)
+              const giftedTo = order.gifted_to_minecraft_username
 
-            return (
-              <div key={order.id} className="rounded-lg border border-white/10 bg-black/24 p-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="font-semibold text-white">
-                      {itemName}
-                      {moreItems ? ` + ${moreItems} more` : ""}
-                    </p>
-                    <p className="mt-1 text-sm text-muted-foreground">{formatDate(order.created_at)}</p>
+              return (
+                <div key={order.id} className="rounded-lg border border-white/10 bg-black/24 p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="font-semibold text-white">
+                        {itemName}
+                        {moreItems ? ` + ${moreItems} more` : ""}
+                      </p>
+                      <p className="mt-1 text-sm text-muted-foreground">{formatDate(order.created_at)}</p>
+                      {giftedTo ? (
+                        <p className="mt-1 inline-flex items-center gap-1.5 text-sm text-amber-100">
+                          <Gift className="h-3.5 w-3.5" />
+                          Gifted to: <span className="font-semibold">{giftedTo}</span>
+                        </p>
+                      ) : null}
+                    </div>
+                    <Badge variant={order.status === "fulfilled" ? "success" : "outline"}>
+                      {orderLabel(order.status)}
+                    </Badge>
                   </div>
-                  <Badge variant={order.status === "fulfilled" ? "success" : "outline"}>
-                    {orderLabel(order.status)}
-                  </Badge>
+                  <p className="mt-3 text-sm font-semibold text-amber-100">
+                    {formatMoney(order.total_cents, order.currency)}
+                  </p>
                 </div>
-                <p className="mt-3 text-sm font-semibold text-amber-100">
-                  {formatMoney(order.total_cents, order.currency)}
-                </p>
-              </div>
-            )
-          })
+              )
+            })}
+          </div>
         ) : (
           <EmptyState icon={Gift} title="No purchases yet" text="Cosmetics and supporter perks will show here." />
         )}
@@ -627,30 +653,32 @@ function RecentPurchases({ orders }: { orders: OrderRow[] }) {
   )
 }
 
-function RecentRewards({ rewards }: { rewards: RewardRow[] }) {
+function AllRewards({ rewards }: { rewards: RewardRow[] }) {
   return (
     <Card className="minecraft-card">
       <CardHeader>
-        <CardTitle className="display-font text-3xl">Recent Rewards</CardTitle>
+        <CardTitle className="display-font text-3xl">All Rewards</CardTitle>
         <CardDescription>Rewards from voting and the store appear here.</CardDescription>
       </CardHeader>
-      <CardContent className="space-y-3">
+      <CardContent>
         {rewards.length ? (
-          rewards.map((reward) => (
-            <div key={reward.id} className="rounded-lg border border-white/10 bg-black/24 p-4">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="font-semibold text-white">{rewardTitle(reward)}</p>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    {rewardDetail(reward)} · {formatDate(reward.created_at)}
-                  </p>
+          <div className="max-h-[24rem] space-y-3 overflow-y-auto pr-1">
+            {rewards.map((reward) => (
+              <div key={reward.id} className="rounded-lg border border-white/10 bg-black/24 p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="font-semibold text-white">{rewardTitle(reward)}</p>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      {rewardDetail(reward)} · {formatDate(reward.created_at)}
+                    </p>
+                  </div>
+                  <Badge variant={reward.status === "delivered" ? "success" : "outline"}>
+                    {rewardLabel(reward.status)}
+                  </Badge>
                 </div>
-                <Badge variant={reward.status === "delivered" ? "success" : "outline"}>
-                  {rewardLabel(reward.status)}
-                </Badge>
               </div>
-            </div>
-          ))
+            ))}
+          </div>
         ) : (
           <EmptyState icon={Clock} title="No rewards yet" text="Vote or visit the store to start earning rewards." />
         )}

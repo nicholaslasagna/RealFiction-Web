@@ -119,10 +119,54 @@ export async function ensureProfileForUser(user: User) {
   }
 }
 
-export async function createPendingOrder(input: CheckoutInput, lines: CheckoutLine[], user: User | null) {
+/**
+ * Looks up the buyer's verified Minecraft link (service-role, scoped to the
+ * user) so a normal checkout can deliver to their linked account without making
+ * them retype their username. Returns null when no verified link exists.
+ */
+export async function getVerifiedMinecraftLink(userId: string) {
+  const supabase = getSupabaseServiceRoleClient()
+  const { data } = await supabase
+    .from("minecraft_account_links")
+    .select("minecraft_username, minecraft_uuid")
+    .eq("user_id", userId)
+    .eq("status", "verified")
+    .order("verified_at", { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  if (!data || !data.minecraft_username) {
+    return null
+  }
+
+  return {
+    username: data.minecraft_username as string,
+    uuid: (data.minecraft_uuid as string | null) ?? null
+  }
+}
+
+export type OrderDelivery = {
+  // Purchaser's linked Minecraft username — the delivery target for a normal
+  // purchase, and the purchaser-of-record for a gift. The checkout route rejects
+  // non-gift orders that reach here without one.
+  minecraftUsername: string | null
+  // Buyer UUID for direct delivery on normal purchases; null for gifts so the
+  // reward resolves the recipient by username instead of the buyer's UUID.
+  minecraftUuid: string | null
+  // Gift recipient username (gift orders only); fulfillment delivers here.
+  giftRecipient: string | null
+  isGift: boolean
+  source: string
+}
+
+export async function createPendingOrder(
+  input: CheckoutInput,
+  lines: CheckoutLine[],
+  user: User | null,
+  delivery: OrderDelivery
+) {
   const supabase = getSupabaseServiceRoleClient()
   const subtotalCents = lines.reduce((total, item) => total + item.lineTotalCents, 0)
-  const minecraftUsername = input.minecraftUsername?.trim() || null
 
   if (user) {
     await ensureProfileForUser(user)
@@ -132,16 +176,19 @@ export async function createPendingOrder(input: CheckoutInput, lines: CheckoutLi
     .from("orders")
     .insert({
       user_id: user?.id ?? null,
-      minecraft_username: minecraftUsername,
+      minecraft_username: delivery.minecraftUsername,
+      minecraft_uuid: delivery.minecraftUuid,
       provider: input.provider,
       status: "pending",
       subtotal_cents: subtotalCents,
       discount_cents: 0,
       total_cents: subtotalCents,
       currency: "USD",
-      gifted_to_minecraft_username: input.giftRecipient ?? null,
+      gifted_to_minecraft_username: delivery.giftRecipient,
       metadata: {
         checkout_version: 2,
+        is_gift: delivery.isGift,
+        delivery_source: delivery.source,
         product_slugs: lines.map((line) => line.product.slug)
       }
     })

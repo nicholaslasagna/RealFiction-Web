@@ -6,7 +6,10 @@ import type { CheckoutLine } from "@/lib/store-server"
 
 export const checkoutSchema = z.object({
   provider: z.enum(["stripe", "paypal"]),
-  minecraftUsername: z.string().trim().min(3).max(16).regex(/^[A-Za-z0-9_]+$/).optional(),
+  // Gift mode is an explicit flag (a checkbox in the cart). For a normal
+  // purchase the delivery target is the buyer's linked account, resolved on the
+  // server — the client never sends its own username for non-gift orders.
+  isGift: z.boolean().optional().default(false),
   giftRecipient: z.string().trim().min(3).max(16).regex(/^[A-Za-z0-9_]+$/).optional(),
   items: z
     .array(
@@ -24,8 +27,11 @@ export type CheckoutInput = z.infer<typeof checkoutSchema>
 type CheckoutOrder = {
   id: string
   provider: "stripe" | "paypal"
+  // Resolved server-side delivery target (gift recipient for gifts, the buyer's
+  // linked Minecraft account otherwise). Non-empty for any valid checkout.
   minecraftUsername?: string | null
   giftRecipient?: string | null
+  isGift?: boolean
 }
 
 function getSiteUrl() {
@@ -57,6 +63,7 @@ export async function createStripeCheckout(order: CheckoutOrder, lines: Checkout
   body.set("metadata[order_id]", order.id)
   body.set("metadata[minecraft_username]", order.minecraftUsername ?? "")
   body.set("metadata[gift_recipient]", order.giftRecipient ?? "")
+  body.set("metadata[is_gift]", order.isGift ? "true" : "false")
   body.set("payment_intent_data[metadata][order_id]", order.id)
   body.set("payment_intent_data[metadata][network]", "RealFiction")
 
