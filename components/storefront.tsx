@@ -5,7 +5,7 @@ import Link from "next/link"
 import { Minus, Plus, ShoppingCart, Trash2 } from "lucide-react"
 
 import { CheckIcon } from "@/components/minecraft-icons"
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -65,6 +65,7 @@ export function Storefront() {
   const [minecraftUsername, setMinecraftUsername] = useState("")
   const [giftRecipient, setGiftRecipient] = useState("")
   const [checkoutState, setCheckoutState] = useState<string | null>(null)
+  const cartRef = useRef<HTMLElement>(null)
 
   // Deep link: /store#<category> (e.g. from the homepage perk cards)
   // pre-selects that category filter. Runs on mount and on hash changes.
@@ -134,6 +135,17 @@ export function Storefront() {
       }
       return current.map((item) => (item.slug === slug ? { ...item, quantity: Math.min(quantity, max) } : item))
     })
+  }
+
+  function addToCart(slug: string) {
+    changeQuantity(slug, 1)
+    // On mobile the cart sits below the whole product list — bring it into view
+    // so the item visibly lands and checkout is right there, no long scroll.
+    if (typeof window !== "undefined" && window.matchMedia("(max-width: 1023px)").matches) {
+      requestAnimationFrame(() => {
+        cartRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
+      })
+    }
   }
 
   async function checkout(provider: "stripe" | "paypal") {
@@ -228,7 +240,7 @@ export function Storefront() {
                               {formatCurrency(card.priceCents)}
                             </span>
                           </div>
-                          <Button className="mt-auto w-full" onClick={() => changeQuantity(card.id, 1)} type="button">
+                          <Button className="mt-auto w-full" onClick={() => addToCart(card.id)} type="button">
                             <Plus className="h-4 w-4" />
                             Add to cart
                           </Button>
@@ -309,7 +321,7 @@ export function Storefront() {
                               ))}
                             </ul>
 
-                            <Button className="mt-auto w-full" onClick={() => changeQuantity(tier.slug, 1)} type="button">
+                            <Button className="mt-auto w-full" onClick={() => addToCart(tier.slug)} type="button">
                               <Plus className="h-4 w-4" />
                               Add to cart
                             </Button>
@@ -325,7 +337,10 @@ export function Storefront() {
         </div>
       </div>
 
-      <aside className="min-w-0 lg:sticky lg:top-24 lg:self-start lg:max-h-[calc(100vh-7rem)] lg:overflow-y-auto lg:overscroll-contain lg:pr-1">
+      <aside
+        ref={cartRef}
+        className="min-w-0 scroll-mt-24 lg:sticky lg:top-24 lg:self-start lg:max-h-[calc(100vh-7rem)] lg:overflow-y-auto lg:overscroll-contain lg:pr-1"
+      >
         <Card className="minecraft-panel">
           <CardHeader>
             <CardTitle className="display-font flex items-center gap-2 text-3xl">

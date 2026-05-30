@@ -291,6 +291,40 @@ select {
 .rf-nav ul a:hover { color: rgb(215, 215, 215); background: rgba(255, 255, 255, 0.05); }
 .rf-nav ul a.active { color: var(--gold); }
 
+/* Animated hamburger — three bars that morph into an X when the mobile menu
+   is open (data-open="true"). Bars inherit the button's text color. */
+.rf-hamburger {
+  display: inline-flex;
+  flex-direction: column;
+  justify-content: space-between;
+  width: 20px;
+  height: 14px;
+}
+.rf-hamburger-bar {
+  display: block;
+  width: 100%;
+  height: 2px;
+  border-radius: 1px;
+  background: currentColor;
+  transform-origin: center;
+  transition: transform 0.25s ease, opacity 0.2s ease;
+}
+.rf-hamburger[data-open="true"] .rf-hamburger-bar:nth-child(1) {
+  transform: translateY(6px) rotate(45deg);
+}
+.rf-hamburger[data-open="true"] .rf-hamburger-bar:nth-child(2) {
+  opacity: 0;
+}
+.rf-hamburger[data-open="true"] .rf-hamburger-bar:nth-child(3) {
+  transform: translateY(-6px) rotate(-45deg);
+}
+
+/* Mobile menu drop-in */
+@keyframes rf-menu-drop {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 /* ============================================================
    HERO — full-bleed bg image + dark overlay
    ============================================================ */

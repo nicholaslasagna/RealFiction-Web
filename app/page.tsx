@@ -112,7 +112,7 @@ export default function HomePage() {
 
           <div className="hero-actions">
             <CopyServerButton value="realfiction.live" label="Copy Java IP" />
-            <a className="mc-button" href="https://discord.com/invite/JkPpmzn">
+            <a className="mc-button mc-button--discord" href="https://discord.com/invite/JkPpmzn">
               <DiscordIcon /> Join Our Discord
             </a>
           </div>

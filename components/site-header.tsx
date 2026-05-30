@@ -3,7 +3,7 @@
 import Image from "next/image"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
-import { ChevronDown, LogOut, Menu, X } from "lucide-react"
+import { ChevronDown, LogOut } from "lucide-react"
 import { useEffect, useRef, useState } from "react"
 
 import { Button } from "@/components/ui/button"
@@ -191,7 +191,11 @@ export function SiteHeader() {
         onClick={() => setOpen((value) => !value)}
         className="ml-auto inline-flex h-11 w-11 items-center justify-center border border-amber-200/30 bg-amber-200/8 text-amber-100 transition hover:bg-amber-200/15 xl:hidden"
       >
-        {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+        <span className="rf-hamburger" data-open={open} aria-hidden>
+          <span className="rf-hamburger-bar" />
+          <span className="rf-hamburger-bar" />
+          <span className="rf-hamburger-bar" />
+        </span>
       </button>
 
       {/* Mobile menu — opens directly below the nav. Body scroll is locked
@@ -199,7 +203,7 @@ export function SiteHeader() {
       {open ? (
         <div
           className="absolute left-0 right-0 top-full border-t border-amber-200/10 bg-[#021429]/97 xl:hidden"
-          style={{ maxHeight: "calc(100vh - 80px)", overflowY: "auto" }}
+          style={{ maxHeight: "calc(100vh - 80px)", overflowY: "auto", animation: "rf-menu-drop 0.2s ease" }}
         >
           <nav className="grid gap-1 px-5 py-4">
             {/* Yellow Store CTA pinned to the top of the mobile menu so
