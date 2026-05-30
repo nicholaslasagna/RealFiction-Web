@@ -464,13 +464,14 @@ export function Storefront() {
                 </span>
               </Button>
               <Button
+                aria-label="Pay with PayPal"
                 disabled={cartLines.length === 0}
                 onClick={() => checkout("paypal")}
                 type="button"
                 variant="outline"
               >
-                <PayPalLogo height={16} />
-                Pay with PayPal
+                Pay with
+                <PayMark src="/images/payments/paypal.svg" label="PayPal" />
               </Button>
             </div>
 
@@ -529,33 +530,3 @@ function PayMark({ src, label }: { src: string; label: string }) {
   )
 }
 
-function PayPalLogo({ height = 14 }: { height?: number }) {
-  return (
-    <svg viewBox="0 0 80 20" height={height} aria-hidden>
-      {/* "Pay" in dark blue */}
-      <text
-        x="0"
-        y="15"
-        fontFamily="Arial, Helvetica, sans-serif"
-        fontSize="16"
-        fontWeight="800"
-        fontStyle="italic"
-        fill="#003087"
-      >
-        Pay
-      </text>
-      {/* "Pal" in lighter blue */}
-      <text
-        x="30"
-        y="15"
-        fontFamily="Arial, Helvetica, sans-serif"
-        fontSize="16"
-        fontWeight="800"
-        fontStyle="italic"
-        fill="#009CDE"
-      >
-        Pal
-      </text>
-    </svg>
-  )
-}
