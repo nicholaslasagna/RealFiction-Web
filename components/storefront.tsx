@@ -521,12 +521,14 @@ export function Storefront() {
      without redrawing the protected wordmark from scratch
    ============================================================ */
 
+// Uniform white pill so the accepted-method marks read as one tidy row
+// (same height + width, centered logo) instead of mismatched blobs.
 function PaymentBadge({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <span
       aria-label={label}
       title={label}
-      className="inline-flex h-7 items-center justify-center rounded-md border border-white/10 bg-white/95 px-2 text-[#1a1a1a]"
+      className="inline-flex h-[26px] w-11 items-center justify-center rounded border border-black/10 bg-white text-[#1a1a1a]"
     >
       {children}
     </span>
@@ -537,11 +539,12 @@ function VisaLogo() {
   return (
     <svg viewBox="0 0 48 16" height="11" aria-hidden>
       <text
-        x="0"
+        x="24"
         y="13"
+        textAnchor="middle"
         fontFamily="Arial, Helvetica, sans-serif"
         fontSize="14"
-        fontWeight="900"
+        fontWeight="800"
         fontStyle="italic"
         fill="#1A1F71"
         letterSpacing="0.5"
@@ -554,32 +557,29 @@ function VisaLogo() {
 
 function MastercardLogo() {
   return (
-    <svg viewBox="0 0 32 20" height="14" aria-hidden>
-      <circle cx="12" cy="10" r="7" fill="#EB001B" />
-      <circle cx="20" cy="10" r="7" fill="#F79E1B" />
-      <path
-        d="M16 4.6a7 7 0 0 1 0 10.8 7 7 0 0 1 0-10.8z"
-        fill="#FF5F00"
-      />
+    <svg viewBox="0 0 36 22" height="15" aria-hidden>
+      <circle cx="14" cy="11" r="8" fill="#EB001B" />
+      <circle cx="22" cy="11" r="8" fill="#F79E1B" />
+      <path d="M18 4.8a8 8 0 0 1 0 12.4 8 8 0 0 1 0-12.4z" fill="#FF5F00" />
     </svg>
   )
 }
 
 function AmexLogo() {
   return (
-    <svg viewBox="0 0 40 16" height="11" aria-hidden>
-      <rect width="40" height="16" rx="2" fill="#1F72CD" />
+    <svg viewBox="0 0 32 18" height="13" aria-hidden>
+      <rect width="32" height="18" rx="3" fill="#006FCF" />
       <text
-        x="20"
-        y="11.5"
+        x="16"
+        y="13"
         textAnchor="middle"
         fontFamily="Arial, Helvetica, sans-serif"
-        fontSize="6.5"
+        fontSize="9"
         fontWeight="800"
         fill="#fff"
-        letterSpacing="0.6"
+        letterSpacing="0.5"
       >
-        AMERICAN EXPRESS
+        AMEX
       </text>
     </svg>
   )
@@ -587,18 +587,17 @@ function AmexLogo() {
 
 function ApplePayLogo() {
   return (
-    <svg viewBox="0 0 40 16" height="13" aria-hidden>
+    <svg viewBox="0 0 30 16" height="12" aria-hidden>
       {/* Apple mark */}
       <path
         d="M6.6 4.2c.4-.5.7-1.2.6-1.9-.6 0-1.3.4-1.7.9-.4.4-.7 1.1-.6 1.8.7.1 1.3-.3 1.7-.8zM7.2 5.1c-.9 0-1.7.5-2.1.5-.4 0-1.1-.5-1.9-.5-1 0-1.9.6-2.4 1.5-1 1.8-.3 4.4.7 5.9.5.7 1.1 1.5 1.9 1.5.8 0 1-.5 1.9-.5.9 0 1.1.5 1.9.5.8 0 1.3-.7 1.8-1.5.6-.8.8-1.6.8-1.7-.1 0-1.5-.6-1.5-2.3 0-1.4 1.1-2 1.2-2.1-.7-1-1.7-1.3-2.3-1.3z"
         fill="#000"
       />
-      {/* "Pay" */}
       <text
-        x="13"
+        x="12"
         y="11.5"
         fontFamily="Arial, Helvetica, sans-serif"
-        fontSize="8.2"
+        fontSize="8.4"
         fontWeight="600"
         fill="#000"
       >
@@ -610,18 +609,17 @@ function ApplePayLogo() {
 
 function GooglePayLogo() {
   return (
-    <svg viewBox="0 0 48 16" height="13" aria-hidden>
-      {/* "G" mark approximation */}
+    <svg viewBox="0 0 32 16" height="12" aria-hidden>
+      {/* "G" mark */}
       <path
         d="M7.7 8.1v1.6h2.3c-.1.7-.4 1.3-.9 1.7-.5.4-1.2.6-2 .6a2.9 2.9 0 1 1 0-5.8c.8 0 1.5.3 2 .8l1.1-1.1A4.5 4.5 0 0 0 4.5 8c0 2.5 2 4.5 4.5 4.5 1.3 0 2.4-.4 3.1-1.2.8-.8 1.1-1.9 1.1-3 0-.3 0-.5-.1-.7H7.7z"
         fill="#4285F4"
       />
-      {/* "Pay" wordmark */}
       <text
-        x="15"
+        x="14"
         y="11.5"
         fontFamily="Arial, Helvetica, sans-serif"
-        fontSize="8.2"
+        fontSize="8.4"
         fontWeight="600"
         fill="#5F6368"
       >
