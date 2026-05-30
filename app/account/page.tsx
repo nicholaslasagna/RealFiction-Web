@@ -12,6 +12,7 @@ import { AccountAuthCard } from "@/components/account-auth-card"
 import { AccountEconomyCard } from "@/components/account-economy-card"
 import { AccountLinkCard } from "@/components/account-link-card"
 import { AccountSignOutButton } from "@/components/account-sign-out-button"
+import { GiftCardCodes } from "@/components/gift-card-codes"
 import {
   BoneIcon,
   CompassIcon,
@@ -109,11 +110,22 @@ type VoteStreakRow = {
   minecraft_username: string
 }
 
+type GiftCardRow = {
+  id: string
+  code: string | null
+  balance_cents: number
+  original_balance_cents: number
+  status: string
+  created_at: string
+  redeemed_at: string | null
+}
+
 type AccountData = {
   links: MinecraftLink[]
   entitlements: EntitlementRow[]
   orders: OrderRow[]
   rewards: RewardRow[]
+  giftCards: GiftCardRow[]
   voteStreak: VoteStreakRow | null
   failed: boolean
 }
@@ -296,7 +308,7 @@ function rewardDetail(row: RewardRow) {
 async function getAccountData(): Promise<AccountData> {
   try {
     const supabase = await createSupabaseServerClient()
-    const [linksResult, entitlementsResult, ordersResult, rewardsResult, votesResult] = await Promise.all([
+    const [linksResult, entitlementsResult, ordersResult, rewardsResult, giftCardsResult, votesResult] = await Promise.all([
       supabase
         .from("minecraft_account_links")
         .select("id,minecraft_uuid,minecraft_username,platform,status,verified_at,expires_at,created_at")
@@ -321,6 +333,13 @@ async function getAccountData(): Promise<AccountData> {
         .select("id,source,reward_key,status,created_at,delivered_at,failed_at,payload")
         .order("created_at", { ascending: false })
         .limit(50),
+      // Gift cards the signed-in user purchased (owner-read RLS). Lets them
+      // reveal/copy the code from their account page.
+      supabase
+        .from("gift_cards")
+        .select("id,code,balance_cents,original_balance_cents,status,created_at,redeemed_at")
+        .order("created_at", { ascending: false })
+        .limit(20),
       supabase
         .from("vote_streaks")
         .select("current_streak,longest_streak,monthly_votes,total_votes,last_vote_at,minecraft_username")
@@ -342,6 +361,9 @@ async function getAccountData(): Promise<AccountData> {
       entitlements: (entitlementsResult.data ?? []) as EntitlementRow[],
       orders: (ordersResult.data ?? []) as OrderRow[],
       rewards: (rewardsResult.data ?? []) as RewardRow[],
+      // Gift cards are best-effort — never fail the whole page if the lifecycle
+      // migration hasn't landed in the target DB yet.
+      giftCards: (giftCardsResult.data ?? []) as GiftCardRow[],
       voteStreak: (votesResult.data ?? null) as VoteStreakRow | null,
       failed
     }
@@ -351,6 +373,7 @@ async function getAccountData(): Promise<AccountData> {
       entitlements: [],
       orders: [],
       rewards: [],
+      giftCards: [],
       voteStreak: null,
       failed: true
     }
@@ -508,6 +531,18 @@ async function SignedInAccount() {
                 )
               })}
             </section>
+
+            <GiftCardCodes
+              cards={data.giftCards.map((card) => ({
+                id: card.id,
+                code: card.code,
+                balanceCents: card.balance_cents,
+                originalCents: card.original_balance_cents,
+                status: card.status,
+                createdAt: card.created_at,
+                redeemedAt: card.redeemed_at
+              }))}
+            />
 
             <div className="grid gap-6 xl:grid-cols-2">
               <AllPurchases orders={data.orders} />

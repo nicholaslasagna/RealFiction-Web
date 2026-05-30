@@ -275,6 +275,17 @@ export async function markOrderPaidAndFulfill(orderId: string, providerPaymentId
     throw new Error("Could not fulfill paid order.")
   }
 
+  // Mint gift card codes for any gift-card SKUs in this order. Idempotent (one
+  // card per order-item unit), so a webhook retry can't double-mint. Non-fatal:
+  // the order is already fulfilled and a later re-drive will mint any missing
+  // codes.
+  const { error: giftError } = await supabase.rpc("issue_gift_cards_for_order", {
+    p_order_id: orderId
+  })
+  if (giftError) {
+    console.error("issue_gift_cards_error", giftError.message ?? "unknown")
+  }
+
   return data
 }
 
