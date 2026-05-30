@@ -65,24 +65,7 @@ export function Storefront() {
   const [minecraftUsername, setMinecraftUsername] = useState("")
   const [giftRecipient, setGiftRecipient] = useState("")
   const [checkoutState, setCheckoutState] = useState<string | null>(null)
-  const [applePayAvailable, setApplePayAvailable] = useState(false)
   const cartRef = useRef<HTMLElement>(null)
-
-  // Only surface the Apple Pay button on devices that can actually use it
-  // (Safari on Apple hardware) — never on Android/Windows where it would dead-
-  // end. The payment itself runs in Stripe Checkout, which presents Apple Pay.
-  useEffect(() => {
-    try {
-      const applePay = (window as unknown as {
-        ApplePaySession?: { canMakePayments?: () => boolean }
-      }).ApplePaySession
-      if (applePay?.canMakePayments?.()) {
-        setApplePayAvailable(true)
-      }
-    } catch {
-      // Apple Pay not available in this context — leave the button hidden.
-    }
-  }, [])
 
   // Deep link: /store#<category> (e.g. from the homepage perk cards)
   // pre-selects that category filter. Runs on mount and on hash changes.
@@ -464,24 +447,22 @@ export function Storefront() {
 
             <div className="grid gap-2">
               <Button
+                aria-label="Checkout — pay with card, Apple Pay, or Google Pay"
+                className="flex-col"
                 disabled={cartLines.length === 0}
                 onClick={() => checkout("stripe")}
                 type="button"
               >
-                <CardWalletGlyph />
-                Checkout
+                <span>Checkout</span>
+                {/* What Stripe Checkout accepts — card networks + the wallets. */}
+                <span className="flex items-center justify-center gap-1.5">
+                  <PaymentBadge label="Visa"><VisaLogo /></PaymentBadge>
+                  <PaymentBadge label="Mastercard"><MastercardLogo /></PaymentBadge>
+                  <PaymentBadge label="American Express"><AmexLogo /></PaymentBadge>
+                  <PaymentBadge label="Apple Pay"><ApplePayLogo /></PaymentBadge>
+                  <PaymentBadge label="Google Pay"><GooglePayLogo /></PaymentBadge>
+                </span>
               </Button>
-              {applePayAvailable ? (
-                <Button
-                  aria-label="Pay with Apple Pay"
-                  className="bg-black text-white hover:bg-black/80"
-                  disabled={cartLines.length === 0}
-                  onClick={() => checkout("stripe")}
-                  type="button"
-                >
-                  <ApplePayMark />
-                </Button>
-              ) : null}
               <Button
                 disabled={cartLines.length === 0}
                 onClick={() => checkout("paypal")}
@@ -503,26 +484,11 @@ export function Storefront() {
               </p>
             ) : null}
 
-            {/* Trust + brand row: shows accepted payment methods using
-                clean inline marks so visitors recognize the brands. */}
-            <div className="flex flex-col gap-2 border-t border-border pt-4">
-              <span className="text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
-                We accept
-              </span>
-              <div className="flex flex-wrap items-center gap-2">
-                <PaymentBadge label="Visa"><VisaLogo /></PaymentBadge>
-                <PaymentBadge label="Mastercard"><MastercardLogo /></PaymentBadge>
-                <PaymentBadge label="American Express"><AmexLogo /></PaymentBadge>
-                <PaymentBadge label="Apple Pay"><ApplePayLogo /></PaymentBadge>
-                <PaymentBadge label="Google Pay"><GooglePayLogo /></PaymentBadge>
-                <PaymentBadge label="PayPal"><PayPalLogo height={14} /></PaymentBadge>
-              </div>
-            </div>
-
             {/* Legal + processor disclosure — kept short, honest, and
                 linked out for the full rules so we cover what's required
-                for an online store while staying readable. */}
-            <p className="text-[11px] leading-5 text-muted-foreground">
+                for an online store while staying readable. Accepted methods
+                are shown on the checkout buttons above. */}
+            <p className="border-t border-border pt-4 text-[11px] leading-5 text-muted-foreground">
               Cosmetic items only — no gameplay advantages. By placing an order you agree to
               our{" "}
               <Link href="/terms" className="text-amber-200 underline-offset-2 hover:underline">
@@ -564,29 +530,6 @@ function PaymentBadge({ label, children }: { label: string; children: React.Reac
     >
       {children}
     </span>
-  )
-}
-
-function CardWalletGlyph() {
-  // Generic card+wallet glyph used inside the Stripe checkout button.
-  // The Stripe-hosted checkout itself will show the actual card / Apple Pay /
-  // Google Pay options, so the button just communicates "secure card flow".
-  return (
-    <svg
-      width="18"
-      height="18"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden
-    >
-      <rect x="2.5" y="6" width="19" height="13" rx="2" />
-      <path d="M2.5 10.5h19" />
-      <path d="M6.5 15.5h3" />
-    </svg>
   )
 }
 
@@ -637,29 +580,6 @@ function AmexLogo() {
         letterSpacing="0.6"
       >
         AMERICAN EXPRESS
-      </text>
-    </svg>
-  )
-}
-
-// White Apple-mark + "Pay" for the dark Apple Pay checkout button (reads as
-// "Apple Pay"). The payment runs through Stripe Checkout's Apple Pay sheet.
-function ApplePayMark() {
-  return (
-    <svg viewBox="0 0 40 16" height="18" role="img" aria-label="Apple Pay">
-      <path
-        d="M6.6 4.2c.4-.5.7-1.2.6-1.9-.6 0-1.3.4-1.7.9-.4.4-.7 1.1-.6 1.8.7.1 1.3-.3 1.7-.8zM7.2 5.1c-.9 0-1.7.5-2.1.5-.4 0-1.1-.5-1.9-.5-1 0-1.9.6-2.4 1.5-1 1.8-.3 4.4.7 5.9.5.7 1.1 1.5 1.9 1.5.8 0 1-.5 1.9-.5.9 0 1.1.5 1.9.5.8 0 1.3-.7 1.8-1.5.6-.8.8-1.6.8-1.7-.1 0-1.5-.6-1.5-2.3 0-1.4 1.1-2 1.2-2.1-.7-1-1.7-1.3-2.3-1.3z"
-        fill="#fff"
-      />
-      <text
-        x="13"
-        y="11.5"
-        fontFamily="Arial, Helvetica, sans-serif"
-        fontSize="8.2"
-        fontWeight="600"
-        fill="#fff"
-      >
-        Pay
       </text>
     </svg>
   )
