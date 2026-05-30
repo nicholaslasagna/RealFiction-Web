@@ -350,17 +350,16 @@ public final class CosmeticsPetService {
   /**
    * Renders the trailing body sparkle for the Tiny Dragon pet.
    *
-   * <p>Historical note: this previously used {@link Particle#PORTAL} for
-   * the second sparkle. As of Purpur 26.1.2 / Java 25, {@code PORTAL}
-   * began requiring a {@code Float} data argument, and passing {@code null}
-   * raised {@code IllegalArgumentException: missing required data class
-   * java.lang.Float} every tick on Lobby1. We swapped it for
-   * {@link Particle#END_ROD}, which is a no-data particle and which the
-   * pet registry already uses for the Dragon Whisperer pet — so the
-   * visual stays close to the original twinkle effect while we no longer
-   * depend on PORTAL's data contract. Both calls also go through the
-   * {@link PetParticleSafeSpawner} so any future particle-contract
-   * regression is caught and logged once, not every tick.
+   * <p>Particle history on Purpur 26.1.2 / Java 25: several particles that
+   * used to accept {@code null} data now require typed data and throw
+   * {@code IllegalArgumentException: missing required data class
+   * java.lang.Float} otherwise. PORTAL broke first (swapped out), then
+   * DRAGON_BREATH started throwing the same way. Both are now replaced with
+   * particles confirmed no-data on this server: {@link Particle#WITCH}
+   * (purple magical haze — reads as dragon breath) and {@link Particle#END_ROD}
+   * (white twinkle, also the registry's tiny-dragon ambient particle). The
+   * calls still go through {@link PetParticleSafeSpawner} so any future
+   * particle-contract regression is caught and logged once, not every tick.
    */
   private void spawnDragonBodyParticles(Player owner, Location headLocation) {
     World world = headLocation.getWorld();
@@ -368,8 +367,8 @@ public final class CosmeticsPetService {
       return;
     }
     Location body = headLocation.clone().subtract(0, 0.35, 0);
-    particleSpawner.tryRun("tiny-dragon", "DRAGON_BREATH", "spawnDragonBodyParticles", () ->
-        world.spawnParticle(Particle.DRAGON_BREATH, body, 2, 0.25, 0.08, 0.25, 0.01, null, true)
+    particleSpawner.tryRun("tiny-dragon", "WITCH", "spawnDragonBodyParticles", () ->
+        world.spawnParticle(Particle.WITCH, body, 2, 0.25, 0.08, 0.25, 0.01, null, true)
     );
     particleSpawner.tryRun("tiny-dragon", "END_ROD", "spawnDragonBodyParticles", () ->
         world.spawnParticle(Particle.END_ROD, body, 1, 0.15, 0.05, 0.15, 0.02, null, true)
