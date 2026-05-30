@@ -296,16 +296,17 @@ public final class SeasonalPreviewController {
   }
 
   private void burstCountdownParticles(Location anchor) {
-    scheduler.runGlobal(() -> {
+    // Guarded: a particle data-contract change must never crash a preview.
+    scheduler.runGlobal(() -> SeasonalEffectGuard.run("preview-countdown", () -> {
       if (anchor.getWorld() == null) {
         return;
       }
       anchor.getWorld().spawnParticle(Particle.FIREWORK, anchor.clone().add(0, 2, 0), 6, 1.5, 0.5, 1.5, 0.02);
-    });
+    }));
   }
 
   private void spawnParticleRibbon(Location anchor, Particle particle, int count) {
-    scheduler.runGlobal(() -> {
+    scheduler.runGlobal(() -> SeasonalEffectGuard.run("preview-ribbon-" + particle.name(), () -> {
       if (anchor.getWorld() == null) {
         return;
       }
@@ -314,11 +315,11 @@ public final class SeasonalPreviewController {
         Location point = anchor.clone().add(Math.cos(angle) * 8, 2 + Math.sin(i * 0.2) * 2, Math.sin(angle) * 8);
         anchor.getWorld().spawnParticle(particle, point, 2, 0.2, 0.2, 0.2, 0.01);
       }
-    });
+    }));
   }
 
   private void spawnColoredDustRibbon(Location anchor, Color color, int count) {
-    scheduler.runGlobal(() -> {
+    scheduler.runGlobal(() -> SeasonalEffectGuard.run("preview-dust-ribbon", () -> {
       World world = anchor.getWorld();
       if (world == null) {
         return;
@@ -329,7 +330,7 @@ public final class SeasonalPreviewController {
         Location point = anchor.clone().add(Math.cos(angle) * 7, 3 + (i % 4) * 0.5D, Math.sin(angle) * 7);
         world.spawnParticle(Particle.DUST, point, 3, 0.15, 0.15, 0.15, 0, dust, true);
       }
-    });
+    }));
   }
 
   private List<Player> audience(Location anchor) {
