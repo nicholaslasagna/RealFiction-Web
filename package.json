@@ -9,6 +9,7 @@
     "build:cloudflare": "opennextjs-cloudflare build",
     "deploy": "opennextjs-cloudflare deploy",
     "preview:cloudflare": "opennextjs-cloudflare preview",
+    "test": "node --test lib/payment-readiness.test.ts",
     "test:rls": "supabase test db",
     "typecheck": "tsc --noEmit"
   },
