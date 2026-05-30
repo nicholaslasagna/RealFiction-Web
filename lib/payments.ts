@@ -3,6 +3,12 @@ import "server-only"
 import { z } from "zod"
 
 import type { CheckoutLine } from "@/lib/store-server"
+import { isPayPalConfigured, isStripeConfigured } from "@/lib/payment-readiness"
+
+// Re-exported so existing importers (`@/lib/payments`) keep working. The real
+// definitions live in the server-only-free readiness module so they can be unit
+// tested. Stripe readiness is independent of PayPal.
+export { isPayPalConfigured, isStripeConfigured }
 
 export const checkoutSchema = z.object({
   provider: z.enum(["stripe", "paypal"]),
@@ -30,14 +36,6 @@ type CheckoutOrder = {
 
 function getSiteUrl() {
   return process.env.NEXT_PUBLIC_SITE_URL ?? "https://realfiction.live"
-}
-
-export function isStripeConfigured() {
-  return Boolean(process.env.STRIPE_SECRET_KEY)
-}
-
-export function isPayPalConfigured() {
-  return Boolean(process.env.PAYPAL_CLIENT_ID && process.env.PAYPAL_CLIENT_SECRET)
 }
 
 export async function createStripeCheckout(order: CheckoutOrder, lines: CheckoutLine[]) {
@@ -81,7 +79,25 @@ export async function createStripeCheckout(order: CheckoutOrder, lines: Checkout
   })
 
   if (!response.ok) {
-    throw new Error("Stripe checkout session could not be created.")
+    // Stripe error bodies never contain our secret key. We surface only the
+    // machine-readable type/code (e.g. "invalid_request_error" /
+    // "amount_too_small", "api_key_expired") and HTTP status — never the human
+    // `message`, which can echo a redacted key fragment.
+    let code = "unknown"
+    let type = "unknown"
+    try {
+      const payload = (await response.json()) as {
+        error?: { code?: string; type?: string }
+      }
+      code = payload.error?.code ?? code
+      type = payload.error?.type ?? type
+    } catch {
+      // Non-JSON body — keep the defaults.
+    }
+    console.error("stripe_session_error", { status: response.status, type, code })
+    throw new Error(
+      `Stripe checkout session could not be created (status ${response.status}, ${type}/${code}).`
+    )
   }
 
   const session = (await response.json()) as { url?: string; id?: string }
