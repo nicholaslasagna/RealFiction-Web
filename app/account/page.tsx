@@ -388,7 +388,6 @@ export default async function AccountPage() {
                 Settings
               </Link>
             ) : null}
-            {user ? <AccountSignOutButton /> : null}
             <Link
               className="inline-flex items-center gap-2 rounded-md border border-white/12 bg-black/24 px-3 py-2 text-sm font-semibold text-muted-foreground backdrop-blur transition hover:border-amber-200/35 hover:text-amber-100"
               href="/"
@@ -396,6 +395,7 @@ export default async function AccountPage() {
               <CompassIcon className="h-4 w-4" />
               Home
             </Link>
+            {user ? <AccountSignOutButton /> : null}
           </div>
         </header>
 
