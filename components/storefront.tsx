@@ -65,7 +65,24 @@ export function Storefront() {
   const [minecraftUsername, setMinecraftUsername] = useState("")
   const [giftRecipient, setGiftRecipient] = useState("")
   const [checkoutState, setCheckoutState] = useState<string | null>(null)
+  const [applePayAvailable, setApplePayAvailable] = useState(false)
   const cartRef = useRef<HTMLElement>(null)
+
+  // Only surface the Apple Pay button on devices that can actually use it
+  // (Safari on Apple hardware) — never on Android/Windows where it would dead-
+  // end. The payment itself runs in Stripe Checkout, which presents Apple Pay.
+  useEffect(() => {
+    try {
+      const applePay = (window as unknown as {
+        ApplePaySession?: { canMakePayments?: () => boolean }
+      }).ApplePaySession
+      if (applePay?.canMakePayments?.()) {
+        setApplePayAvailable(true)
+      }
+    } catch {
+      // Apple Pay not available in this context — leave the button hidden.
+    }
+  }, [])
 
   // Deep link: /store#<category> (e.g. from the homepage perk cards)
   // pre-selects that category filter. Runs on mount and on hash changes.
@@ -454,6 +471,17 @@ export function Storefront() {
                 <CardWalletGlyph />
                 Checkout
               </Button>
+              {applePayAvailable ? (
+                <Button
+                  aria-label="Pay with Apple Pay"
+                  className="bg-black text-white hover:bg-black/80"
+                  disabled={cartLines.length === 0}
+                  onClick={() => checkout("stripe")}
+                  type="button"
+                >
+                  <ApplePayMark />
+                </Button>
+              ) : null}
               <Button
                 disabled={cartLines.length === 0}
                 onClick={() => checkout("paypal")}
@@ -609,6 +637,29 @@ function AmexLogo() {
         letterSpacing="0.6"
       >
         AMERICAN EXPRESS
+      </text>
+    </svg>
+  )
+}
+
+// White Apple-mark + "Pay" for the dark Apple Pay checkout button (reads as
+// "Apple Pay"). The payment runs through Stripe Checkout's Apple Pay sheet.
+function ApplePayMark() {
+  return (
+    <svg viewBox="0 0 40 16" height="18" role="img" aria-label="Apple Pay">
+      <path
+        d="M6.6 4.2c.4-.5.7-1.2.6-1.9-.6 0-1.3.4-1.7.9-.4.4-.7 1.1-.6 1.8.7.1 1.3-.3 1.7-.8zM7.2 5.1c-.9 0-1.7.5-2.1.5-.4 0-1.1-.5-1.9-.5-1 0-1.9.6-2.4 1.5-1 1.8-.3 4.4.7 5.9.5.7 1.1 1.5 1.9 1.5.8 0 1-.5 1.9-.5.9 0 1.1.5 1.9.5.8 0 1.3-.7 1.8-1.5.6-.8.8-1.6.8-1.7-.1 0-1.5-.6-1.5-2.3 0-1.4 1.1-2 1.2-2.1-.7-1-1.7-1.3-2.3-1.3z"
+        fill="#fff"
+      />
+      <text
+        x="13"
+        y="11.5"
+        fontFamily="Arial, Helvetica, sans-serif"
+        fontSize="8.2"
+        fontWeight="600"
+        fill="#fff"
+      >
+        Pay
       </text>
     </svg>
   )
