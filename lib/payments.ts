@@ -124,9 +124,12 @@ export async function getPayPalAccessToken() {
 }
 
 export function getPayPalBaseUrl() {
-  return process.env.PAYPAL_ENVIRONMENT === "production"
-    ? "https://api-m.paypal.com"
-    : "https://api-m.sandbox.paypal.com"
+  // Live only when explicitly opted in. Accept "production" or "live" (any
+  // case) so the eventual go-live flip can't silently stay in sandbox because
+  // of a near-miss value like "live" or "Production" — anything else is sandbox.
+  const environment = (process.env.PAYPAL_ENVIRONMENT ?? "").trim().toLowerCase()
+  const live = environment === "production" || environment === "live"
+  return live ? "https://api-m.paypal.com" : "https://api-m.sandbox.paypal.com"
 }
 
 export async function createPayPalCheckout(order: CheckoutOrder, lines: CheckoutLine[]) {
