@@ -210,7 +210,7 @@ public final class SeasonalPreviewController {
     switch (spec.theme()) {
       case US250_INDEPENDENCE_DAY, INDEPENDENCE_DAY, VETERANS_DAY, MEMORIAL_DAY -> {
         fireworkShowService.launchRing(anchor, 8, palette);
-        SeasonalParticleTextRenderer.renderBanner(
+        SeasonalParticleTextRenderer.renderDistantBanner(
             scheduler,
             anchor,
             "REALFICTION",
@@ -224,7 +224,7 @@ public final class SeasonalPreviewController {
         spawnColoredDustRibbon(anchor, Color.fromRGB(220, 20, 60), 12);
         spawnColoredDustRibbon(anchor, Color.fromRGB(0, 128, 0), 12);
         spawnColoredDustRibbon(anchor, Color.fromRGB(255, 215, 0), 12);
-        SeasonalParticleTextRenderer.renderBanner(
+        SeasonalParticleTextRenderer.renderDistantBanner(
             scheduler,
             anchor,
             "REALFICTION",
@@ -238,13 +238,13 @@ public final class SeasonalPreviewController {
         spawnParticleRibbon(anchor, Particle.SOUL_FIRE_FLAME, 20);
         fireworkShowService.launchRing(anchor, 6, palette);
         // Halloween theme: no two-line banner — the bitmap font doesn't have
-        // a W glyph for "HALLOWEEN", so we paint REALFICTION solo.
-        SeasonalParticleTextRenderer.renderLine(
-            scheduler, anchor, "REALFICTION", Color.fromRGB(255, 140, 0), 0);
+        // a W glyph for "HALLOWEEN", so we paint REALFICTION solo (distant).
+        SeasonalParticleTextRenderer.renderDistantBanner(
+            scheduler, anchor, "REALFICTION", null, Color.fromRGB(255, 140, 0), Color.fromRGB(255, 140, 0));
       }
       case NEW_YEARS -> {
         fireworkShowService.launchRing(anchor, 10, palette);
-        SeasonalParticleTextRenderer.renderBanner(
+        SeasonalParticleTextRenderer.renderDistantBanner(
             scheduler,
             anchor,
             "REALFICTION",
@@ -255,8 +255,8 @@ public final class SeasonalPreviewController {
       }
       default -> {
         fireworkShowService.launchRing(anchor, 6, palette);
-        SeasonalParticleTextRenderer.renderLine(
-            scheduler, anchor, "REALFICTION", Color.fromRGB(255, 215, 0), 0);
+        SeasonalParticleTextRenderer.renderDistantBanner(
+            scheduler, anchor, "REALFICTION", null, Color.fromRGB(255, 215, 0), Color.fromRGB(255, 215, 0));
       }
     }
   }

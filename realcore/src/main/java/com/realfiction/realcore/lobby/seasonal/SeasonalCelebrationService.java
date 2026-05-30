@@ -416,14 +416,12 @@ public final class SeasonalCelebrationService {
     Banner banner = BANNERS.getOrDefault(
         event.ambienceTheme(),
         new Banner("REALFICTION", null, Color.fromRGB(255, 215, 0), Color.WHITE));
-    // Paint the sky banner over the middle of the walkable corridor so it
-    // reads overhead the play area, within the navigable z bounds.
-    Location anchor = SeasonalShowArea.center(origin.location());
-    if (banner.bottom() == null) {
-      SeasonalParticleTextRenderer.renderLine(scheduler, anchor, banner.top(), banner.topColor(), 0.0D);
-      return;
-    }
-    SeasonalParticleTextRenderer.renderBanner(
+    // Paint REALFICTION (+ per-theme tagline) as a big sign out in the distance
+    // along the spawn's facing, so during events it reads as a giant horizon
+    // banner while the fireworks pop closer to the lobby. Uses the raw spawn
+    // location (not the corridor center) for the correct facing + forward push.
+    Location anchor = origin.location();
+    SeasonalParticleTextRenderer.renderDistantBanner(
         scheduler, anchor, banner.top(), banner.bottom(), banner.topColor(), banner.bottomColor());
   }
 
@@ -523,10 +521,10 @@ public final class SeasonalCelebrationService {
 
     sendUs250MidnightTitle(zone);
 
-    // Force-paint the REALFICTION / 250 YEARS sky banner immediately
-    // (do not wait for the next 60s banner tick).
-    SeasonalParticleTextRenderer.renderBanner(
-        scheduler, show,
+    // Force-paint the REALFICTION / 250 YEARS sign immediately (don't wait for
+    // the next 60s banner tick), out in the distance along the spawn facing.
+    SeasonalParticleTextRenderer.renderDistantBanner(
+        scheduler, origin.location(),
         "REALFICTION", "250 YEARS",
         Color.fromRGB(220, 32, 48),  // red
         Color.fromRGB(255, 215, 0)   // gold

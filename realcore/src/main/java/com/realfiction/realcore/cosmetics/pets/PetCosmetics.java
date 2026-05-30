@@ -42,6 +42,10 @@ public final class PetCosmetics {
         list.add(builtin);
       }
     }
+    // Pet AI is fully implemented — strip any leftover "coming soon" placeholder
+    // pet (e.g. the old "Pets Pack" bone) that a previously-generated config.yml
+    // may still carry, so it never shows in the GUI.
+    mutable.get(CosmeticCategory.PETS).removeIf(CosmeticOption::placeholder);
     for (CosmeticCategory category : CosmeticCategory.values()) {
       options.put(category, List.copyOf(mutable.get(category)));
     }
