@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 116 34" role="img" aria-label="PayPal">
+  <!-- Double-P monogram in PayPal's two brand blues -->
+  <path fill="#009cde" d="M19.5 3.2h-9.1c-.62 0-1.15.45-1.25 1.06L4.2 28.9c-.07.45.28.86.74.86h4.66c.62 0 1.15-.45 1.24-1.06l1.36-7.49c.1-.61.62-1.06 1.24-1.06h2.88c5.99 0 9.45-2.9 10.36-8.64.41-2.51.02-4.49-1.16-5.87C24.62 4.03 22.45 3.2 19.5 3.2z"/>
+  <path fill="#003087" d="M14.2 8.1h-9.1c-.62 0-1.15.45-1.25 1.06L-1.1 33.8c-.07.45.28.86.74.86H3.9c.62 0 1.15-.45 1.24-1.06l1.36-7.49c.1-.61.62-1.06 1.24-1.06h2.88c5.99 0 9.45-2.9 10.36-8.64.41-2.51.02-4.49-1.16-5.87C19.32 8.93 17.15 8.1 14.2 8.1z" transform="translate(5.3 0)"/>
+  <!-- PayPal wordmark -->
+  <text x="40" y="24" font-family="Verdana, Arial, Helvetica, sans-serif" font-size="22" font-weight="700" font-style="italic" letter-spacing="-1">
+    <tspan fill="#003087">Pay</tspan><tspan fill="#009cde">Pal</tspan>
+  </text>
+</svg>
