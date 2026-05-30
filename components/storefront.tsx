@@ -456,11 +456,11 @@ export function Storefront() {
                 <span>Checkout</span>
                 {/* What Stripe Checkout accepts — card networks + the wallets. */}
                 <span className="flex items-center justify-center gap-1.5">
-                  <PaymentBadge label="Visa"><VisaLogo /></PaymentBadge>
-                  <PaymentBadge label="Mastercard"><MastercardLogo /></PaymentBadge>
-                  <PaymentBadge label="American Express"><AmexLogo /></PaymentBadge>
-                  <PaymentBadge label="Apple Pay"><ApplePayLogo /></PaymentBadge>
-                  <PaymentBadge label="Google Pay"><GooglePayLogo /></PaymentBadge>
+                  <PayMark src="/images/payments/visa.svg" label="Visa" />
+                  <PayMark src="/images/payments/mastercard.svg" label="Mastercard" />
+                  <PayMark src="/images/payments/amex.svg" label="American Express" />
+                  <PayMark src="/images/payments/apple-pay.svg" label="Apple Pay" />
+                  <PayMark src="/images/payments/google-pay.svg" label="Google Pay" />
                 </span>
               </Button>
               <Button
@@ -511,123 +511,21 @@ export function Storefront() {
 }
 
 /* ============================================================
-   Payment brand marks — minimal inline SVGs.
+   Payment brand marks.
 
-   Goals:
-   - Show real brand identity (so customers trust the checkout)
-   - Stay small (these render inline at ~14-16px tall)
-   - Not pull in any tracking from third-party CDNs
-   - Match each brand's actual look closely enough to be recognizable
-     without redrawing the protected wordmark from scratch
+   The accepted-method marks use the real brand logos (official SVGs in
+   /public/images/payments/) inside small white pills so they read clearly
+   on the green Checkout button. PayPal keeps its own labelled button.
    ============================================================ */
 
-function PaymentBadge({ label, children }: { label: string; children: React.ReactNode }) {
+// Real brand logo on a white pill — uniform height, natural width, so the
+// row reads as a tidy strip of recognizable marks.
+function PayMark({ src, label }: { src: string; label: string }) {
   return (
-    <span
-      aria-label={label}
-      title={label}
-      className="inline-flex h-7 items-center justify-center rounded-md border border-white/10 bg-white/95 px-2 text-[#1a1a1a]"
-    >
-      {children}
+    <span className="inline-flex h-[26px] items-center justify-center rounded bg-white px-2">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={src} alt={label} className="h-[16px] w-auto" loading="lazy" decoding="async" />
     </span>
-  )
-}
-
-function VisaLogo() {
-  return (
-    <svg viewBox="0 0 48 16" height="11" aria-hidden>
-      <text
-        x="0"
-        y="13"
-        fontFamily="Arial, Helvetica, sans-serif"
-        fontSize="14"
-        fontWeight="900"
-        fontStyle="italic"
-        fill="#1A1F71"
-        letterSpacing="0.5"
-      >
-        VISA
-      </text>
-    </svg>
-  )
-}
-
-function MastercardLogo() {
-  return (
-    <svg viewBox="0 0 32 20" height="14" aria-hidden>
-      <circle cx="12" cy="10" r="7" fill="#EB001B" />
-      <circle cx="20" cy="10" r="7" fill="#F79E1B" />
-      <path
-        d="M16 4.6a7 7 0 0 1 0 10.8 7 7 0 0 1 0-10.8z"
-        fill="#FF5F00"
-      />
-    </svg>
-  )
-}
-
-function AmexLogo() {
-  return (
-    <svg viewBox="0 0 40 16" height="11" aria-hidden>
-      <rect width="40" height="16" rx="2" fill="#1F72CD" />
-      <text
-        x="20"
-        y="11.5"
-        textAnchor="middle"
-        fontFamily="Arial, Helvetica, sans-serif"
-        fontSize="6.5"
-        fontWeight="800"
-        fill="#fff"
-        letterSpacing="0.6"
-      >
-        AMERICAN EXPRESS
-      </text>
-    </svg>
-  )
-}
-
-function ApplePayLogo() {
-  return (
-    <svg viewBox="0 0 40 16" height="13" aria-hidden>
-      {/* Apple mark */}
-      <path
-        d="M6.6 4.2c.4-.5.7-1.2.6-1.9-.6 0-1.3.4-1.7.9-.4.4-.7 1.1-.6 1.8.7.1 1.3-.3 1.7-.8zM7.2 5.1c-.9 0-1.7.5-2.1.5-.4 0-1.1-.5-1.9-.5-1 0-1.9.6-2.4 1.5-1 1.8-.3 4.4.7 5.9.5.7 1.1 1.5 1.9 1.5.8 0 1-.5 1.9-.5.9 0 1.1.5 1.9.5.8 0 1.3-.7 1.8-1.5.6-.8.8-1.6.8-1.7-.1 0-1.5-.6-1.5-2.3 0-1.4 1.1-2 1.2-2.1-.7-1-1.7-1.3-2.3-1.3z"
-        fill="#000"
-      />
-      {/* "Pay" */}
-      <text
-        x="13"
-        y="11.5"
-        fontFamily="Arial, Helvetica, sans-serif"
-        fontSize="8.2"
-        fontWeight="600"
-        fill="#000"
-      >
-        Pay
-      </text>
-    </svg>
-  )
-}
-
-function GooglePayLogo() {
-  return (
-    <svg viewBox="0 0 48 16" height="13" aria-hidden>
-      {/* "G" mark approximation */}
-      <path
-        d="M7.7 8.1v1.6h2.3c-.1.7-.4 1.3-.9 1.7-.5.4-1.2.6-2 .6a2.9 2.9 0 1 1 0-5.8c.8 0 1.5.3 2 .8l1.1-1.1A4.5 4.5 0 0 0 4.5 8c0 2.5 2 4.5 4.5 4.5 1.3 0 2.4-.4 3.1-1.2.8-.8 1.1-1.9 1.1-3 0-.3 0-.5-.1-.7H7.7z"
-        fill="#4285F4"
-      />
-      {/* "Pay" wordmark */}
-      <text
-        x="15"
-        y="11.5"
-        fontFamily="Arial, Helvetica, sans-serif"
-        fontSize="8.2"
-        fontWeight="600"
-        fill="#5F6368"
-      >
-        Pay
-      </text>
-    </svg>
   )
 }
 
