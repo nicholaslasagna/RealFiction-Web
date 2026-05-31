@@ -234,10 +234,21 @@ public final class CosmeticsPetService {
       return state.nextMoveTick().withLastTarget(next);
     }
 
-    // Living pets glide toward the target with real velocity (so the client
-    // renders normal walking/flying with animation, not teleport jitter) and
-    // turn to face the direction of travel via setRotation, which rotates the
-    // entity without snapping its position the way a teleport would.
+    // Walking pets (ground mobs): navigate with the pathfinder so they actually
+    // WALK to the follow point with normal leg animation. Re-issued every move
+    // tick so they track the player; the force-snap above handles the player
+    // teleporting or the pet falling far behind. This replaces the old
+    // velocity-on-an-AI-disabled-mob path, which left walking pets frozen until
+    // a snap — they "only teleported when very far, otherwise stood still".
+    if (entity instanceof Mob walkingMob && !definition.floating()) {
+      walkingMob.getPathfinder().moveTo(desired, PetMovementMath.WALK_SPEED);
+      return state.nextMoveTick().withLastTarget(desired);
+    }
+
+    // Floating pets glide toward the target with real velocity (no gravity) so
+    // the client renders smooth hovering motion, and turn to face the direction
+    // of travel via setRotation, which rotates the entity without snapping its
+    // position the way a teleport would.
     if (entity instanceof LivingEntity living) {
       living.setGravity(false);
       living.setVelocity(PetMovementMath.glideVelocity(current, desired));
@@ -480,7 +491,7 @@ public final class CosmeticsPetService {
 
   private void configureLiving(LivingEntity entity, Player owner, PetDefinition definition) {
     if (entity instanceof Mob mob) {
-      configureMob(mob, owner);
+      configureMob(mob, owner, definition);
     } else {
       entity.setInvulnerable(true);
       entity.setCollidable(false);
@@ -492,16 +503,27 @@ public final class CosmeticsPetService {
     applyScale(entity, definition.effectiveScale());
   }
 
-  private void configureMob(Mob mob, Player owner) {
+  private void configureMob(Mob mob, Player owner, PetDefinition definition) {
     mob.setInvulnerable(true);
     mob.setCollidable(false);
     mob.setPersistent(false);
     mob.setRemoveWhenFarAway(false);
     mob.setCustomNameVisible(false);
-    mob.setAware(false);
-    if (mob instanceof LivingEntity living) {
-      living.setAI(false);
-      living.setGravity(false);
+    if (definition.floating()) {
+      // Floating pets hover via velocity — no AI, no gravity, no awareness.
+      mob.setAware(false);
+      mob.setAI(false);
+      mob.setGravity(false);
+    } else {
+      // Walking pets navigate with the pathfinder (followPet), which needs AI +
+      // awareness + gravity ON so the mob actually walks (and animates) along
+      // the ground. They stay invulnerable, non-colliding, silent, and never
+      // target anything in the lobby, so AI is purely "walk to the follow
+      // point" — without it setVelocity did nothing and the pet only ever
+      // teleported when it fell far behind.
+      mob.setAware(true);
+      mob.setAI(true);
+      mob.setGravity(true);
     }
     tagPet(mob, owner);
     PetSilenceConfigurer.apply(mob);

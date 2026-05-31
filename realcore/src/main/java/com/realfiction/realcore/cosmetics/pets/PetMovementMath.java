@@ -28,6 +28,12 @@ public final class PetMovementMath {
   static final double GLIDE_ARRIVE_DISTANCE = 0.45D; // within this: stop, hold still
   static final double FACE_BLEND = 0.4D;             // how quickly the pet turns to face travel
 
+  // Pathfinder speed multiplier for WALKING (ground) pets. They navigate to the
+  // follow point with real walk animation instead of gliding via velocity; >1
+  // so they keep up with a walking player. The force-snap teleport still covers
+  // the rare case the pet falls far behind or the player teleports.
+  public static final double WALK_SPEED = 1.3D;
+
   private PetMovementMath() {
   }
 
