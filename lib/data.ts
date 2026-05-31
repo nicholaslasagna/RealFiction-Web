@@ -2,7 +2,6 @@ import type { ComponentType } from "react"
 import {
   BadgeCheck,
   Castle,
-  MapPinned,
   Medal,
   Palette,
   PartyPopper,
@@ -21,7 +20,10 @@ import {
   DyeIcon,
   ElytraIcon,
   FireworkRocketIcon,
-  NetherStarIcon
+  MapItemIcon,
+  NetherStarIcon,
+  ShieldIcon,
+  SwordIcon
 } from "@/components/minecraft-icons"
 
 export type ProductCategory =
@@ -453,21 +455,21 @@ export const mapEndpoints = [
     name: "RealFiction Map",
     url: "https://map.realfiction.live",
     description: "Primary SMP world map, claims, settlements, and major community builds.",
-    icon: MapPinned,
+    icon: MapItemIcon,
     embeddable: false
   },
   {
     name: "Factions",
     url: "https://map2.realfiction.live",
     description: "Factions world map, territory lines, and seasonal bases.",
-    icon: Swords,
+    icon: SwordIcon,
     embeddable: false
   },
   {
     name: "RealAnarchy Map",
     url: "https://map.realanarchy.live",
     description: "RealAnarchy world map and independent network surface.",
-    icon: ShieldCheck,
+    icon: ShieldIcon,
     embeddable: true
   }
 ]
