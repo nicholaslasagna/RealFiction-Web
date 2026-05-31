@@ -15,14 +15,16 @@ public final class SeasonalParticleTextRenderer {
   private static final double SKY_HEIGHT = 12.0D;
   private static final double FORWARD_DISTANCE = 8.0D;
 
-  // Distant "REALFICTION" sign: a big sky banner placed well out in front of
-  // spawn (along the spawn's facing) and high up, so during events it reads as
-  // a giant sign on the horizon while fireworks pop closer to the lobby. Forced
-  // DUST particles render at this range for normal view distances.
-  private static final double DISTANT_PIXEL_SCALE = 0.78D;
-  private static final double DISTANT_LINE_GAP = 6.0D;
-  private static final double DISTANT_SKY_HEIGHT = 34.0D;
-  private static final double DISTANT_FORWARD_DISTANCE = 72.0D;
+  // "REALFICTION" sky sign: a banner just in front of and above spawn during
+  // events. Kept close (not on the horizon) so the whole sign — every sparkle
+  // pixel — stays within ~32 blocks of the spawn point along with the fireworks.
+  // FORWARD 6 + half of an ~65px word at scale 0.42 (~14 blocks) keeps the
+  // farthest pixel well inside the spawn radius even when the show center is
+  // already biased forward. Forced DUST renders at this range.
+  private static final double DISTANT_PIXEL_SCALE = 0.42D;
+  private static final double DISTANT_LINE_GAP = 4.0D;
+  private static final double DISTANT_SKY_HEIGHT = 22.0D;
+  private static final double DISTANT_FORWARD_DISTANCE = 6.0D;
 
   private SeasonalParticleTextRenderer() {
   }

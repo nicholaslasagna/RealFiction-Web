@@ -30,11 +30,27 @@ public final class SeasonalShowArea {
   public static final double Z_MAX = -124.0D;
 
   /**
-   * Horizontal radius (blocks) of the show disc, measured from the corridor
-   * center. 24 keeps the full disc (48 across) inside the 54-block area with a
-   * margin on every side, so nothing ever lands outside the navigable space.
+   * Hard cap: every seasonal effect (ambient fireworks, firework rings, the
+   * patriotic dust storm, and the REALFICTION sky banner) stays within this many
+   * blocks of the spawn point — nothing is ever "in the distance".
    */
-  public static final double SHOW_RADIUS = 24.0D;
+  public static final double SPAWN_RADIUS = 32.0D;
+
+  /**
+   * The show is centered this many blocks IN FRONT of spawn (into the corridor),
+   * so centered effects sit just ahead of the player instead of far down the
+   * lobby. Chosen so {@code SHOW_FORWARD + SHOW_RADIUS} stays within
+   * {@link #SPAWN_RADIUS} of spawn.
+   */
+  public static final double SHOW_FORWARD = 15.0D;
+
+  /**
+   * Horizontal radius (blocks) of the show disc around the forward show center.
+   * {@code SHOW_FORWARD (15) + SHOW_RADIUS (15) = 30 <= SPAWN_RADIUS (32)}, so no
+   * firework pad, ring, or banner pixel can ever land more than ~30 blocks from
+   * the spawn point.
+   */
+  public static final double SHOW_RADIUS = 15.0D;
 
   /**
    * Overhead height band (blocks above the anchor) for ambient fireworks.
@@ -58,13 +74,16 @@ public final class SeasonalShowArea {
   }
 
   /**
-   * The center of the show: the anchor's X/Y but pinned to the middle of the
-   * Z corridor, so centered effects (firework rings, dust storm, sky banner)
-   * sit in the middle of the play area regardless of where spawn is along it.
+   * The center of the show: the spawn anchor's X/Y, pushed {@link #SHOW_FORWARD}
+   * blocks forward into the corridor (Z clamped to the walkable span). Centered
+   * effects (firework rings, dust storm, sky banner) sit just in front of spawn
+   * and never land more than {@code SHOW_FORWARD + their own radius} from the
+   * spawn point — well inside {@link #SPAWN_RADIUS}.
    */
   public static Location center(Location anchor) {
     Location center = anchor.clone();
-    center.setZ(centerZ());
+    // Forward = toward Z_MIN (the corridor runs from spawn at Z_MAX outward).
+    center.setZ(clampZ(anchor.getZ() - SHOW_FORWARD));
     return center;
   }
 
