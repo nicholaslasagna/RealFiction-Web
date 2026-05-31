@@ -15,6 +15,8 @@ import { AccountSignOutButton } from "@/components/account-sign-out-button"
 import { GiftCardCodes } from "@/components/gift-card-codes"
 import {
   BoneIcon,
+  CheckIcon,
+  ClockIcon,
   CompassIcon,
   DyeIcon,
   ElytraIcon,
@@ -23,7 +25,8 @@ import {
   GearIcon,
   GrassBlockIcon,
   NetherStarIcon,
-  SteveHeadIcon
+  SteveHeadIcon,
+  WarningIcon
 } from "@/components/minecraft-icons"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -240,6 +243,32 @@ function rewardLabel(status: string) {
   }
 
   return labels[status] ?? "Checking"
+}
+
+// Pixel-art status chips — a green check when it's done, an amber warning sign
+// when it needs help, an hourglass-style clock while it's in flight.
+function OrderStatusBadge({ status }: { status: string }) {
+  const Icon = status === "fulfilled" ? CheckIcon : status === "refunded" || status === "chargeback" ? WarningIcon : ClockIcon
+  const variant: "success" | "warning" | "outline" =
+    status === "fulfilled" ? "success" : status === "refunded" || status === "chargeback" ? "warning" : "outline"
+  return (
+    <Badge variant={variant}>
+      <Icon size={12} />
+      {orderLabel(status)}
+    </Badge>
+  )
+}
+
+function RewardStatusBadge({ status }: { status: string }) {
+  const Icon = status === "delivered" ? CheckIcon : status === "failed" ? WarningIcon : ClockIcon
+  const variant: "success" | "warning" | "outline" =
+    status === "delivered" ? "success" : status === "failed" ? "warning" : "outline"
+  return (
+    <Badge variant={variant}>
+      <Icon size={12} />
+      {rewardLabel(status)}
+    </Badge>
+  )
 }
 
 const voteRewardAmounts: Record<string, number> = {
@@ -669,9 +698,7 @@ function AllPurchases({ orders }: { orders: OrderRow[] }) {
                         </p>
                       ) : null}
                     </div>
-                    <Badge variant={order.status === "fulfilled" ? "success" : "outline"}>
-                      {orderLabel(order.status)}
-                    </Badge>
+                    <OrderStatusBadge status={order.status} />
                   </div>
                   <p className="mt-3 text-sm font-semibold text-amber-100">
                     {formatMoney(order.total_cents, order.currency)}
@@ -707,9 +734,7 @@ function AllRewards({ rewards }: { rewards: RewardRow[] }) {
                       {rewardDetail(reward)} · {formatDate(reward.created_at)}
                     </p>
                   </div>
-                  <Badge variant={reward.status === "delivered" ? "success" : "outline"}>
-                    {rewardLabel(reward.status)}
-                  </Badge>
+                  <RewardStatusBadge status={reward.status} />
                 </div>
               </div>
             ))}
