@@ -24,28 +24,33 @@ public final class SeasonalAmbienceEffects {
     if (theme == null || theme == SeasonalAmbienceTheme.NONE || origin == null || origin.getWorld() == null) {
       return;
     }
-    World world = origin.getWorld();
-    ThreadLocalRandom random = ThreadLocalRandom.current();
-    int spent = 0;
-    switch (theme) {
-      case US250_INDEPENDENCE_DAY -> spent = us250Burst(world, origin, random, particleBudget, tickSeed);
-      case INDEPENDENCE_DAY -> spent = independenceBurst(world, origin, random, particleBudget, tickSeed);
-      case CHRISTMAS -> spent = christmasBurst(world, origin, random, particleBudget, tickSeed);
-      case HANUKKAH -> spent = hanukkahBurst(world, origin, random, particleBudget, tickSeed);
-      case HALLOWEEN -> spent = halloweenBurst(world, origin, random, particleBudget, tickSeed);
-      case NEW_YEARS -> spent = newYearsBurst(world, origin, random, particleBudget, tickSeed);
-      case CHINESE_NEW_YEAR -> spent = chineseNewYearBurst(world, origin, random, particleBudget, tickSeed);
-      case VALENTINES_DAY -> spent = valentinesBurst(world, origin, random, particleBudget, tickSeed);
-      case EASTER -> spent = easterBurst(world, origin, random, particleBudget, tickSeed);
-      case THANKSGIVING -> spent = thanksgivingBurst(world, origin, random, particleBudget, tickSeed);
-      case VETERANS_DAY -> spent = veteransBurst(world, origin, random, particleBudget, tickSeed);
-      case MEMORIAL_DAY -> spent = memorialBurst(world, origin, random, particleBudget, tickSeed);
-      default -> {
+    // Guarded at the source so a particle whose data contract tightened on a
+    // server update (the way PORTAL and DRAGON_BREATH began requiring a Float on
+    // Purpur 26.1.2) can never throw out of the repeating ambience tick OR the
+    // admin event preview — both funnel through here. A bad theme logs once and
+    // is skipped for the session instead of crashing the server.
+    SeasonalEffectGuard.run("ambience-burst-" + theme.name(), () -> {
+      World world = origin.getWorld();
+      ThreadLocalRandom random = ThreadLocalRandom.current();
+      int spent = switch (theme) {
+        case US250_INDEPENDENCE_DAY -> us250Burst(world, origin, random, particleBudget, tickSeed);
+        case INDEPENDENCE_DAY -> independenceBurst(world, origin, random, particleBudget, tickSeed);
+        case CHRISTMAS -> christmasBurst(world, origin, random, particleBudget, tickSeed);
+        case HANUKKAH -> hanukkahBurst(world, origin, random, particleBudget, tickSeed);
+        case HALLOWEEN -> halloweenBurst(world, origin, random, particleBudget, tickSeed);
+        case NEW_YEARS -> newYearsBurst(world, origin, random, particleBudget, tickSeed);
+        case CHINESE_NEW_YEAR -> chineseNewYearBurst(world, origin, random, particleBudget, tickSeed);
+        case VALENTINES_DAY -> valentinesBurst(world, origin, random, particleBudget, tickSeed);
+        case EASTER -> easterBurst(world, origin, random, particleBudget, tickSeed);
+        case THANKSGIVING -> thanksgivingBurst(world, origin, random, particleBudget, tickSeed);
+        case VETERANS_DAY -> veteransBurst(world, origin, random, particleBudget, tickSeed);
+        case MEMORIAL_DAY -> memorialBurst(world, origin, random, particleBudget, tickSeed);
+        default -> 0;
+      };
+      if (playSound && spent > 0) {
+        playThemeSound(theme, origin, random);
       }
-    }
-    if (playSound && spent > 0) {
-      playThemeSound(theme, origin, random);
-    }
+    });
   }
 
   public static void playSoundForPlayer(Player player, SeasonalAmbienceTheme theme, Location origin) {
@@ -228,7 +233,10 @@ public final class SeasonalAmbienceEffects {
     if (spent < budget) {
       double t = tickSeed * 0.25D;
       Location ribbon = origin.clone().add(Math.cos(t) * 5.0D, 1.0D + Math.sin(t * 2) * 0.4D, Math.sin(t) * 5.0D);
-      world.spawnParticle(Particle.DRAGON_BREATH, ribbon, 2, 0.1, 0.1, 0.1, 0.01, null, true);
+      // Red dust ribbon (was DRAGON_BREATH, which requires a Float data class on
+      // Purpur 26.1.2 and crashed when spawned with null data). DUST always
+      // carries its DustOptions, so it can never hit that data-contract crash.
+      world.spawnParticle(Particle.DUST, ribbon, 2, 0.1, 0.1, 0.1, 0.0, dust(Color.RED), true);
       spent += 2;
     }
     if (spent < budget) {

@@ -639,3 +639,31 @@ export function ShieldIcon({ size = 22, ...rest }: IconProps) {
     rest
   )
 }
+
+/** Warning sign — a reward that needs manual help. */
+export function WarningIcon({ size = 22, ...rest }: IconProps) {
+  return pixelSvg(
+    size,
+    <>
+      {/* amber triangle */}
+      <rect x="7" y="2" width="2" height="1" fill="#f2c14e" />
+      <rect x="6" y="3" width="4" height="1" fill="#f2c14e" />
+      <rect x="6" y="4" width="4" height="1" fill="#f2c14e" />
+      <rect x="5" y="5" width="6" height="1" fill="#f2c14e" />
+      <rect x="5" y="6" width="6" height="1" fill="#f2c14e" />
+      <rect x="4" y="7" width="8" height="1" fill="#f2c14e" />
+      <rect x="4" y="8" width="8" height="1" fill="#f2c14e" />
+      <rect x="3" y="9" width="10" height="1" fill="#f2c14e" />
+      <rect x="3" y="10" width="10" height="1" fill="#f2c14e" />
+      <rect x="2" y="11" width="12" height="1" fill="#f2c14e" />
+      <rect x="2" y="12" width="12" height="1" fill="#f2c14e" />
+      {/* top highlight + base shadow */}
+      <rect x="7" y="2" width="2" height="1" fill="#ffe9a8" />
+      <rect x="2" y="12" width="12" height="1" fill="#c68f1e" />
+      {/* dark exclamation mark */}
+      <rect x="7" y="5" width="2" height="4" fill="#3a2a0a" />
+      <rect x="7" y="10" width="2" height="1" fill="#3a2a0a" />
+    </>,
+    rest
+  )
+}

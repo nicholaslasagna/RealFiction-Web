@@ -129,20 +129,24 @@ public final class SeasonalParticleTextRenderer {
   }
 
   private static void spawnPixels(World world, List<SkyPixel> pixels) {
-    for (SkyPixel pixel : pixels) {
-      world.spawnParticle(
-          Particle.DUST,
-          pixel.x(),
-          pixel.y(),
-          pixel.z(),
-          1,
-          0,
-          0,
-          0,
-          0,
-          new Particle.DustOptions(pixel.color(), 1.2f),
-          true
-      );
-    }
+    // Guarded so a DUST data-contract change could never throw out of the
+    // repeating banner tick and take the server down.
+    SeasonalEffectGuard.run("sky-banner", () -> {
+      for (SkyPixel pixel : pixels) {
+        world.spawnParticle(
+            Particle.DUST,
+            pixel.x(),
+            pixel.y(),
+            pixel.z(),
+            1,
+            0,
+            0,
+            0,
+            0,
+            new Particle.DustOptions(pixel.color(), 1.2f),
+            true
+        );
+      }
+    });
   }
 }

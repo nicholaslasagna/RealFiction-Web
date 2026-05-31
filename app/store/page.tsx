@@ -8,6 +8,8 @@ import { Reveal } from "@/components/reveal"
 import { Storefront } from "@/components/storefront"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
+import { getVerifiedMinecraftLink } from "@/lib/store-server"
+import { getAuthenticatedUser } from "@/lib/supabase/server"
 
 export const metadata: Metadata = {
   title: "Store",
@@ -15,7 +17,13 @@ export const metadata: Metadata = {
     "RealFiction store for cosmetics, supporter ranks, pets, particles, username colors, lobby flight, and gift cards."
 }
 
-export default function StorePage() {
+// Checkout eligibility (signed in + linked account) is gated in the cart, so
+// this needs fresh per-request auth state.
+export const dynamic = "force-dynamic"
+
+export default async function StorePage() {
+  const user = await getAuthenticatedUser().catch(() => null)
+  const link = user ? await getVerifiedMinecraftLink(user.id).catch(() => null) : null
   return (
     <section>
       <div className="relative overflow-hidden border-b border-amber-200/10 py-16 md:py-20">
@@ -70,7 +78,7 @@ export default function StorePage() {
         </Reveal>
 
         <Reveal className="mt-10">
-          <Storefront />
+          <Storefront signedIn={Boolean(user)} linkedUsername={link?.username ?? null} />
         </Reveal>
       </div>
     </section>

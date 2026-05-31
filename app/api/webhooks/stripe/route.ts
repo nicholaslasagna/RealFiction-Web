@@ -3,10 +3,12 @@ import {
   safeJsonError
 } from "@/lib/security"
 import {
+  cancelOrder,
   findOrderIdByPaymentId,
   markOrderPaidAndFulfill,
   markWebhookEventProcessed,
   persistWebhookEvent,
+  releaseStoreCredit,
   revokeOrder
 } from "@/lib/store-server"
 
@@ -111,6 +113,22 @@ export async function POST(request: Request) {
           orderId,
           typeof session.payment_intent === "string" ? session.payment_intent : null
         )
+      }
+    }
+
+    if (event.type === "checkout.session.expired") {
+      // The customer abandoned a partial-credit checkout — release the reserved
+      // store credit back to their balance and cancel the pending order. Both
+      // calls are idempotent and no-op when no credit/order applies.
+      const session = event.data?.object ?? {}
+      const metadata = (session.metadata ?? {}) as Record<string, string | undefined>
+      const orderId =
+        metadata.order_id ??
+        (typeof session.client_reference_id === "string" ? session.client_reference_id : undefined)
+
+      if (orderId) {
+        await releaseStoreCredit(orderId)
+        await cancelOrder(orderId)
       }
     }
 

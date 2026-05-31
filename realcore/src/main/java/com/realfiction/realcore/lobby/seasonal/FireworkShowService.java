@@ -31,12 +31,19 @@ public final class FireworkShowService {
     if (origin == null || origin.getWorld() == null || count <= 0) {
       return;
     }
+    // Pin the ring to the middle of the lobby corridor and hard-clamp every pad
+    // to the navigable Z span, so rings always pop around the play area — never
+    // off in the distance or outside where players can walk — regardless of
+    // where the anchor is (e.g. an admin running a preview from spawn).
+    Location center = SeasonalShowArea.center(origin);
     scheduler.runGlobal(() -> {
       World world = origin.getWorld();
       for (int i = 0; i < count; i++) {
         double angle = (Math.PI * 2 * i) / count;
         double radius = 10 + (i % 3) * 2.5D;
-        Location pad = origin.clone().add(Math.cos(angle) * radius, heightOffset, Math.sin(angle) * radius);
+        double x = center.getX() + Math.cos(angle) * radius;
+        double z = SeasonalShowArea.clampZ(center.getZ() + Math.sin(angle) * radius);
+        Location pad = new Location(world, x, center.getY() + heightOffset, z);
         spawnFirework(world, pad, palette);
       }
     });
