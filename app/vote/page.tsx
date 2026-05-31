@@ -10,13 +10,73 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { voteMilestones, voteSites } from "@/lib/data"
+import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role"
+import { getAuthenticatedUser } from "@/lib/supabase/server"
 
 export const metadata: Metadata = {
   title: "Vote",
   description: "Vote for RealFiction, track cooldowns, streaks, rewards, monthly top voters, and progress milestones."
 }
 
-export default function VotePage() {
+// Per-user cooldowns are read per request, so the page can't be statically cached.
+export const dynamic = "force-dynamic"
+
+type VoteSiteRef = { slug?: string | null; cooldown_hours?: number | null } | null
+
+/**
+ * For the signed-in user, the epoch-ms "next vote allowed" time per site slug,
+ * computed from their most recent recorded vote on each site + that site's
+ * cooldown. Read server-side with the service role and scoped to the
+ * authenticated user's own verified Minecraft username — the client never sees
+ * or supplies these timestamps.
+ */
+async function getVoteReadiness(): Promise<{ signedIn: boolean; readyBySlug: Record<string, number> }> {
+  try {
+    const user = await getAuthenticatedUser().catch(() => null)
+    if (!user) {
+      return { signedIn: false, readyBySlug: {} }
+    }
+
+    const supabase = getSupabaseServiceRoleClient()
+    const { data: link } = await supabase
+      .from("minecraft_account_links")
+      .select("minecraft_username")
+      .eq("user_id", user.id)
+      .eq("status", "verified")
+      .order("verified_at", { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    if (!link?.minecraft_username) {
+      return { signedIn: true, readyBySlug: {} }
+    }
+
+    const { data } = await supabase
+      .from("votes")
+      .select("voted_at, vote_sites(slug, cooldown_hours)")
+      .ilike("minecraft_username", link.minecraft_username)
+      .order("voted_at", { ascending: false })
+      .limit(200)
+
+    const readyBySlug: Record<string, number> = {}
+    for (const row of (data ?? []) as Array<{ voted_at: string; vote_sites: VoteSiteRef }>) {
+      const site = Array.isArray(row.vote_sites) ? row.vote_sites[0] : row.vote_sites
+      const slug = site?.slug
+      if (!slug || slug in readyBySlug) {
+        continue
+      }
+      const cooldownHours = site?.cooldown_hours ?? 24
+      readyBySlug[slug] = new Date(row.voted_at).getTime() + cooldownHours * 3_600_000
+    }
+
+    return { signedIn: true, readyBySlug }
+  } catch {
+    return { signedIn: false, readyBySlug: {} }
+  }
+}
+
+export default async function VotePage() {
+  const { signedIn, readyBySlug } = await getVoteReadiness()
   return (
     <section>
       <div className="relative overflow-hidden border-b border-amber-200/10 py-16 md:py-20">
@@ -83,7 +143,11 @@ export default function VotePage() {
                       <Badge variant="outline">Vote site {index + 1}</Badge>
                       <CardTitle className="display-font mt-3 text-2xl">{site.name}</CardTitle>
                     </div>
-                    <VoteCountdown hours={site.cooldownHours} />
+                    <VoteCountdown
+                      hours={site.cooldownHours}
+                      signedIn={signedIn}
+                      readyAt={readyBySlug[site.slug] ?? null}
+                    />
                   </div>
                   <CardDescription>{site.reward}</CardDescription>
                 </CardHeader>

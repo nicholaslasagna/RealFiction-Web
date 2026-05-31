@@ -382,60 +382,70 @@ export const productCategories: Array<{
 
 export const voteSites = [
   {
+    slug: "minecraftservers-org",
     name: "MinecraftServers.org",
     href: "https://minecraftservers.org/vote/558530",
     reward: "Vote key + streak XP",
     cooldownHours: 24
   },
   {
+    slug: "planetminecraft",
     name: "PlanetMinecraft.com",
     href: "https://www.planetminecraft.com/server/real-fiction/vote/",
     reward: "Vote key + profile points",
     cooldownHours: 24
   },
   {
+    slug: "minecraft-mp",
     name: "Minecraft MP",
     href: "https://minecraft-mp.com/server/326865/vote/",
     reward: "Vote key + daily progress",
     cooldownHours: 24
   },
   {
+    slug: "topg",
     name: "TopG",
     href: "https://topg.org/minecraft-servers/server-669450",
     reward: "Vote key + streak shield",
     cooldownHours: 24
   },
   {
+    slug: "minecraft-menu",
     name: "Minecraft Menu",
     href: "https://minecraft.menu/server-realfiction.4130/vote",
     reward: "Vote key",
     cooldownHours: 24
   },
   {
+    slug: "servers-minecraft",
     name: "Servers-Minecraft",
     href: "https://servers-minecraft.net/server-realfiction.40945",
     reward: "Vote key + monthly score",
     cooldownHours: 24
   },
   {
+    slug: "minecraft-buzz",
     name: "Minecraft.Buzz",
     href: "https://minecraft.buzz/vote/12880",
     reward: "Vote key",
     cooldownHours: 24
   },
   {
+    slug: "curseforge",
     name: "CurseForge",
     href: "https://www.curseforge.com/servers/minecraft/game/realfiction/vote",
     reward: "Vote key + cosmetic chance",
     cooldownHours: 24
   },
   {
+    slug: "mclist-io",
     name: "mclist.io",
     href: "https://mclist.io/server/65417-realfiction-live-realfiction-minigames-smp-f/vote",
     reward: "Vote key",
     cooldownHours: 24
   },
   {
+    slug: "mcsl",
     name: "MCSL",
     href: "https://minecraft-server-list.com/server/501080/vote/",
     reward: "Vote key + leaderboard score",
