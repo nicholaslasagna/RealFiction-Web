@@ -56,6 +56,10 @@ public final class CosmeticsPetService {
   private volatile CosmeticsStorage cosmeticsStorage;
   private ScheduledTaskHandle tickTask;
   private volatile boolean enabled = true;
+  // One-time, secret-free confirmation that the follow loop reached the
+  // position-applying branch at least once in-game — verifies the loop runs
+  // without any per-tick log spam.
+  private volatile boolean loggedFirstFollowMove = false;
 
   public CosmeticsPetService(
       Plugin plugin,
@@ -218,45 +222,34 @@ public final class CosmeticsPetService {
     boolean differentWorld = !sameWorld(entity, player);
     Location current = entity.getLocation();
     double distanceSq = differentWorld ? Double.MAX_VALUE : current.distanceSquared(desired);
-    boolean displayPet = definition.displayPet() || entity instanceof ArmorStand;
 
-    // Only a big jump (player teleported, changed world, or fell far behind)
-    // snaps — everything else moves smoothly so it never reads as teleporting.
+    // Emergency fallback only: a big jump (player teleported, changed world,
+    // fell far behind, or desynced) snaps. Everything else moves smoothly so it
+    // never reads as teleporting.
     if (PetMovementMath.shouldForceSnap(distanceSq, differentWorld)) {
       applyPetPosition(entity, player, desired);
       return state.nextMoveTick().withLastTarget(desired);
     }
 
-    if (displayPet) {
-      // Armor-stand display pets interpolate teleports smoothly client-side.
-      Location next = PetMovementMath.interpolateDisplay(current, desired, Math.sqrt(distanceSq));
-      applyPetPosition(entity, player, next);
-      return state.nextMoveTick().withLastTarget(next);
+    // Everything that reaches here is a floating / flying / display pet — the
+    // armor-stand display pets AND the living hover pets (Allay, Bee, Parrot,
+    // Bat, Axolotl). They all follow via a smooth interpolated teleport each
+    // move tick, the same proven path the display pets always used.
+    //
+    // The old code moved living hover pets with setVelocity, but they spawn
+    // AI-disabled (setAI(false) = NoAI) and a NoAI entity ignores velocity, so
+    // they never moved and sat frozen until the far-distance snap fired.
+    // interpolateDisplay + teleportAsync (see applyPetPosition) repositions them
+    // a fraction of the gap each tick — Folia-safe, and flying mobs keep their
+    // passive wing flap so it reads as gentle hovering flight, not a freeze.
+    Location next = PetMovementMath.interpolateDisplay(current, desired, Math.sqrt(distanceSq));
+    if (!loggedFirstFollowMove) {
+      loggedFirstFollowMove = true;
+      logger.info("Cosmetic pet follow loop active — applying interpolated movement (first pet: "
+          + definition.id() + ")");
     }
-
-    // Walking pets (ground mobs): navigate with the pathfinder so they actually
-    // WALK to the follow point with normal leg animation. Re-issued every move
-    // tick so they track the player; the force-snap above handles the player
-    // teleporting or the pet falling far behind. This replaces the old
-    // velocity-on-an-AI-disabled-mob path, which left walking pets frozen until
-    // a snap — they "only teleported when very far, otherwise stood still".
-    if (entity instanceof Mob walkingMob && !definition.floating()) {
-      walkingMob.getPathfinder().moveTo(desired, PetMovementMath.WALK_SPEED);
-      return state.nextMoveTick().withLastTarget(desired);
-    }
-
-    // Floating pets glide toward the target with real velocity (no gravity) so
-    // the client renders smooth hovering motion, and turn to face the direction
-    // of travel via setRotation, which rotates the entity without snapping its
-    // position the way a teleport would.
-    if (entity instanceof LivingEntity living) {
-      living.setGravity(false);
-      living.setVelocity(PetMovementMath.glideVelocity(current, desired));
-      living.setRotation(
-          PetMovementMath.faceYaw(current, desired, current.getYaw(), player.getLocation().getYaw()),
-          0f);
-    }
-    return state.nextMoveTick().withLastTarget(desired);
+    applyPetPosition(entity, player, next);
+    return state.nextMoveTick().withLastTarget(next);
   }
 
   private void applyPetPosition(Entity entity, Player player, Location location) {
@@ -267,10 +260,20 @@ public final class CosmeticsPetService {
     location.setYaw(yaw);
     location.setPitch(0f);
     if (entity instanceof LivingEntity living) {
+      // Kill any residual motion so the teleport fully owns the position.
       living.setVelocity(new Vector(0, 0, 0));
-      living.teleportAsync(location);
-    } else {
+    }
+    // Move with the SAME synchronous teleport the working display pets use — the
+    // proven path. Living pets previously used teleportAsync here, which is the
+    // one behavioural difference from the display pets that follow correctly, so
+    // the per-tick interpolation steps never landed. The pet shares the owner's
+    // region (we tick from runForPlayer and snap it back if it ever drifts), so
+    // a same-region teleport is Folia-safe; only fall back to async if the
+    // platform rejects the synchronous call.
+    try {
       entity.teleport(location);
+    } catch (Throwable error) {
+      entity.teleportAsync(location);
     }
   }
 
@@ -509,30 +512,19 @@ public final class CosmeticsPetService {
     mob.setPersistent(false);
     mob.setRemoveWhenFarAway(false);
     mob.setCustomNameVisible(false);
-    if (definition.floating()) {
-      // Floating pets hover via velocity — no AI, no gravity, no awareness.
-      mob.setAware(false);
-      mob.setAI(false);
-      mob.setGravity(false);
-    } else {
-      // Walking pets navigate with the pathfinder (followPet), which needs AI +
-      // awareness + gravity ON so the mob actually walks (and animates) along
-      // the ground. Without AI, setVelocity did nothing and the pet only ever
-      // teleported when it fell far behind.
-      mob.setAware(true);
-      mob.setAI(true);
-      mob.setGravity(true);
-      // Strip every vanilla goal so the pet is a blank slate driven only by
-      // moveTo: a Fox can't flee the owner / curl up to sleep, and a Rabbit
-      // can't panic-hop away. Navigation still runs without goals, so the pet
-      // walks to the follow point and animates normally. Guarded so a server
-      // without the MobGoals API never fails to spawn the pet.
-      try {
-        Bukkit.getMobGoals().removeAllGoals(mob);
-      } catch (Throwable error) {
-        logger.log(Level.WARNING,
-            "Could not strip pet goals for " + definition.id() + "; it may wander", error);
-      }
+    // Every living pet — floating AND ground — is moved by the follow loop's
+    // interpolated synchronous teleport (the same proven path the display pets
+    // use). Keep them fully NoAI + no-gravity so nothing fights the teleport:
+    // no idle wander, no Fox fleeing/sleeping, no Rabbit panic-hop, no gravity
+    // pulling a hover pet down, and crucially no AI movement controller fighting
+    // the per-tick position. Goals are stripped belt-and-suspenders.
+    mob.setAware(false);
+    mob.setAI(false);
+    mob.setGravity(false);
+    try {
+      Bukkit.getMobGoals().removeAllGoals(mob);
+    } catch (Throwable ignored) {
+      // A NoAI mob runs no goals anyway; ignore if the API is unavailable.
     }
     tagPet(mob, owner);
     PetSilenceConfigurer.apply(mob);
