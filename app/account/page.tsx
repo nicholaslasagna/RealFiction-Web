@@ -499,10 +499,7 @@ async function SignedInAccount() {
         <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
           <section className="space-y-6">
             <div className="minecraft-panel rounded-lg p-6 md:p-8">
-              <Badge variant={verifiedLink ? "success" : "warning"}>
-                {verifiedLink ? "Ready to play" : "One step left"}
-              </Badge>
-              <h1 className="display-font mt-4 text-5xl font-semibold leading-tight text-white md:text-6xl">
+              <h1 className="display-font text-5xl font-semibold leading-tight text-white md:text-6xl">
                 Welcome back
               </h1>
               <p className="mt-4 max-w-2xl text-base leading-7 text-muted-foreground">

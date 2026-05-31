@@ -667,3 +667,33 @@ export function WarningIcon({ size = 22, ...rest }: IconProps) {
     rest
   )
 }
+
+/** Iron sword — combat / Factions. */
+export function SwordIcon({ size = 22, ...rest }: IconProps) {
+  return pixelSvg(
+    size,
+    <>
+      {/* blade (steel), diagonal with tip top-right */}
+      <rect x="11" y="2" width="2" height="1" fill="#ccd5df" />
+      <rect x="10" y="3" width="2" height="1" fill="#ccd5df" />
+      <rect x="9" y="4" width="2" height="1" fill="#ccd5df" />
+      <rect x="8" y="5" width="2" height="1" fill="#ccd5df" />
+      <rect x="7" y="6" width="2" height="1" fill="#ccd5df" />
+      {/* blade highlight (upper-right edge) */}
+      <rect x="12" y="2" width="1" height="1" fill="#eef2f7" />
+      <rect x="11" y="3" width="1" height="1" fill="#eef2f7" />
+      <rect x="10" y="4" width="1" height="1" fill="#eef2f7" />
+      {/* gold cross-hilt */}
+      <rect x="5" y="8" width="4" height="1" fill="#f2c14e" />
+      <rect x="7" y="6" width="1" height="2" fill="#f2c14e" />
+      <rect x="6" y="7" width="2" height="1" fill="#f2c14e" />
+      {/* wood handle to the bottom-left */}
+      <rect x="5" y="9" width="2" height="1" fill="#7a4f25" />
+      <rect x="4" y="10" width="2" height="1" fill="#7a4f25" />
+      <rect x="3" y="11" width="2" height="1" fill="#7a4f25" />
+      {/* pommel */}
+      <rect x="2" y="12" width="2" height="1" fill="#caa23a" />
+    </>,
+    rest
+  )
+}
