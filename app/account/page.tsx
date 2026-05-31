@@ -83,6 +83,8 @@ type OrderRow = {
   created_at: string
   paid_at: string | null
   gifted_to_minecraft_username?: string | null
+  store_credit_applied_cents?: number | null
+  payment_due_cents?: number | null
   order_items?: OrderItemRow[] | null
 }
 
@@ -353,7 +355,7 @@ async function getAccountData(): Promise<AccountData> {
       // live).
       supabase
         .from("orders")
-        .select("id,status,total_cents,currency,created_at,paid_at,gifted_to_minecraft_username,order_items(quantity,product_snapshot)")
+        .select("id,status,total_cents,currency,created_at,paid_at,gifted_to_minecraft_username,store_credit_applied_cents,payment_due_cents,order_items(quantity,product_snapshot)")
         .in("status", ["paid", "fulfilled", "refunded", "chargeback"])
         .order("created_at", { ascending: false })
         .limit(50),
@@ -700,9 +702,24 @@ function AllPurchases({ orders }: { orders: OrderRow[] }) {
                     </div>
                     <OrderStatusBadge status={order.status} />
                   </div>
-                  <p className="mt-3 text-sm font-semibold text-amber-100">
-                    {formatMoney(order.total_cents, order.currency)}
-                  </p>
+                  {order.store_credit_applied_cents && order.store_credit_applied_cents > 0 ? (
+                    <div className="mt-3 space-y-0.5 text-sm">
+                      <p className="text-emerald-200">
+                        Store credit applied: -{formatMoney(order.store_credit_applied_cents, order.currency)}
+                      </p>
+                      <p className="font-semibold text-amber-100">
+                        Paid today:{" "}
+                        {formatMoney(
+                          order.payment_due_cents ?? Math.max(0, order.total_cents - order.store_credit_applied_cents),
+                          order.currency
+                        )}
+                      </p>
+                    </div>
+                  ) : (
+                    <p className="mt-3 text-sm font-semibold text-amber-100">
+                      {formatMoney(order.total_cents, order.currency)}
+                    </p>
+                  )}
                 </div>
               )
             })}

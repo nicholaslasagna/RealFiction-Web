@@ -70,6 +70,8 @@ export function Storefront({
   const [selectedMonths, setSelectedMonths] = useState<Record<string, DurationMonths>>({})
   const [isGift, setIsGift] = useState(false)
   const [giftRecipient, setGiftRecipient] = useState("")
+  const [applyCredit, setApplyCredit] = useState(false)
+  const [storeCreditCents, setStoreCreditCents] = useState(0)
   const [checkoutState, setCheckoutState] = useState<string | null>(null)
   const cartRef = useRef<HTMLElement>(null)
 
@@ -87,6 +89,26 @@ export function Storefront({
     window.addEventListener("hashchange", applyHash)
     return () => window.removeEventListener("hashchange", applyHash)
   }, [])
+
+  // Load the signed-in user's store-credit balance so it can be applied at
+  // checkout. The amount actually applied is always recomputed server-side.
+  useEffect(() => {
+    if (!signedIn) {
+      return
+    }
+    let active = true
+    fetch("/api/account/store-credit", { headers: { Accept: "application/json" }, cache: "no-store" })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((body: { balanceCents?: number } | null) => {
+        if (active && body && typeof body.balanceCents === "number") {
+          setStoreCreditCents(Math.max(0, Math.trunc(body.balanceCents)))
+        }
+      })
+      .catch(() => {})
+    return () => {
+      active = false
+    }
+  }, [signedIn])
 
   const sections = useMemo(
     () =>
@@ -124,6 +146,12 @@ export function Storefront({
   }>
 
   const total = cartLines.reduce((sum, item) => sum + item.total, 0)
+
+  // Store credit is display-only here; the server recomputes the real amount.
+  const creditAvailable = signedIn && storeCreditCents > 0
+  const creditToApply = applyCredit && creditAvailable ? Math.min(storeCreditCents, total) : 0
+  const dueCents = total - creditToApply
+  const fullCredit = creditToApply > 0 && dueCents === 0
 
   // Checkout eligibility. A normal purchase delivers to the buyer's linked
   // account; a gift delivers to a valid recipient username. The server enforces
@@ -171,13 +199,25 @@ export function Storefront({
         body: JSON.stringify({
           provider,
           isGift,
+          applyStoreCredit: applyCredit,
           giftRecipient: isGift ? giftRecipient.trim() || undefined : undefined,
           items: cart.map((item) => ({ productId: item.slug, quantity: item.quantity }))
         })
       })
 
-      const json = (await response.json()) as { checkoutUrl?: string | null; message?: string; error?: string }
+      const json = (await response.json()) as {
+        checkoutUrl?: string | null
+        completed?: boolean
+        message?: string
+        error?: string
+      }
 
+      // Fully covered by store credit — the order completed server-side with no
+      // payment provider; send the buyer to their account to see it.
+      if (json.completed) {
+        window.location.href = "/account?checkout=success"
+        return
+      }
       if (json.checkoutUrl) {
         window.location.href = json.checkoutUrl
         return
@@ -474,9 +514,47 @@ export function Storefront({
               )}
             </div>
 
-            <div className="flex items-center justify-between border-t border-border pt-4">
-              <span className="text-sm text-muted-foreground">Total</span>
-              <strong className="font-mono text-xl text-amber-100">{formatCurrency(total)}</strong>
+            {/* Store credit — only when signed in with a positive balance. */}
+            {creditAvailable ? (
+              <label className="flex items-center justify-between gap-3 rounded-lg border border-amber-200/16 bg-black/16 p-3 text-sm">
+                <span className="font-semibold text-white">
+                  Apply store credit
+                  <span className="ml-2 font-normal text-muted-foreground">
+                    {formatCurrency(storeCreditCents)} available
+                  </span>
+                </span>
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 accent-amber-300"
+                  checked={applyCredit}
+                  onChange={(event) => setApplyCredit(event.target.checked)}
+                />
+              </label>
+            ) : null}
+
+            {/* Totals — break down credit when applied, otherwise a plain total. */}
+            <div className="space-y-2 border-t border-border pt-4">
+              {creditToApply > 0 ? (
+                <>
+                  <div className="flex items-center justify-between text-sm text-muted-foreground">
+                    <span>Subtotal</span>
+                    <span className="font-mono">{formatCurrency(total)}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-sm text-emerald-200">
+                    <span>Store credit</span>
+                    <span className="font-mono">-{formatCurrency(creditToApply)}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-muted-foreground">Due today</span>
+                    <strong className="font-mono text-xl text-amber-100">{formatCurrency(dueCents)}</strong>
+                  </div>
+                </>
+              ) : (
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground">Total</span>
+                  <strong className="font-mono text-xl text-amber-100">{formatCurrency(total)}</strong>
+                </div>
+              )}
             </div>
 
             {!signedIn ? (
@@ -487,6 +565,22 @@ export function Storefront({
               <Button asChild className="w-full" variant="outline">
                 <Link href="/account">Link Minecraft account</Link>
               </Button>
+            ) : fullCredit ? (
+              <div className="grid gap-2">
+                <Button
+                  aria-label="Place order with store credit"
+                  disabled={!canCheckout}
+                  onClick={() => checkout("stripe")}
+                  type="button"
+                >
+                  Place order with store credit
+                </Button>
+                {isGift && !validRecipient ? (
+                  <p className="text-xs text-muted-foreground">
+                    Enter the recipient&apos;s Minecraft username to continue.
+                  </p>
+                ) : null}
+              </div>
             ) : (
               <div className="grid gap-2">
                 <Button
@@ -496,7 +590,7 @@ export function Storefront({
                   onClick={() => checkout("stripe")}
                   type="button"
                 >
-                  <span>Checkout</span>
+                  <span>{creditToApply > 0 ? "Pay the rest" : "Checkout"}</span>
                   {/* What Stripe Checkout accepts — card networks + the wallets. */}
                   <span className="flex items-center justify-center gap-1.5">
                     <PayMark src="/images/payments/visa.svg" label="Visa" />
