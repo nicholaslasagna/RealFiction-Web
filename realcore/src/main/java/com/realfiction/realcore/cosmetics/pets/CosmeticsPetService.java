@@ -517,13 +517,22 @@ public final class CosmeticsPetService {
     } else {
       // Walking pets navigate with the pathfinder (followPet), which needs AI +
       // awareness + gravity ON so the mob actually walks (and animates) along
-      // the ground. They stay invulnerable, non-colliding, silent, and never
-      // target anything in the lobby, so AI is purely "walk to the follow
-      // point" — without it setVelocity did nothing and the pet only ever
+      // the ground. Without AI, setVelocity did nothing and the pet only ever
       // teleported when it fell far behind.
       mob.setAware(true);
       mob.setAI(true);
       mob.setGravity(true);
+      // Strip every vanilla goal so the pet is a blank slate driven only by
+      // moveTo: a Fox can't flee the owner / curl up to sleep, and a Rabbit
+      // can't panic-hop away. Navigation still runs without goals, so the pet
+      // walks to the follow point and animates normally. Guarded so a server
+      // without the MobGoals API never fails to spawn the pet.
+      try {
+        Bukkit.getMobGoals().removeAllGoals(mob);
+      } catch (Throwable error) {
+        logger.log(Level.WARNING,
+            "Could not strip pet goals for " + definition.id() + "; it may wander", error);
+      }
     }
     tagPet(mob, owner);
     PetSilenceConfigurer.apply(mob);
