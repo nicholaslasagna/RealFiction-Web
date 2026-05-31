@@ -10,6 +10,9 @@ export const checkoutSchema = z.object({
   // purchase the delivery target is the buyer's linked account, resolved on the
   // server — the client never sends its own username for non-gift orders.
   isGift: z.boolean().optional().default(false),
+  // Whether to spend the buyer's store credit. The amount applied is always
+  // computed server-side from the ledger — the client never sends a balance.
+  applyStoreCredit: z.boolean().optional().default(false),
   giftRecipient: z.string().trim().min(3).max(16).regex(/^[A-Za-z0-9_]+$/).optional(),
   items: z
     .array(
@@ -32,6 +35,11 @@ type CheckoutOrder = {
   minecraftUsername?: string | null
   giftRecipient?: string | null
   isGift?: boolean
+  // Store credit applied to this order + the remaining amount the provider
+  // should charge (cents). When credit is applied the session bills only the
+  // remainder via a single consolidated line item.
+  storeCreditAppliedCents?: number
+  paymentDueCents?: number
 }
 
 function getSiteUrl() {
@@ -64,19 +72,35 @@ export async function createStripeCheckout(order: CheckoutOrder, lines: Checkout
   body.set("metadata[minecraft_username]", order.minecraftUsername ?? "")
   body.set("metadata[gift_recipient]", order.giftRecipient ?? "")
   body.set("metadata[is_gift]", order.isGift ? "true" : "false")
+  body.set("metadata[store_credit_cents]", String(order.storeCreditAppliedCents ?? 0))
   body.set("payment_intent_data[metadata][order_id]", order.id)
   body.set("payment_intent_data[metadata][network]", "RealFiction")
 
-  lines.forEach((item, index) => {
-    body.set(`line_items[${index}][quantity]`, String(item.quantity))
-    body.set(`line_items[${index}][price_data][currency]`, item.product.currency.toLowerCase())
-    body.set(`line_items[${index}][price_data][unit_amount]`, String(item.product.price_cents))
-    body.set(`line_items[${index}][price_data][product_data][name]`, item.product.name)
-    body.set(`line_items[${index}][price_data][product_data][description]`, item.product.description)
-    body.set(`line_items[${index}][price_data][product_data][metadata][product_id]`, item.product.id)
-    body.set(`line_items[${index}][price_data][product_data][metadata][product_slug]`, item.product.slug)
-    body.set(`line_items[${index}][price_data][product_data][metadata][category]`, item.product.category)
-  })
+  const storeCreditApplied = (order.storeCreditAppliedCents ?? 0) > 0
+
+  if (storeCreditApplied) {
+    // Store credit covers part of the cart: Stripe charges only the remainder
+    // via one consolidated line item. The DB order_items still carry the real
+    // products, so fulfillment is unchanged.
+    const dueCents = order.paymentDueCents ?? lines.reduce((total, item) => total + item.lineTotalCents, 0)
+    body.set("metadata[payment_due_cents]", String(dueCents))
+    body.set("line_items[0][quantity]", "1")
+    body.set("line_items[0][price_data][currency]", "usd")
+    body.set("line_items[0][price_data][unit_amount]", String(dueCents))
+    body.set("line_items[0][price_data][product_data][name]", "RealFiction order (store credit applied)")
+    body.set("line_items[0][price_data][product_data][metadata][store_credit_applied]", "true")
+  } else {
+    lines.forEach((item, index) => {
+      body.set(`line_items[${index}][quantity]`, String(item.quantity))
+      body.set(`line_items[${index}][price_data][currency]`, item.product.currency.toLowerCase())
+      body.set(`line_items[${index}][price_data][unit_amount]`, String(item.product.price_cents))
+      body.set(`line_items[${index}][price_data][product_data][name]`, item.product.name)
+      body.set(`line_items[${index}][price_data][product_data][description]`, item.product.description)
+      body.set(`line_items[${index}][price_data][product_data][metadata][product_id]`, item.product.id)
+      body.set(`line_items[${index}][price_data][product_data][metadata][product_slug]`, item.product.slug)
+      body.set(`line_items[${index}][price_data][product_data][metadata][category]`, item.product.category)
+    })
+  }
 
   const response = await fetch("https://api.stripe.com/v1/checkout/sessions", {
     method: "POST",
@@ -144,6 +168,30 @@ export async function createPayPalCheckout(order: CheckoutOrder, lines: Checkout
   const token = await getPayPalAccessToken()
   const baseUrl = getPayPalBaseUrl()
   const totalCents = lines.reduce((total, item) => total + item.lineTotalCents, 0)
+  const storeCreditApplied = (order.storeCreditAppliedCents ?? 0) > 0
+  const chargeValue = ((storeCreditApplied ? (order.paymentDueCents ?? totalCents) : totalCents) / 100).toFixed(2)
+  // When credit is applied, bill only the remainder via one consolidated item;
+  // the DB order_items still carry the real products for fulfillment.
+  const items = storeCreditApplied
+    ? [
+        {
+          name: "RealFiction order (store credit applied)",
+          sku: order.id,
+          quantity: "1",
+          category: "DIGITAL_GOODS",
+          unit_amount: { currency_code: "USD", value: chargeValue }
+        }
+      ]
+    : lines.map((line) => ({
+        name: line.product.name,
+        sku: line.product.slug,
+        quantity: String(line.quantity),
+        category: "DIGITAL_GOODS",
+        unit_amount: {
+          currency_code: line.product.currency,
+          value: (line.product.price_cents / 100).toFixed(2)
+        }
+      }))
 
   const orderResponse = await fetch(`${baseUrl}/v2/checkout/orders`, {
     method: "POST",
@@ -161,24 +209,15 @@ export async function createPayPalCheckout(order: CheckoutOrder, lines: Checkout
           description: "RealFiction cosmetic and supporter checkout",
           amount: {
             currency_code: "USD",
-            value: (totalCents / 100).toFixed(2),
+            value: chargeValue,
             breakdown: {
               item_total: {
                 currency_code: "USD",
-                value: (totalCents / 100).toFixed(2)
+                value: chargeValue
               }
             }
           },
-          items: lines.map((line) => ({
-            name: line.product.name,
-            sku: line.product.slug,
-            quantity: String(line.quantity),
-            category: "DIGITAL_GOODS",
-            unit_amount: {
-              currency_code: line.product.currency,
-              value: (line.product.price_cents / 100).toFixed(2)
-            }
-          }))
+          items
         }
       ],
       application_context: {

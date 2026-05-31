@@ -15,6 +15,8 @@ import { AccountSignOutButton } from "@/components/account-sign-out-button"
 import { GiftCardCodes } from "@/components/gift-card-codes"
 import {
   BoneIcon,
+  CheckIcon,
+  ClockIcon,
   CompassIcon,
   DyeIcon,
   ElytraIcon,
@@ -23,7 +25,8 @@ import {
   GearIcon,
   GrassBlockIcon,
   NetherStarIcon,
-  SteveHeadIcon
+  SteveHeadIcon,
+  WarningIcon
 } from "@/components/minecraft-icons"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -80,6 +83,8 @@ type OrderRow = {
   created_at: string
   paid_at: string | null
   gifted_to_minecraft_username?: string | null
+  store_credit_applied_cents?: number | null
+  payment_due_cents?: number | null
   order_items?: OrderItemRow[] | null
 }
 
@@ -242,6 +247,32 @@ function rewardLabel(status: string) {
   return labels[status] ?? "Checking"
 }
 
+// Pixel-art status chips — a green check when it's done, an amber warning sign
+// when it needs help, an hourglass-style clock while it's in flight.
+function OrderStatusBadge({ status }: { status: string }) {
+  const Icon = status === "fulfilled" ? CheckIcon : status === "refunded" || status === "chargeback" ? WarningIcon : ClockIcon
+  const variant: "success" | "warning" | "outline" =
+    status === "fulfilled" ? "success" : status === "refunded" || status === "chargeback" ? "warning" : "outline"
+  return (
+    <Badge variant={variant}>
+      <Icon size={12} />
+      {orderLabel(status)}
+    </Badge>
+  )
+}
+
+function RewardStatusBadge({ status }: { status: string }) {
+  const Icon = status === "delivered" ? CheckIcon : status === "failed" ? WarningIcon : ClockIcon
+  const variant: "success" | "warning" | "outline" =
+    status === "delivered" ? "success" : status === "failed" ? "warning" : "outline"
+  return (
+    <Badge variant={variant}>
+      <Icon size={12} />
+      {rewardLabel(status)}
+    </Badge>
+  )
+}
+
 const voteRewardAmounts: Record<string, number> = {
   "vote.standard": 250,
   "vote.milestone.5": 500,
@@ -324,7 +355,7 @@ async function getAccountData(): Promise<AccountData> {
       // live).
       supabase
         .from("orders")
-        .select("id,status,total_cents,currency,created_at,paid_at,gifted_to_minecraft_username,order_items(quantity,product_snapshot)")
+        .select("id,status,total_cents,currency,created_at,paid_at,gifted_to_minecraft_username,store_credit_applied_cents,payment_due_cents,order_items(quantity,product_snapshot)")
         .in("status", ["paid", "fulfilled", "refunded", "chargeback"])
         .order("created_at", { ascending: false })
         .limit(50),
@@ -669,13 +700,26 @@ function AllPurchases({ orders }: { orders: OrderRow[] }) {
                         </p>
                       ) : null}
                     </div>
-                    <Badge variant={order.status === "fulfilled" ? "success" : "outline"}>
-                      {orderLabel(order.status)}
-                    </Badge>
+                    <OrderStatusBadge status={order.status} />
                   </div>
-                  <p className="mt-3 text-sm font-semibold text-amber-100">
-                    {formatMoney(order.total_cents, order.currency)}
-                  </p>
+                  {order.store_credit_applied_cents && order.store_credit_applied_cents > 0 ? (
+                    <div className="mt-3 space-y-0.5 text-sm">
+                      <p className="text-emerald-200">
+                        Store credit applied: -{formatMoney(order.store_credit_applied_cents, order.currency)}
+                      </p>
+                      <p className="font-semibold text-amber-100">
+                        Paid today:{" "}
+                        {formatMoney(
+                          order.payment_due_cents ?? Math.max(0, order.total_cents - order.store_credit_applied_cents),
+                          order.currency
+                        )}
+                      </p>
+                    </div>
+                  ) : (
+                    <p className="mt-3 text-sm font-semibold text-amber-100">
+                      {formatMoney(order.total_cents, order.currency)}
+                    </p>
+                  )}
                 </div>
               )
             })}
@@ -707,9 +751,7 @@ function AllRewards({ rewards }: { rewards: RewardRow[] }) {
                       {rewardDetail(reward)} · {formatDate(reward.created_at)}
                     </p>
                   </div>
-                  <Badge variant={reward.status === "delivered" ? "success" : "outline"}>
-                    {rewardLabel(reward.status)}
-                  </Badge>
+                  <RewardStatusBadge status={reward.status} />
                 </div>
               </div>
             ))}

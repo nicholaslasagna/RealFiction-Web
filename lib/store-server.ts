@@ -157,6 +157,12 @@ export type OrderDelivery = {
   giftRecipient: string | null
   isGift: boolean
   source: string
+  // Effective order provider — 'gift_card' for a full-store-credit order with no
+  // card payment, otherwise the requested 'stripe'/'paypal'.
+  provider: "stripe" | "paypal" | "gift_card"
+  // Store credit applied at creation + the remaining amount to charge (cents).
+  storeCreditCents: number
+  paymentDueCents: number
 }
 
 export async function createPendingOrder(
@@ -178,11 +184,13 @@ export async function createPendingOrder(
       user_id: user?.id ?? null,
       minecraft_username: delivery.minecraftUsername,
       minecraft_uuid: delivery.minecraftUuid,
-      provider: input.provider,
+      provider: delivery.provider,
       status: "pending",
       subtotal_cents: subtotalCents,
       discount_cents: 0,
       total_cents: subtotalCents,
+      store_credit_applied_cents: delivery.storeCreditCents,
+      payment_due_cents: delivery.paymentDueCents,
       currency: "USD",
       gifted_to_minecraft_username: delivery.giftRecipient,
       metadata: {
@@ -286,7 +294,62 @@ export async function markOrderPaidAndFulfill(orderId: string, providerPaymentId
     console.error("issue_gift_cards_error", giftError.message ?? "unknown")
   }
 
+  // Finalise any reserved store credit (idempotent; no-op when none was
+  // applied). Both the Stripe webhook and the PayPal capture path call this, so
+  // a partial-credit order's hold becomes a spend on successful payment.
+  const { error: creditError } = await supabase.rpc("finalize_store_credit_for_order", {
+    p_order_id: orderId
+  })
+  if (creditError) {
+    console.error("finalize_store_credit_error", creditError.message ?? "unknown")
+  }
+
   return data
+}
+
+/**
+ * Server-authoritative USD store-credit balance (cents) for a user. Sums their
+ * store_credit_ledger via get_store_credit_balance. Never trusts the client.
+ */
+export async function getStoreCreditBalanceCents(userId: string): Promise<number> {
+  const supabase = getSupabaseServiceRoleClient()
+  const { data, error } = await supabase.rpc("get_store_credit_balance", { p_user_id: userId })
+  if (error) {
+    return 0
+  }
+  const row = Array.isArray(data) ? data[0] : data
+  const cents = Number((row as { balance_cents?: number | string } | null)?.balance_cents ?? 0)
+  return Number.isFinite(cents) ? Math.max(0, Math.trunc(cents)) : 0
+}
+
+/** Reserve credit for a partial-credit order before redirecting to a provider. */
+export async function reserveStoreCredit(orderId: string, userId: string, amountCents: number): Promise<boolean> {
+  const supabase = getSupabaseServiceRoleClient()
+  const { data, error } = await supabase.rpc("reserve_store_credit_for_order", {
+    p_order_id: orderId,
+    p_user_id: userId,
+    p_amount_cents: amountCents
+  })
+  return !error && data === true
+}
+
+/** Release a reserved credit hold (checkout cancelled/expired/failed). */
+export async function releaseStoreCredit(orderId: string): Promise<void> {
+  const supabase = getSupabaseServiceRoleClient()
+  const { error } = await supabase.rpc("release_store_credit_for_order", { p_order_id: orderId })
+  if (error) {
+    console.error("release_store_credit_error", error.message ?? "unknown")
+  }
+}
+
+/** Complete a full-store-credit order with no payment provider (atomic). */
+export async function completeStoreCreditOnlyOrder(orderId: string, userId: string): Promise<boolean> {
+  const supabase = getSupabaseServiceRoleClient()
+  const { data, error } = await supabase.rpc("complete_store_credit_only_order", {
+    p_order_id: orderId,
+    p_user_id: userId
+  })
+  return !error && data === true
 }
 
 export async function findOrderIdByPaymentId(provider: "stripe" | "paypal", paymentId: string) {
