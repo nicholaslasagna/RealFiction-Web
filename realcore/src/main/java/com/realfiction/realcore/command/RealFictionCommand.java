@@ -9,6 +9,7 @@ import com.realfiction.realcore.rewards.ProductPermissionResolver;
 import com.realfiction.realcore.rewards.RewardPollTelemetry;
 import com.realfiction.realcore.rewards.RewardPoller;
 import com.realfiction.realcore.lobby.LobbyManager;
+import com.realfiction.realcore.lobby.seasonal.AnniversaryCelebrationService;
 import com.realfiction.realcore.lobby.seasonal.SeasonalEventsService;
 import com.realfiction.realcore.playtime.PlaytimeTracker;
 import com.realfiction.realcore.scheduler.RealCoreScheduler;
@@ -47,6 +48,7 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
+import org.bukkit.Location;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
@@ -59,6 +61,7 @@ import org.jetbrains.annotations.Nullable;
 
 public final class RealFictionCommand implements CommandExecutor, TabCompleter {
   private final RealCorePlugin plugin;
+  private AnniversaryCelebrationService anniversary;
 
   public RealFictionCommand(RealCorePlugin plugin) {
     this.plugin = plugin;
@@ -95,6 +98,8 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
         return handleCosmetics(sender, args);
       case "seasonal":
         return handleSeasonal(sender, args);
+      case "anniversary":
+        return handleAnniversary(sender, args);
       case "spawn":
         return handleSpawn(sender);
       case "setspawn":
@@ -115,6 +120,87 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
       send(sender, ChatColor.RED + "RealCore reload failed. Check the server console.");
     }
     return true;
+  }
+
+  private boolean handleAnniversary(CommandSender sender, String[] args) {
+    if (!sender.hasPermission("realcore.admin")) {
+      send(sender, ChatColor.RED + "You do not have permission to do that.");
+      return true;
+    }
+    if (args.length < 2) {
+      send(sender, ChatColor.YELLOW + "Usage: /rf anniversary <years> [true|false]");
+      send(sender, ChatColor.GRAY + "  true  = a loving couple's anniversary (default)");
+      send(sender, ChatColor.GRAY + "  false = a RealFiction network anniversary");
+      return true;
+    }
+
+    int years;
+    try {
+      years = Integer.parseInt(args[1].trim());
+    } catch (NumberFormatException ex) {
+      send(sender, ChatColor.RED + "The number of years must be a whole number, e.g. /rf anniversary 2");
+      return true;
+    }
+    if (years < 1 || years > 1000) {
+      send(sender, ChatColor.RED + "Pick a number of years between 1 and 1000.");
+      return true;
+    }
+
+    boolean lovey = true;
+    if (args.length >= 3) {
+      String mode = args[2].trim().toLowerCase(Locale.ROOT);
+      if (mode.equals("false") || mode.equals("network") || mode.equals("realfiction")) {
+        lovey = false;
+      } else if (!(mode.equals("true") || mode.equals("love") || mode.equals("lovey"))) {
+        send(sender, ChatColor.RED + "Mode must be true (love) or false (RealFiction network).");
+        return true;
+      }
+    }
+
+    Location center;
+    if (sender instanceof Player player) {
+      center = player.getLocation();
+    } else {
+      center = consoleCelebrationCenter();
+      if (center == null) {
+        send(sender, ChatColor.RED
+            + "No players are online to anchor the celebration. Run this in-game, or wait for someone to join.");
+        return true;
+      }
+    }
+
+    if (anniversary == null) {
+      anniversary = new AnniversaryCelebrationService(plugin.scheduler(), plugin.getLogger());
+    }
+    if (anniversary.isRunning()) {
+      send(sender, ChatColor.YELLOW + "A celebration is already lighting up the sky. Let this one finish first.");
+      return true;
+    }
+
+    boolean started = anniversary.start(years, lovey, center);
+    if (!started) {
+      send(sender, ChatColor.RED + "Could not start the celebration right now. Please try again in a moment.");
+      return true;
+    }
+
+    String flavour = lovey ? "a love-filled" : "a RealFiction network";
+    send(sender, ChatColor.LIGHT_PURPLE.toString() + ChatColor.BOLD + "Happy " + years + " year anniversary!"
+        + ChatColor.RESET + ChatColor.GRAY + " Lighting up the sky with " + flavour + " celebration.");
+    return true;
+  }
+
+  /**
+   * Anchor a console-launched celebration at the first online player, so the
+   * fireworks have somewhere to bloom. Returns {@code null} when nobody is on.
+   */
+  private @Nullable Location consoleCelebrationCenter() {
+    for (Player online : Bukkit.getOnlinePlayers()) {
+      Location loc = online.getLocation();
+      if (loc.getWorld() != null) {
+        return loc;
+      }
+    }
+    return null;
   }
 
   private boolean handleStatus(CommandSender sender) {
@@ -1740,6 +1826,7 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
         options.add("economy");
         options.add("rewards");
         options.add("seasonal");
+        options.add("anniversary");
         options.add("doctor");
         options.add("reload");
         options.add("setspawn");
@@ -1766,6 +1853,12 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
         return List.of();
       }
       return com.realfiction.realcore.lobby.seasonal.SeasonalPreviewCatalog.validIds();
+    }
+    if (args.length == 2 && "anniversary".equalsIgnoreCase(args[0]) && sender.hasPermission("realcore.admin")) {
+      return List.of("1", "2", "3", "5", "10", "25");
+    }
+    if (args.length == 3 && "anniversary".equalsIgnoreCase(args[0]) && sender.hasPermission("realcore.admin")) {
+      return List.of("true", "false");
     }
     if (args.length == 2 && "cosmetics".equalsIgnoreCase(args[0]) && sender.hasPermission("realcore.admin")) {
       return List.of("pets");
