@@ -737,11 +737,17 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
           + "(and economy.dbBalanceReadEnabled) first.");
       return true;
     }
+    RealCoreConfig config = plugin.realCoreConfig();
+    boolean dryRun = config != null && config.economy().reconcile().dryRun();
     int scanned = service.triggerOnlineReconcile();
     if (scanned < 0) {
       send(sender, ChatColor.RED + "Auto reconcile is not running.");
       return true;
     }
+    String mode = dryRun
+        ? ChatColor.AQUA + "DRY-RUN" + ChatColor.GRAY + " (logs only, no balance changes)"
+        : ChatColor.RED + "LIVE" + ChatColor.GRAY + " (will adjust local Vault balances)";
+    send(sender, ChatColor.GOLD + "Reconcile mode: " + mode);
     send(sender, ChatColor.GREEN + "Reconcile pass triggered for " + scanned + " online player(s)."
         + ChatColor.GRAY + " Pull-only; results are async — see the server log and /rf economy.");
     return true;

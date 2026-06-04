@@ -228,7 +228,7 @@ public final class EconomyReconciliationService {
       boolean dryRun = rc.dryRun();
       long afterMinor = localMinor;
       boolean applied = false;
-      if ((decision.action() == Action.DEPOSIT || decision.action() == Action.WITHDRAW) && !dryRun) {
+      if (shouldMutateVault(decision, dryRun)) {
         double amount = toVaultAmount(Math.abs(decision.vaultDeltaMinor()), scale);
         Method mutation = decision.action() == Action.DEPOSIT ? binding.deposit() : binding.withdraw();
         invokeMoneyMutation(mutation, binding.provider(), player, amount);
@@ -236,7 +236,7 @@ public final class EconomyReconciliationService {
         applied = true;
       }
 
-      if (decision.baselineChanged() && !dryRun) {
+      if (shouldPersistBaseline(decision, dryRun)) {
         long newBaseline = applied ? afterMinor : decision.newBaselineMinor();
         Long previous = baselines.put(uuid, newBaseline);
         if (previous == null || previous != newBaseline) {
@@ -292,6 +292,13 @@ public final class EconomyReconciliationService {
     }
 
     // db < local.
+    if (dbMinor <= 0) {
+      // A zero authoritative balance is never trustworthy enough to wipe local funds to zero:
+      // a missing economy_balances row also reads as 0 (the RPC coalesces null -> 0). Hold instead
+      // of withdrawing the player to nothing on a fresh/empty/unreachable economy.
+      return new Decision(Action.HOLD, 0, baselineMinor, false,
+          "DB balance is zero/absent; holding rather than wiping local to zero");
+    }
     if (localMinor <= baselineMinor) {
       // Local has not risen since our last sync, so the gap is the DB dropping = a spend elsewhere.
       long delta = localMinor - dbMinor;
@@ -304,6 +311,16 @@ public final class EconomyReconciliationService {
     // Holding never erases it; captured income self-resolves once it reaches the DB.
     return new Decision(Action.HOLD, 0, baselineMinor, false,
         "local rose since last sync; holding to avoid erasing local income");
+  }
+
+  /** Vault is only mutated for a real DEPOSIT/WITHDRAW and never in dry-run mode. */
+  static boolean shouldMutateVault(Decision decision, boolean dryRun) {
+    return !dryRun && (decision.action() == Action.DEPOSIT || decision.action() == Action.WITHDRAW);
+  }
+
+  /** The persisted baseline is only advanced when the decision changed it and not in dry-run mode. */
+  static boolean shouldPersistBaseline(Decision decision, boolean dryRun) {
+    return !dryRun && decision.baselineChanged();
   }
 
   // -- Vault provider access (reflection; mirrors VaultBalanceSyncService) -----

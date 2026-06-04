@@ -37,7 +37,7 @@ public record EconomyReconcileConfig(
         25,
         100_000_000L,
         true,
-        false
+        true
     );
   }
 

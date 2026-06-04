@@ -114,7 +114,10 @@ economy:
     # high-balance economies.
     maxDeltaMinor: 100000000
     requireOnline: true
-    dryRun: false
+    # Safe default: observe-only. Reconcile logs the deposits/withdrawals it WOULD
+    # make without touching any balance. Flip to false only after the logged
+    # decisions look correct for this server.
+    dryRun: true
   # Phase 6C vote reward ledger shadow mode. RealCore computes and logs the
   # ledger transaction it would submit later, but this build never writes those
   # vote reward transactions to the economy API.
