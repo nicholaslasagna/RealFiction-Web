@@ -36,7 +36,20 @@ export async function POST(request: Request) {
   const parsed = contactSchema.safeParse(body)
 
   if (!parsed.success) {
-    return Response.json({ error: "Invalid support request." }, { status: 400 })
+    // Tell the sender which field to fix instead of a single opaque rejection,
+    // while keeping the response free of internal/validation-library detail.
+    const field = parsed.error.issues[0]?.path[0]
+    const fieldMessages: Record<string, string> = {
+      name: "Please enter your name (2–80 characters).",
+      email: "Please enter a valid email address so we can reply.",
+      minecraftUsername: "That Minecraft username is too long (max 16 characters).",
+      topic: "Please add a short topic (at least 3 characters).",
+      message: "Please add a little more detail — your message needs at least 10 characters."
+    }
+    const error =
+      (typeof field === "string" && fieldMessages[field]) ||
+      "Please double-check the form and try again."
+    return Response.json({ error }, { status: 400 })
   }
 
   // Silently accept honeypot hits so bots cannot distinguish a drop from success.
