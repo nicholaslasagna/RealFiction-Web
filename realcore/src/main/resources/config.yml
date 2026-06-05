@@ -86,6 +86,38 @@ economy:
   # balance and apply at most syncVaultMaxDeltaMinor to local Vault.
   syncVaultAfterDb: false
   syncVaultMaxDeltaMinor: 100
+  # Continuous DB-to-Vault reconciliation: the cross-server "every server shows
+  # the same balance" path. Pull-only — it deposits/withdraws the local
+  # Vault/EssentialsX balance to match the authoritative DB balance on join and
+  # on a periodic timer, and NEVER writes the ledger (so it cannot double-pay).
+  # A persisted per-player baseline lets it tell "earned/spent on another server"
+  # (reconcile) apart from "local balance rose since last sync" (held, never
+  # erased). Requires economy.enabled + economy.dbBalanceReadEnabled with this
+  # server.id in dbBalanceReadBackendAllowlist. Anarchy is always excluded.
+  # Recommended rollout: enable with dryRun:true, confirm the logged deposits/
+  # withdrawals look right, then set dryRun:false.
+  reconcile:
+    enabled: false
+    backendAllowlist:
+      - smp-1
+      - factions-1
+      - lobby-1
+    onJoin: true
+    # Delay after join before reconciling, so EssentialsX/Vault has loaded the
+    # account (20 ticks = 1 second).
+    joinDelayTicks: 60
+    # Re-check online players this often. 0 disables the periodic pass.
+    periodicSeconds: 180
+    maxPlayersPerRun: 25
+    # Safety cap: one reconcile never deposits/withdraws more than this many minor
+    # units (it skips + logs instead). Default ~$1,000,000. Raise for very
+    # high-balance economies.
+    maxDeltaMinor: 100000000
+    requireOnline: true
+    # Safe default: observe-only. Reconcile logs the deposits/withdrawals it WOULD
+    # make without touching any balance. Flip to false only after the logged
+    # decisions look correct for this server.
+    dryRun: true
   # Phase 6C vote reward ledger shadow mode. RealCore computes and logs the
   # ledger transaction it would submit later, but this build never writes those
   # vote reward transactions to the economy API.

@@ -42,7 +42,8 @@ public record EconomyConfig(
     long vaultDeltaShadowMaxLoggedDeltaMinor,
     List<String> vaultDeltaShadowBackendAllowlist,
     ShadowConfig shadow,
-    GameplayEconomySyncConfig gameplaySync
+    GameplayEconomySyncConfig gameplaySync,
+    EconomyReconcileConfig reconcile
 ) {
   public static EconomyConfig disabledDefaults() {
     return new EconomyConfig(
@@ -76,7 +77,8 @@ public record EconomyConfig(
         250_000,
         List.of("smp-1"),
         ShadowConfig.defaults(),
-        GameplayEconomySyncConfig.disabledDefaults()
+        GameplayEconomySyncConfig.disabledDefaults(),
+        EconomyReconcileConfig.disabledDefaults()
     );
   }
 
@@ -140,7 +142,8 @@ public record EconomyConfig(
             defaults.vaultDeltaShadowMaxLoggedDeltaMinor())),
         normalizeAllowlist(section.getStringList("vaultDeltaShadowBackendAllowlist"), defaults.vaultDeltaShadowBackendAllowlist()),
         ShadowConfig.from(section.getConfigurationSection("shadow"), defaults.shadow()),
-        GameplayEconomySyncConfig.from(section.getConfigurationSection("gameplaySync"))
+        GameplayEconomySyncConfig.from(section.getConfigurationSection("gameplaySync")),
+        EconomyReconcileConfig.from(section.getConfigurationSection("reconcile"))
     );
   }
 

@@ -19,6 +19,7 @@ import com.realfiction.realcore.economy.EconomyShopGuiBuyProducer;
 import com.realfiction.realcore.economy.EconomyShopGuiSellProducer;
 import com.realfiction.realcore.economy.BufferedEconomyTransactionWriter;
 import com.realfiction.realcore.economy.EconomyBalanceSnapshot;
+import com.realfiction.realcore.economy.EconomyReconciliationService;
 import com.realfiction.realcore.economy.EconomyService;
 import com.realfiction.realcore.economy.GenericGameplayEconomyProducerService;
 import com.realfiction.realcore.economy.GameplayEconomyProducer;
@@ -781,6 +782,9 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
     if (args.length >= 2 && "sync-vault".equalsIgnoreCase(args[1])) {
       return handleEconomyVaultSync(sender, args);
     }
+    if (args.length >= 2 && "reconcile".equalsIgnoreCase(args[1])) {
+      return handleEconomyReconcile(sender);
+    }
     if (args.length >= 2 && "balance".equalsIgnoreCase(args[1])) {
       return handleEconomyBalance(sender, args);
     }
@@ -808,6 +812,30 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
     send(sender, ChatColor.GOLD + "RealCore Global Economy");
     appendEconomyStatus(sender);
     send(sender, ChatColor.GRAY + "No Vault provider is registered by RealCore.");
+    return true;
+  }
+
+  private boolean handleEconomyReconcile(CommandSender sender) {
+    EconomyReconciliationService service = plugin.economyReconciliationService();
+    if (service == null || !service.enabled()) {
+      send(sender, ChatColor.RED + "Auto DB-to-Vault reconcile is disabled. Enable "
+          + "economy.reconcile.enabled and add this server.id to economy.reconcile.backendAllowlist "
+          + "(and economy.dbBalanceReadEnabled) first.");
+      return true;
+    }
+    RealCoreConfig config = plugin.realCoreConfig();
+    boolean dryRun = config != null && config.economy().reconcile().dryRun();
+    int scanned = service.triggerOnlineReconcile();
+    if (scanned < 0) {
+      send(sender, ChatColor.RED + "Auto reconcile is not running.");
+      return true;
+    }
+    String mode = dryRun
+        ? ChatColor.AQUA + "DRY-RUN" + ChatColor.GRAY + " (logs only, no balance changes)"
+        : ChatColor.RED + "LIVE" + ChatColor.GRAY + " (will adjust local Vault balances)";
+    send(sender, ChatColor.GOLD + "Reconcile mode: " + mode);
+    send(sender, ChatColor.GREEN + "Reconcile pass triggered for " + scanned + " online player(s)."
+        + ChatColor.GRAY + " Pull-only; results are async — see the server log and /rf economy.");
     return true;
   }
 
@@ -1309,12 +1337,32 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
         + ", require online " + economy.syncVaultFromDbRequireOnline());
     send(sender, ChatColor.YELLOW + "Manual DB-to-Vault allowlist: " + ChatColor.WHITE
         + economy.syncVaultFromDbAllowlistSummary());
+    appendReconcileStatus(sender, config);
     appendDbBalanceReadStatus(sender, economy);
     appendVoteRewardLedgerShadowStatus(sender);
     appendVoteRewardLedgerWriteStatus(sender);
     appendVaultDeltaShadowStatus(sender, false);
     appendGameplayEconomyStatus(sender, false);
     sendEconomyWriterStatus(sender, economy.writer());
+  }
+
+  private void appendReconcileStatus(CommandSender sender, RealCoreConfig config) {
+    var rc = config.economy().reconcile();
+    send(sender, ChatColor.YELLOW + "Auto DB-to-Vault reconcile: "
+        + (rc.enabled() ? ChatColor.GREEN + "enabled" : ChatColor.GRAY + "disabled")
+        + ChatColor.GRAY + ", on-join " + rc.onJoin()
+        + ", periodic " + rc.periodicSeconds() + "s"
+        + ", max players " + rc.maxPlayersPerRun()
+        + ", max delta " + rc.maxDeltaMinor() + " minor"
+        + ", dry-run " + rc.dryRun());
+    send(sender, ChatColor.YELLOW + "Reconcile allowlist: " + ChatColor.WHITE
+        + (rc.backendAllowlist().isEmpty() ? "(none)" : String.join(", ", rc.backendAllowlist())));
+    EconomyReconciliationService service = plugin.economyReconciliationService();
+    if (service != null) {
+      send(sender, ChatColor.YELLOW + "Reconcile activity: "
+          + (service.enabled() ? ChatColor.GREEN + "active" : ChatColor.GRAY + "inactive")
+          + ChatColor.GRAY + " (" + service.statusSummary() + ")");
+    }
   }
 
   private void appendGameplayEconomyStatus(CommandSender sender, boolean detailed) {
@@ -1864,7 +1912,7 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
       return List.of("pets");
     }
     if (args.length == 2 && "economy".equalsIgnoreCase(args[0]) && sender.hasPermission("realcore.admin")) {
-      return List.of("audit", "balance", "flush", "gameplay", "shadow", "syncfromdb", "test");
+      return List.of("audit", "balance", "flush", "gameplay", "reconcile", "shadow", "syncfromdb", "test");
     }
     if (args.length == 3 && "economy".equalsIgnoreCase(args[0])
         && "gameplay".equalsIgnoreCase(args[1])
