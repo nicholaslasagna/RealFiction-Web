@@ -1,5 +1,6 @@
 import { z } from "zod"
 
+import { notifyContactWebhook, type ContactNotifyResult } from "@/lib/contact-notify"
 import { safeJsonError, sha256Hex } from "@/lib/security"
 import { getAuthenticatedUser } from "@/lib/supabase/server"
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role"
@@ -99,8 +100,25 @@ export async function POST(request: Request) {
       throw new Error("Could not record support request.")
     }
 
+    // Best-effort team notification. The ticket is already persisted, so a
+    // webhook failure (or no webhook configured) must never fail the request.
+    // notifyContactWebhook swallows its own errors; the .catch is paranoia.
+    const notify: ContactNotifyResult = await notifyContactWebhook(
+      {
+        name: parsed.data.name,
+        email: parsed.data.email,
+        minecraftUsername: parsed.data.minecraftUsername ?? null,
+        topic: parsed.data.topic,
+        message: parsed.data.message
+      },
+      ticket.id
+    ).catch(() => ({ delivered: false }))
+    if (!notify.delivered && !notify.skipped) {
+      console.warn("contact_notify_failed", { ticketId: ticket.id, status: notify.status ?? null })
+    }
+
     return Response.json({
-      message: "Support request received. Our team will follow up by email.",
+      message: "Support request received — we'll reply to the email you provided.",
       ticketId: ticket.id
     })
   } catch (error) {
