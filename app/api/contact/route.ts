@@ -118,7 +118,7 @@ export async function POST(request: Request) {
     }
 
     return Response.json({
-      message: "Support request received. Our team will follow up by email.",
+      message: "Support request received — we'll reply to the email you provided.",
       ticketId: ticket.id
     })
   } catch (error) {
