@@ -46,6 +46,7 @@ public final class EconomyProviderService {
   private volatile Object essentialsProvider;
   private volatile Method essentialsGetBalance;
   private volatile EconomyVaultProvider registeredProvider;
+  private volatile EconomyPlayerCommands playerCommands;
   private volatile boolean live = false;
 
   private final AtomicLong preloads = new AtomicLong();
@@ -234,6 +235,8 @@ public final class EconomyProviderService {
         Bukkit.getServicesManager().register(Economy.class, provider, plugin, ServicePriority.Highest);
         registeredProvider = provider;
         live = true;
+        playerCommands = new EconomyPlayerCommands(plugin, this);
+        playerCommands.register();
         logger.warning("Economy provider is LIVE: RealCore is now the Vault economy (currency="
             + providerConfig().currencyNamePlural() + "). Disable EssentialsX's own economy so its "
             + "commands (/bal, /pay, /eco) read this shared balance, not a separate local one.");
@@ -249,6 +252,10 @@ public final class EconomyProviderService {
   }
 
   private void unregisterVaultProvider() {
+    if (playerCommands != null) {
+      playerCommands.unregister();
+      playerCommands = null;
+    }
     EconomyVaultProvider provider = registeredProvider;
     if (provider != null) {
       try {
