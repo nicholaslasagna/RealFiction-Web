@@ -8,7 +8,11 @@ public enum EconomyCategory {
   GAMEPLAY_SPEND("gameplay_spend"),
   SHOP_SELL("shop_sell"),
   SHOP_BUY("shop_buy"),
-  SPEND("spend");
+  SPEND("spend"),
+  /** Authoritative deposit from the live Vault economy provider (uncapped, can_be_authority). */
+  VAULT_CREDIT("vault"),
+  /** Authoritative withdrawal from the live Vault economy provider (uncapped, can_be_authority). */
+  VAULT_DEBIT("vault");
 
   private final String apiValue;
 
@@ -21,11 +25,11 @@ public enum EconomyCategory {
   }
 
   public boolean credit() {
-    return this == VOTE_REWARD || this == GAMEPLAY_EARN || this == SHOP_SELL;
+    return this == VOTE_REWARD || this == GAMEPLAY_EARN || this == SHOP_SELL || this == VAULT_CREDIT;
   }
 
   public boolean debit() {
-    return this == SPEND || this == GAMEPLAY_SPEND || this == SHOP_BUY;
+    return this == SPEND || this == GAMEPLAY_SPEND || this == SHOP_BUY || this == VAULT_DEBIT;
   }
 
   public static EconomyCategory fromApiValue(String value) {

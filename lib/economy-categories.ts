@@ -11,7 +11,9 @@ export const PLUGIN_ECONOMY_CATEGORIES = [
   "shop_sell",
   "shop_buy",
   /** Legacy alias; policy gate matches gameplay_spend (can_spend). */
-  "spend"
+  "spend",
+  /** Authoritative balance write from the live Vault economy server; uncapped, gated by can_be_authority. */
+  "vault"
 ] as const
 
 export type PluginEconomyCategory = (typeof PLUGIN_ECONOMY_CATEGORIES)[number]
@@ -33,11 +35,15 @@ export const LEDGER_ECONOMY_CATEGORIES = [
 export type LedgerEconomyCategory = (typeof LEDGER_ECONOMY_CATEGORIES)[number]
 
 /** Policy flag required for each plugin category. */
-export const PLUGIN_CATEGORY_POLICY_FLAG: Record<PluginEconomyCategory, "can_reward" | "can_earn" | "can_spend"> = {
+export const PLUGIN_CATEGORY_POLICY_FLAG: Record<
+  PluginEconomyCategory,
+  "can_reward" | "can_earn" | "can_spend" | "can_be_authority"
+> = {
   vote_reward: "can_reward",
   gameplay_earn: "can_earn",
   gameplay_spend: "can_spend",
   shop_sell: "can_earn",
   shop_buy: "can_spend",
-  spend: "can_spend"
+  spend: "can_spend",
+  vault: "can_be_authority"
 }
