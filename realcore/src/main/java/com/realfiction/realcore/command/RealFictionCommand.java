@@ -19,6 +19,7 @@ import com.realfiction.realcore.economy.EconomyShopGuiBuyProducer;
 import com.realfiction.realcore.economy.EconomyShopGuiSellProducer;
 import com.realfiction.realcore.economy.BufferedEconomyTransactionWriter;
 import com.realfiction.realcore.economy.EconomyBalanceSnapshot;
+import com.realfiction.realcore.economy.EconomyProviderService;
 import com.realfiction.realcore.economy.EconomyReconciliationService;
 import com.realfiction.realcore.economy.EconomyService;
 import com.realfiction.realcore.economy.GenericGameplayEconomyProducerService;
@@ -785,6 +786,11 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
     if (args.length >= 2 && "reconcile".equalsIgnoreCase(args[1])) {
       return handleEconomyReconcile(sender);
     }
+    if (args.length >= 2 && "provider".equalsIgnoreCase(args[1])) {
+      send(sender, ChatColor.GOLD + "RealCore Economy Provider");
+      appendEconomyProviderStatus(sender);
+      return true;
+    }
     if (args.length >= 2 && "balance".equalsIgnoreCase(args[1])) {
       return handleEconomyBalance(sender, args);
     }
@@ -813,6 +819,29 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
     appendEconomyStatus(sender);
     send(sender, ChatColor.GRAY + "No Vault provider is registered by RealCore.");
     return true;
+  }
+
+  private void appendEconomyProviderStatus(CommandSender sender) {
+    RealCoreConfig config = plugin.realCoreConfig();
+    if (config == null) {
+      send(sender, ChatColor.YELLOW + "Provider: " + ChatColor.RED + "config not loaded");
+      return;
+    }
+    var pc = config.economy().provider();
+    String mode = !pc.enabled()
+        ? ChatColor.GRAY + "disabled"
+        : (pc.shadowMode() ? ChatColor.AQUA + "shadow (observe-only)" : ChatColor.RED + "LIVE");
+    send(sender, ChatColor.YELLOW + "Provider: " + mode
+        + ChatColor.GRAY + ", failClosed " + pc.failClosed()
+        + ", currency " + pc.currencyNamePlural() + " (" + pc.currencySymbol() + ", " + pc.fractionalDigits() + "dp)");
+    send(sender, ChatColor.YELLOW + "Provider allowlist: " + ChatColor.WHITE
+        + (pc.backendAllowlist().isEmpty() ? "(none)" : String.join(", ", pc.backendAllowlist())));
+    EconomyProviderService provider = plugin.economyProviderService();
+    if (provider != null) {
+      send(sender, ChatColor.YELLOW + "Provider activity: "
+          + (provider.enabled() ? ChatColor.GREEN + "active" : ChatColor.GRAY + "inactive")
+          + ChatColor.GRAY + " (" + provider.statusSummary() + ")");
+    }
   }
 
   private boolean handleEconomyReconcile(CommandSender sender) {
@@ -1338,6 +1367,7 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
     send(sender, ChatColor.YELLOW + "Manual DB-to-Vault allowlist: " + ChatColor.WHITE
         + economy.syncVaultFromDbAllowlistSummary());
     appendReconcileStatus(sender, config);
+    appendEconomyProviderStatus(sender);
     appendDbBalanceReadStatus(sender, economy);
     appendVoteRewardLedgerShadowStatus(sender);
     appendVoteRewardLedgerWriteStatus(sender);
@@ -1912,7 +1942,7 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
       return List.of("pets");
     }
     if (args.length == 2 && "economy".equalsIgnoreCase(args[0]) && sender.hasPermission("realcore.admin")) {
-      return List.of("audit", "balance", "flush", "gameplay", "reconcile", "shadow", "syncfromdb", "test");
+      return List.of("audit", "balance", "flush", "gameplay", "provider", "reconcile", "shadow", "syncfromdb", "test");
     }
     if (args.length == 3 && "economy".equalsIgnoreCase(args[0])
         && "gameplay".equalsIgnoreCase(args[1])

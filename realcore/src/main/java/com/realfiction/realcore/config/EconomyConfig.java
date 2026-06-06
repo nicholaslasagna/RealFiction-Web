@@ -43,7 +43,8 @@ public record EconomyConfig(
     List<String> vaultDeltaShadowBackendAllowlist,
     ShadowConfig shadow,
     GameplayEconomySyncConfig gameplaySync,
-    EconomyReconcileConfig reconcile
+    EconomyReconcileConfig reconcile,
+    EconomyProviderConfig provider
 ) {
   public static EconomyConfig disabledDefaults() {
     return new EconomyConfig(
@@ -78,7 +79,8 @@ public record EconomyConfig(
         List.of("smp-1"),
         ShadowConfig.defaults(),
         GameplayEconomySyncConfig.disabledDefaults(),
-        EconomyReconcileConfig.disabledDefaults()
+        EconomyReconcileConfig.disabledDefaults(),
+        EconomyProviderConfig.disabledDefaults()
     );
   }
 
@@ -143,7 +145,8 @@ public record EconomyConfig(
         normalizeAllowlist(section.getStringList("vaultDeltaShadowBackendAllowlist"), defaults.vaultDeltaShadowBackendAllowlist()),
         ShadowConfig.from(section.getConfigurationSection("shadow"), defaults.shadow()),
         GameplayEconomySyncConfig.from(section.getConfigurationSection("gameplaySync")),
-        EconomyReconcileConfig.from(section.getConfigurationSection("reconcile"))
+        EconomyReconcileConfig.from(section.getConfigurationSection("reconcile")),
+        EconomyProviderConfig.from(section.getConfigurationSection("provider"))
     );
   }
 
