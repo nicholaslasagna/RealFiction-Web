@@ -118,6 +118,30 @@ economy:
     # make without touching any balance. Flip to false only after the logged
     # decisions look correct for this server.
     dryRun: true
+  # RealCore as the network's Vault economy provider — the "every server shows the
+  # same balance" end state, backed by the shared Supabase economy. SHADOW by
+  # default: it only preloads each player's balance and logs the DB-vs-EssentialsX
+  # delta, so you can confirm RealCore tracks reality on Purpur AND Folia before
+  # anything goes live. It does NOT register as the Vault provider or move money
+  # while shadowMode is true. (Live registration — RealCore actually becoming the
+  # economy — is a later, separately-shipped phase.) Requires economy.enabled +
+  # economy.dbBalanceReadEnabled with this server.id in dbBalanceReadBackendAllowlist.
+  provider:
+    enabled: false
+    shadowMode: true
+    backendAllowlist:
+      - lobby-1
+      - smp-1
+      - factions-1
+    # If the authoritative balance can't be loaded, fail closed (deny economy ops)
+    # rather than serve 0 and risk a dupe-spend. Keep true.
+    failClosed: true
+    cacheTtlSeconds: 0
+    maxCachedAccounts: 20000
+    currencyNameSingular: "dollar"
+    currencyNamePlural: "dollars"
+    currencySymbol: "$"
+    fractionalDigits: 2
   # Phase 6C vote reward ledger shadow mode. RealCore computes and logs the
   # ledger transaction it would submit later, but this build never writes those
   # vote reward transactions to the economy API.

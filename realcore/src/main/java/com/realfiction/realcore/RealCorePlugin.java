@@ -10,6 +10,8 @@ import com.realfiction.realcore.cosmetics.CosmeticsListener;
 import com.realfiction.realcore.cosmetics.CosmeticEntitlementNotifier;
 import com.realfiction.realcore.cosmetics.CosmeticsManager;
 import com.realfiction.realcore.economy.EconomyProductionStartupAudit;
+import com.realfiction.realcore.economy.EconomyProviderListener;
+import com.realfiction.realcore.economy.EconomyProviderService;
 import com.realfiction.realcore.economy.EconomyReconciliationListener;
 import com.realfiction.realcore.economy.EconomyReconciliationService;
 import com.realfiction.realcore.economy.EconomyService;
@@ -79,6 +81,7 @@ public final class RealCorePlugin extends JavaPlugin {
   private GameplayEconomySyncService gameplayEconomySyncService;
   private VaultDeltaShadowService vaultDeltaShadowService;
   private EconomyReconciliationService economyReconciliationService;
+  private EconomyProviderService economyProviderService;
   private VoteRewardLedgerShadowService voteRewardLedgerShadowService;
   private VoteRewardLedgerWriteService voteRewardLedgerWriteService;
   // Listeners are registered exactly once on enable; producers are swapped on
@@ -119,6 +122,8 @@ public final class RealCorePlugin extends JavaPlugin {
     getServer().getPluginManager().registerEvents(statBlocksListener, this);
     // Always registered; late-binds the reconciliation service and no-ops while it is disabled.
     getServer().getPluginManager().registerEvents(new EconomyReconciliationListener(this), this);
+    // Always registered; late-binds the economy provider (shadow/preload) and no-ops while disabled.
+    getServer().getPluginManager().registerEvents(new EconomyProviderListener(this), this);
     setupPlaceholders();
 
     RealFictionCommand commandExecutor = new RealFictionCommand(this);
@@ -257,6 +262,9 @@ public final class RealCorePlugin extends JavaPlugin {
       economyReconciliationService = new EconomyReconciliationService(
           this, realCoreConfig, economyService, scheduler, getLogger());
       economyReconciliationService.start();
+      economyProviderService = new EconomyProviderService(
+          this, realCoreConfig, economyService, scheduler, getLogger());
+      economyProviderService.start();
       if (!economyService.configuredEnabled()) {
         getLogger().info("Global economy client disabled by economy.enabled.");
       } else if (!economyService.writerRunning()) {
@@ -360,6 +368,10 @@ public final class RealCorePlugin extends JavaPlugin {
 
   public EconomyReconciliationService economyReconciliationService() {
     return economyReconciliationService;
+  }
+
+  public EconomyProviderService economyProviderService() {
+    return economyProviderService;
   }
 
   public GameplayEconomyTransactionBuffer gameplayEconomyTransactionBuffer() {
@@ -734,6 +746,10 @@ public final class RealCorePlugin extends JavaPlugin {
 
   private void stopServices(boolean closeScheduler) {
     servicesLoaded = false;
+    if (economyProviderService != null) {
+      economyProviderService.stop();
+      economyProviderService = null;
+    }
     if (economyReconciliationService != null) {
       economyReconciliationService.stop();
       economyReconciliationService = null;
