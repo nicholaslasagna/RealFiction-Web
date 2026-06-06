@@ -15,9 +15,11 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.logging.Logger;
+import net.milkbowl.vault.economy.Economy;
 import org.bukkit.Bukkit;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.plugin.RegisteredServiceProvider;
+import org.bukkit.plugin.ServicePriority;
 
 /**
  * Backing service for making RealCore the network's Vault economy provider (Phase 1: shadow).
@@ -43,11 +45,16 @@ public final class EconomyProviderService {
 
   private volatile Object essentialsProvider;
   private volatile Method essentialsGetBalance;
+  private volatile EconomyVaultProvider registeredProvider;
+  private volatile boolean live = false;
 
   private final AtomicLong preloads = new AtomicLong();
   private final AtomicLong preloadFailures = new AtomicLong();
   private final AtomicLong shadowMatches = new AtomicLong();
   private final AtomicLong shadowMismatches = new AtomicLong();
+  private final AtomicLong vaultWriteCounter = new AtomicLong();
+  private final AtomicLong vaultWrites = new AtomicLong();
+  private final AtomicLong vaultRejects = new AtomicLong();
 
   public EconomyProviderService(
       RealCorePlugin plugin,
@@ -79,14 +86,13 @@ public final class EconomyProviderService {
           + "). Observing only: preloading balances and logging DB-vs-EssentialsX deltas, "
           + "not registering as the Vault provider and not moving money.");
     } else {
-      // Phase 1 jar: live registration is intentionally not wired yet. Stay safe.
-      logger.warning("Economy provider has shadowMode=false, but live Vault registration is not "
-          + "available in this build yet — staying in observe-only mode. Keep shadowMode=true.");
+      registerAsVaultProvider();
     }
   }
 
   public void stop() {
     running.set(false);
+    unregisterVaultProvider();
     essentialsProvider = null;
     essentialsGetBalance = null;
   }
@@ -141,6 +147,127 @@ public final class EconomyProviderService {
       cache.evict(uuid);
     }
   }
+
+  // -- live provider: registration + read/write-through the cache -------------
+
+  public boolean live() {
+    return live;
+  }
+
+  public int scale() {
+    return providerConfig().scale();
+  }
+
+  /** Served from cache; a not-loaded account reads 0 (offline/3rd-party lookup limitation). */
+  public double balanceDouble(UUID uuid) {
+    if (uuid == null) {
+      return 0d;
+    }
+    java.util.OptionalLong minor = cache.balanceMinor(uuid);
+    return minor.isPresent() ? toMajor(minor.getAsLong()) : 0d;
+  }
+
+  public boolean hasBalance(UUID uuid, double amount) {
+    if (uuid == null) {
+      return false;
+    }
+    java.util.OptionalLong minor = cache.balanceMinor(uuid);
+    return minor.isPresent() && minor.getAsLong() >= toMinorUnits(amount, scale());
+  }
+
+  public TxResult deposit(UUID uuid, String name, double amount) {
+    if (uuid == null || amount < 0) {
+      return new TxResult(false, balanceDouble(uuid), "Invalid deposit.");
+    }
+    long minor = toMinorUnits(amount, scale());
+    EconomyBalanceCache.Mutation mutation = cache.deposit(uuid, minor);
+    if (mutation.result() != EconomyBalanceCache.MutationResult.OK) {
+      return failClosed(uuid);
+    }
+    writeThrough(uuid, name, minor);
+    return new TxResult(true, toMajor(mutation.balanceMinor()), "");
+  }
+
+  public TxResult withdraw(UUID uuid, String name, double amount) {
+    if (uuid == null || amount < 0) {
+      return new TxResult(false, balanceDouble(uuid), "Invalid withdrawal.");
+    }
+    long minor = toMinorUnits(amount, scale());
+    EconomyBalanceCache.Mutation mutation = cache.withdraw(uuid, minor);
+    switch (mutation.result()) {
+      case OK -> {
+        writeThrough(uuid, name, -minor);
+        return new TxResult(true, toMajor(mutation.balanceMinor()), "");
+      }
+      case INSUFFICIENT_FUNDS -> {
+        return new TxResult(false, toMajor(mutation.balanceMinor()), "Insufficient funds.");
+      }
+      default -> {
+        return failClosed(uuid);
+      }
+    }
+  }
+
+  private TxResult failClosed(UUID uuid) {
+    vaultRejects.incrementAndGet();
+    warnOnce("failclosed", "Economy op rejected for " + uuid + ": balance not loaded (fail-closed).");
+    return new TxResult(false, 0d, "Your balance is still loading — please try again in a moment.");
+  }
+
+  private void writeThrough(UUID uuid, String name, long deltaMinor) {
+    String idempotencyKey = config.serverId() + ":vault:" + uuid + ":"
+        + System.currentTimeMillis() + ":" + vaultWriteCounter.incrementAndGet();
+    boolean accepted = economy.applyVaultDelta(uuid, name, deltaMinor, "vault economy", idempotencyKey);
+    if (accepted) {
+      vaultWrites.incrementAndGet();
+    } else {
+      vaultRejects.incrementAndGet();
+      warnOnce("writethrough", "Vault write-through not buffered for " + uuid
+          + " (delta=" + deltaMinor + "); cache leads DB until the next preload reconciles.");
+    }
+  }
+
+  private void registerAsVaultProvider() {
+    Runnable task = () -> {
+      try {
+        EconomyVaultProvider provider = new EconomyVaultProvider(this, providerConfig());
+        Bukkit.getServicesManager().register(Economy.class, provider, plugin, ServicePriority.Highest);
+        registeredProvider = provider;
+        live = true;
+        logger.warning("Economy provider is LIVE: RealCore is now the Vault economy (currency="
+            + providerConfig().currencyNamePlural() + "). Disable EssentialsX's own economy so its "
+            + "commands (/bal, /pay, /eco) read this shared balance, not a separate local one.");
+      } catch (Throwable error) {
+        warnOnce("register", "Failed to register as the Vault economy provider: " + rootMessage(error));
+      }
+    };
+    if (scheduler == null) {
+      task.run();
+    } else {
+      scheduler.runGlobal(task);
+    }
+  }
+
+  private void unregisterVaultProvider() {
+    EconomyVaultProvider provider = registeredProvider;
+    if (provider != null) {
+      try {
+        Bukkit.getServicesManager().unregister(Economy.class, provider);
+      } catch (Throwable ignored) {
+        // best effort
+      }
+      registeredProvider = null;
+    }
+    live = false;
+  }
+
+  private double toMajor(long minor) {
+    return BigDecimal.valueOf(minor)
+        .divide(BigDecimal.valueOf(Math.max(1, scale())), providerConfig().fractionalDigits(), RoundingMode.HALF_UP)
+        .doubleValue();
+  }
+
+  public record TxResult(boolean success, double balance, String error) {}
 
   private void shadowCompare(UUID uuid, String name, long dbMinor, int scale) {
     try {
@@ -237,10 +364,13 @@ public final class EconomyProviderService {
   }
 
   public String statusSummary() {
-    return "preloads=" + preloads.get()
+    return "live=" + live
+        + " preloads=" + preloads.get()
         + " preloadFailures=" + preloadFailures.get()
         + " shadowMatches=" + shadowMatches.get()
         + " shadowMismatches=" + shadowMismatches.get()
+        + " vaultWrites=" + vaultWrites.get()
+        + " vaultRejects=" + vaultRejects.get()
         + " cached=" + cache.size();
   }
 
