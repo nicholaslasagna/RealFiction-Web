@@ -120,6 +120,48 @@ public final class EconomyReconciliationService {
     return running.get();
   }
 
+  /**
+   * Immediately deposit (credit=true) or withdraw the given minor amount from the player's local
+   * Vault balance — for an instant /bal right after a gameplay capture, without waiting for the
+   * capture -> DB -> reconcile roundtrip. It deliberately does NOT touch the baseline: the
+   * reconciler's HOLD branch keeps this local-ahead-of-DB gap until the captured transaction reaches
+   * the DB, then a NOOP settles it, so the roundtrip never double-applies the amount. No-op if Vault
+   * is unavailable. (Do not combine with the live economy provider, which would route through the
+   * same DB and double up.)
+   */
+  public void creditLocalImmediately(UUID uuid, long amountMinor, boolean credit) {
+    if (uuid == null || amountMinor <= 0 || scheduler == null) {
+      return;
+    }
+    scheduler.runGlobal(() -> {
+      try {
+        VaultBinding binding = binding();
+        if (binding == null) {
+          return;
+        }
+        OfflinePlayer player = Bukkit.getOfflinePlayer(uuid);
+        createAccountIfSupported(binding, player);
+        double amount = toVaultAmount(amountMinor, 100);
+        Method mutation = credit ? binding.deposit() : binding.withdraw();
+        invokeMoneyMutation(mutation, binding.provider(), player, amount);
+      } catch (Throwable error) {
+        warnOnce("immediate", "Immediate local credit failed: " + rootMessage(error));
+      }
+    });
+  }
+
+  /** Force-flush queued captures (e.g. on quit) so the DB is current before a server switch. */
+  public void flushPendingCaptures() {
+    if (economy == null) {
+      return;
+    }
+    try {
+      economy.requestFlush();
+    } catch (Throwable ignored) {
+      // best effort
+    }
+  }
+
   // -- triggers ---------------------------------------------------------------
 
   /** Schedules a delayed reconcile for a freshly joined player. Safe to call when disabled. */
@@ -280,6 +322,21 @@ public final class EconomyReconciliationService {
           "cold-start: local exceeds DB; holding (no withdraw on first sight)");
     }
 
+    if (dbMinor == localMinor) {
+      return new Decision(Action.NOOP, 0, dbMinor, true, "matches DB");
+    }
+
+    // Any un-reconciled local change since our last sync (an earn OR a spend) is being captured to
+    // the DB and will appear there shortly. Hold so we don't fight it: re-depositing a local spend
+    // would refund a purchase, and withdrawing a local earn would erase it. Once the capture reaches
+    // the DB, db == local and the NOOP above advances the baseline.
+    if (localMinor != baselineMinor) {
+      return new Decision(Action.HOLD, 0, baselineMinor, false,
+          "local changed since last sync; holding until the capture reaches the DB");
+    }
+
+    // local == baseline: no un-reconciled local activity, so a db-vs-local gap is a change from
+    // another server (or while offline) — apply it.
     if (dbMinor > localMinor) {
       long delta = dbMinor - localMinor;
       if (delta > cap) {
@@ -287,10 +344,6 @@ public final class EconomyReconciliationService {
       }
       return new Decision(Action.DEPOSIT, delta, dbMinor, true, "deposit to match DB (earned on another server)");
     }
-    if (dbMinor == localMinor) {
-      return new Decision(Action.NOOP, 0, dbMinor, true, "matches DB");
-    }
-
     // db < local.
     if (dbMinor <= 0) {
       // A zero authoritative balance is never trustworthy enough to wipe local funds to zero:
@@ -299,18 +352,11 @@ public final class EconomyReconciliationService {
       return new Decision(Action.HOLD, 0, baselineMinor, false,
           "DB balance is zero/absent; holding rather than wiping local to zero");
     }
-    if (localMinor <= baselineMinor) {
-      // Local has not risen since our last sync, so the gap is the DB dropping = a spend elsewhere.
-      long delta = localMinor - dbMinor;
-      if (delta > cap) {
-        return new Decision(Action.SKIP_CAP, 0, baselineMinor, false, "withdraw " + delta + " exceeds maxDeltaMinor");
-      }
-      return new Decision(Action.WITHDRAW, delta, dbMinor, true, "withdraw to match DB (spent on another server)");
+    long delta = localMinor - dbMinor;
+    if (delta > cap) {
+      return new Decision(Action.SKIP_CAP, 0, baselineMinor, false, "withdraw " + delta + " exceeds maxDeltaMinor");
     }
-    // Local rose since our last sync: recent captured income not yet flushed, or un-captured income.
-    // Holding never erases it; captured income self-resolves once it reaches the DB.
-    return new Decision(Action.HOLD, 0, baselineMinor, false,
-        "local rose since last sync; holding to avoid erasing local income");
+    return new Decision(Action.WITHDRAW, delta, dbMinor, true, "withdraw to match DB (spent on another server)");
   }
 
   /** Vault is only mutated for a real DEPOSIT/WITHDRAW and never in dry-run mode. */

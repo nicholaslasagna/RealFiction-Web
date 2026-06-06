@@ -22,6 +22,8 @@ import com.realfiction.realcore.economy.EconomyBalanceSnapshot;
 import com.realfiction.realcore.economy.EconomyProviderService;
 import com.realfiction.realcore.economy.EconomyReconciliationService;
 import com.realfiction.realcore.economy.EconomyService;
+import com.realfiction.realcore.economy.GameplayEconomyCategory;
+import com.realfiction.realcore.economy.GameplayEconomyEvent;
 import com.realfiction.realcore.economy.GenericGameplayEconomyProducerService;
 import com.realfiction.realcore.economy.GameplayEconomyProducer;
 import com.realfiction.realcore.economy.GameplayEconomyProducerMetrics;
@@ -806,6 +808,9 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
       if (args.length >= 3 && "preflight".equalsIgnoreCase(args[2])) {
         return handleEconomyGameplayPreflight(sender, args);
       }
+      if (args.length >= 3 && ("earn".equalsIgnoreCase(args[2]) || "spend".equalsIgnoreCase(args[2]))) {
+        return handleEconomyGameplayEarnSpend(sender, args);
+      }
       send(sender, ChatColor.GOLD + "RealCore Gameplay Economy Sync");
       if (args.length >= 3 && "producers".equalsIgnoreCase(args[2])) {
         appendGameplayProducerStatus(sender);
@@ -865,6 +870,83 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
     send(sender, ChatColor.GOLD + "Reconcile mode: " + mode);
     send(sender, ChatColor.GREEN + "Reconcile pass triggered for " + scanned + " online player(s)."
         + ChatColor.GRAY + " Pull-only; results are async — see the server log and /rf economy.");
+    return true;
+  }
+
+  private boolean handleEconomyGameplayEarnSpend(CommandSender sender, String[] args) {
+    // /rf economy gameplay <earn|spend> <player|uuid> <amountMinor> <source> [eventId]
+    // Real gameplay capture for reward hooks (e.g. ajParkour). Goes to the DB ledger via the
+    // generic producer; the reconciler then mirrors it into each server's balance.
+    if (args.length < 6) {
+      send(sender, ChatColor.YELLOW
+          + "Usage: /rf economy gameplay <earn|spend> <player|uuid> <amountMinor> <source> [eventId]");
+      return true;
+    }
+    GameplayEconomySyncService sync = plugin.gameplayEconomySyncService();
+    GenericGameplayEconomyProducerService producer = sync == null ? null : sync.genericProducer();
+    if (producer == null) {
+      send(sender, ChatColor.RED + "Gameplay economy is not loaded (needs modules.economy, "
+          + "economy.enabled, and economy.gameplaySync.enabled).");
+      return true;
+    }
+
+    GameplayEconomyCategory category = "earn".equalsIgnoreCase(args[2])
+        ? GameplayEconomyCategory.GAMEPLAY_EARN
+        : GameplayEconomyCategory.GAMEPLAY_SPEND;
+
+    long amountMinor;
+    try {
+      amountMinor = Long.parseLong(args[4].trim());
+    } catch (NumberFormatException ex) {
+      send(sender, ChatColor.RED + "amountMinor must be a whole number of minor units (10000 = $100.00).");
+      return true;
+    }
+    if (amountMinor <= 0) {
+      send(sender, ChatColor.RED + "amountMinor must be positive.");
+      return true;
+    }
+
+    String source = args[5].trim();
+
+    UUID uuid;
+    String name;
+    Player online = Bukkit.getPlayerExact(args[3]);
+    if (online != null) {
+      uuid = online.getUniqueId();
+      name = online.getName();
+    } else {
+      try {
+        uuid = UUID.fromString(args[3]);
+        name = args[3];
+      } catch (IllegalArgumentException ex) {
+        send(sender, ChatColor.RED + "Player must be online or a valid UUID.");
+        return true;
+      }
+    }
+
+    // A unique eventId per call so repeated rewards each credit; dedup only catches retries of the
+    // SAME explicit eventId. Pass a stable id as the 7th arg if you want idempotency.
+    String eventId = args.length >= 7 ? args[6].trim() : source + ":" + uuid + ":" + System.nanoTime();
+
+    GameplayEconomyEvent event = GameplayEconomyEvent.create(
+        uuid, name, amountMinor, category, source, eventId, category.ledgerCategory().apiValue());
+    GenericGameplayEconomyProducerService.SubmitResult result = producer.submit(event);
+
+    if (result.accepted()) {
+      // Instant /bal on this server: credit the local Vault now. The reconciler's HOLD branch keeps
+      // this from being double-applied when the captured tx later reaches the DB.
+      if (!result.dryRun()) {
+        EconomyReconciliationService recon = plugin.economyReconciliationService();
+        if (recon != null) {
+          recon.creditLocalImmediately(uuid, amountMinor, category == GameplayEconomyCategory.GAMEPLAY_EARN);
+        }
+      }
+      send(sender, ChatColor.GREEN + "Captured " + category.ledgerCategory().apiValue() + " " + amountMinor
+          + " minor for " + name + " (source " + source + ")"
+          + (result.dryRun() ? ChatColor.YELLOW + " [dry-run]" : ""));
+    } else {
+      send(sender, ChatColor.RED + "Rejected: " + result.rejectionReason());
+    }
     return true;
   }
 
