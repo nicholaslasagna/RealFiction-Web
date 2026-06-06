@@ -50,6 +50,17 @@ final class EconomyReconciliationDecisionTest {
   }
 
   @Test
+  void holdsWhenLocalSpentLocallyNotYetFlushed() {
+    // A local spend (e.g. a shop buy) drops local below baseline before the capture reaches the DB.
+    // The DB is still ahead, but we must NOT re-deposit the difference (that would refund the
+    // purchase) — hold until the capture lands and db catches down to local.
+    Decision decision = EconomyReconciliationService.decide(true, 1_000, 950, 1_000, CAP);
+    assertEquals(Action.HOLD, decision.action());
+    assertEquals(0, decision.vaultDeltaMinor());
+    assertFalse(decision.baselineChanged());
+  }
+
+  @Test
   void noopWhenAlreadyMatchingDb() {
     Decision decision = EconomyReconciliationService.decide(true, 1_000, 1_000, 1_000, CAP);
     assertEquals(Action.NOOP, decision.action());
