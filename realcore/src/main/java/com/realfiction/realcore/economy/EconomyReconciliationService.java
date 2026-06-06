@@ -229,7 +229,7 @@ public final class EconomyReconciliationService {
     if (!guardReason().isBlank()) {
       return;
     }
-    economy.fetchBalanceReadOnly(uuid).whenComplete((snapshot, error) -> {
+    economy.fetchBalanceReadOnlyFresh(uuid).whenComplete((snapshot, error) -> {
       if (error != null) {
         warnOnce("dbread", "DB balance read failed during reconcile: " + rootMessage(error));
         return;
