@@ -123,9 +123,15 @@ economy:
   # default: it only preloads each player's balance and logs the DB-vs-EssentialsX
   # delta, so you can confirm RealCore tracks reality on Purpur AND Folia before
   # anything goes live. It does NOT register as the Vault provider or move money
-  # while shadowMode is true. (Live registration — RealCore actually becoming the
-  # economy — is a later, separately-shipped phase.) Requires economy.enabled +
-  # economy.dbBalanceReadEnabled with this server.id in dbBalanceReadBackendAllowlist.
+  # while shadowMode is true.
+  #
+  # Going LIVE (shadowMode: false) makes RealCore register as the Vault economy at
+  # highest priority and write every deposit/withdraw through to the shared store.
+  # Then you MUST: disable EssentialsX's own economy, set the DB policy
+  # can_be_authority=true for this server, and seed starting balances (via
+  # admin_import_economy_balances) — so /bal, /pay, shops, and parkour all read and
+  # write the one shared balance. Requires economy.enabled + economy.dbBalanceReadEnabled
+  # with this server.id in dbBalanceReadBackendAllowlist.
   provider:
     enabled: false
     shadowMode: true

@@ -159,6 +159,27 @@ public final class EconomyService {
     return writer.enqueue(transaction);
   }
 
+  /**
+   * Authoritative balance write from the live Vault economy provider. Enqueues an uncapped
+   * {@code vault} credit/debit to the shared store via the buffered, retrying writer. The DB
+   * computes the new balance authoritatively; idempotencyKey makes a retried write a no-op.
+   *
+   * @return true if accepted into the write buffer
+   */
+  public boolean applyVaultDelta(UUID minecraftUuid, String username, long deltaMinor, String reason,
+                                 String idempotencyKey) {
+    if (deltaMinor == 0) {
+      return true;
+    }
+    long amount = Math.abs(deltaMinor);
+    EconomyTransaction transaction = deltaMinor > 0
+        ? EconomyTransaction.credit(minecraftUuid, username, amount, EconomyCategory.VAULT_CREDIT,
+            reason, idempotencyKey, "vault", null, Map.of())
+        : EconomyTransaction.debit(minecraftUuid, username, amount, EconomyCategory.VAULT_DEBIT,
+            reason, idempotencyKey, "vault", null, Map.of());
+    return enqueue(transaction);
+  }
+
   public void requestFlush() {
     writer.requestFlush();
   }
