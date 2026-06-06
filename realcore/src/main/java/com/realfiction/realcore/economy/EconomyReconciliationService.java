@@ -120,6 +120,48 @@ public final class EconomyReconciliationService {
     return running.get();
   }
 
+  /**
+   * Immediately deposit (credit=true) or withdraw the given minor amount from the player's local
+   * Vault balance — for an instant /bal right after a gameplay capture, without waiting for the
+   * capture -> DB -> reconcile roundtrip. It deliberately does NOT touch the baseline: the
+   * reconciler's HOLD branch keeps this local-ahead-of-DB gap until the captured transaction reaches
+   * the DB, then a NOOP settles it, so the roundtrip never double-applies the amount. No-op if Vault
+   * is unavailable. (Do not combine with the live economy provider, which would route through the
+   * same DB and double up.)
+   */
+  public void creditLocalImmediately(UUID uuid, long amountMinor, boolean credit) {
+    if (uuid == null || amountMinor <= 0 || scheduler == null) {
+      return;
+    }
+    scheduler.runGlobal(() -> {
+      try {
+        VaultBinding binding = binding();
+        if (binding == null) {
+          return;
+        }
+        OfflinePlayer player = Bukkit.getOfflinePlayer(uuid);
+        createAccountIfSupported(binding, player);
+        double amount = toVaultAmount(amountMinor, 100);
+        Method mutation = credit ? binding.deposit() : binding.withdraw();
+        invokeMoneyMutation(mutation, binding.provider(), player, amount);
+      } catch (Throwable error) {
+        warnOnce("immediate", "Immediate local credit failed: " + rootMessage(error));
+      }
+    });
+  }
+
+  /** Force-flush queued captures (e.g. on quit) so the DB is current before a server switch. */
+  public void flushPendingCaptures() {
+    if (economy == null) {
+      return;
+    }
+    try {
+      economy.requestFlush();
+    } catch (Throwable ignored) {
+      // best effort
+    }
+  }
+
   // -- triggers ---------------------------------------------------------------
 
   /** Schedules a delayed reconcile for a freshly joined player. Safe to call when disabled. */

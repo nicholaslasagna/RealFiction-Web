@@ -933,6 +933,14 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
     GenericGameplayEconomyProducerService.SubmitResult result = producer.submit(event);
 
     if (result.accepted()) {
+      // Instant /bal on this server: credit the local Vault now. The reconciler's HOLD branch keeps
+      // this from being double-applied when the captured tx later reaches the DB.
+      if (!result.dryRun()) {
+        EconomyReconciliationService recon = plugin.economyReconciliationService();
+        if (recon != null) {
+          recon.creditLocalImmediately(uuid, amountMinor, category == GameplayEconomyCategory.GAMEPLAY_EARN);
+        }
+      }
       send(sender, ChatColor.GREEN + "Captured " + category.ledgerCategory().apiValue() + " " + amountMinor
           + " minor for " + name + " (source " + source + ")"
           + (result.dryRun() ? ChatColor.YELLOW + " [dry-run]" : ""));
