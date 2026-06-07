@@ -486,51 +486,38 @@ export const mapEndpoints = [
 
 export const rules = [
   {
-    category: "Community",
+    category: "Community & Respect",
     items: [
-      "Respect other players, staff, builders, and event organizers.",
-      "No harassment, hate speech, targeted abuse, or impersonation.",
-      "Keep chat, usernames, skins, and profile customization appropriate for the community."
+      "Treat every player, builder, and staff member with kindness and respect.",
+      "No harassment, discrimination, bullying, hate speech, or targeted abuse — in any form.",
+      "Keep usernames, skins, and profiles appropriate for a community of all ages."
+    ]
+  },
+  {
+    category: "Chat & Conduct",
+    items: [
+      "Keep chat appropriate: no offensive, vulgar, or inappropriate language.",
+      "No spamming, flooding, or excessive messaging.",
+      "No advertising other servers, services, or unrelated content.",
+      "Advertising scams or deceptive services is strictly prohibited."
     ]
   },
   {
     category: "Fair Play",
     items: [
-      "No hacked clients, automation, macros, x-ray, duping, or exploit abuse.",
-      "Report bugs privately instead of using them for gain.",
-      "No gameplay advantages are sold or tolerated through third-party side deals."
+      "No cheating or hacking — no mods, clients, macros, or automation that give an unfair advantage.",
+      "X-ray, through any mod, texture pack, or method, is strictly prohibited.",
+      "Do not intentionally abuse bugs, glitches, or exploits on RealFiction.",
+      "Report bugs and rule violations to staff instead of exploiting them or taking matters into your own hands."
     ]
   },
   {
-    category: "Economy",
+    category: "Gameplay & Performance",
     items: [
-      "Do not scam through confusing trades, fake ranks, or outside payment promises.",
-      "Chargebacks, payment fraud, and gift card abuse are reviewed by staff.",
-      "Cosmetic purchases do not protect players from moderation action."
-    ]
-  },
-  {
-    category: "Factions",
-    items: [
-      "Base raiding must follow the active season ruleset.",
-      "No alt abuse, illegal buffering, printer bypasses, or staff-side rule lawyering.",
-      "Season rule updates are posted in updates and Discord before enforcement changes."
-    ]
-  },
-  {
-    category: "Builds",
-    items: [
-      "No griefing protected community spaces or staff-approved public builds.",
-      "Claims, rollback requests, and disputes require clear evidence.",
-      "Map art and public displays must follow community content standards."
-    ]
-  },
-  {
-    category: "Security",
-    items: [
-      "Never share account credentials, one-time verification codes, or payment session links.",
-      "Linked Minecraft accounts can be checked again on your account page.",
-      "Suspicious purchases, gift redemptions, and voting patterns may be temporarily held."
+      "No lag machines: avoid excessive redstone or oversized contraptions that hurt server performance.",
+      "Keep griefing to a minimum and within each server's ruleset.",
+      "Do not ask staff for ranks, gamemode switches, or free or cheated items.",
+      "Use common sense — if something seems questionable or disruptive, don't do it. Play fair, be kind, and have fun."
     ]
   }
 ]

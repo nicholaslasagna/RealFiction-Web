@@ -6,7 +6,7 @@ import { RulesExplorer } from "@/components/rules-explorer"
 
 export const metadata: Metadata = {
   title: "Rules",
-  description: "RealFiction rules with categories, search, fair play, factions, builds, purchases, and account safety."
+  description: "RealFiction community rules — respect, chat conduct, fair play, anti-cheat, and gameplay — all searchable."
 }
 
 export default function RulesPage() {
@@ -15,7 +15,7 @@ export default function RulesPage() {
       <Reveal className="max-w-4xl">
         <h1 className="display-font text-5xl font-semibold leading-tight md:text-6xl">Rules</h1>
         <p className="mt-5 max-w-3xl text-lg leading-8 text-muted-foreground">
-          Simple rules for chat, fair play, factions, builds, purchases, account safety, and moderation.
+          The ground rules for RealFiction — respect, chat, fair play, and gameplay. Search to find a specific policy.
         </p>
         <div className="mt-5 flex items-center gap-2 text-sm text-muted-foreground">
           <Search className="h-4 w-4 text-amber-200" />
