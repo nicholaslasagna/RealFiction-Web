@@ -265,7 +265,10 @@ public final class EconomyReconciliationService {
       long localMinor = toMinorUnits(readBalance(binding, player), scale);
       long dbMinor = snapshot.balanceMinor();
       Long base = baselines.get(uuid);
-      Decision decision = decide(base != null, base == null ? 0L : base, localMinor, dbMinor, rc.maxDeltaMinor());
+      // Join/manual = authoritative pull to the DB; periodic stays conservative (holds un-flushed
+      // local activity so a fresh shop buy isn't refunded mid-session).
+      boolean forceToDb = "join".equals(trigger) || "manual".equals(trigger);
+      Decision decision = decide(base != null, base == null ? 0L : base, localMinor, dbMinor, rc.maxDeltaMinor(), forceToDb);
 
       boolean dryRun = rc.dryRun();
       long afterMinor = localMinor;
@@ -302,7 +305,8 @@ public final class EconomyReconciliationService {
    * @param dbMinor the authoritative DB balance in minor units
    * @param maxDeltaMinor the maximum deposit/withdraw magnitude allowed in one reconcile
    */
-  static Decision decide(boolean hasBaseline, long baselineMinor, long localMinor, long dbMinor, long maxDeltaMinor) {
+  static Decision decide(boolean hasBaseline, long baselineMinor, long localMinor, long dbMinor, long maxDeltaMinor,
+                         boolean forceToDb) {
     long cap = Math.max(1L, maxDeltaMinor);
 
     if (!hasBaseline) {
@@ -326,11 +330,13 @@ public final class EconomyReconciliationService {
       return new Decision(Action.NOOP, 0, dbMinor, true, "matches DB");
     }
 
-    // Any un-reconciled local change since our last sync (an earn OR a spend) is being captured to
-    // the DB and will appear there shortly. Hold so we don't fight it: re-depositing a local spend
-    // would refund a purchase, and withdrawing a local earn would erase it. Once the capture reaches
-    // the DB, db == local and the NOOP above advances the baseline.
-    if (localMinor != baselineMinor) {
+    // On a forced sync (join/manual) pull straight to the DB: the player just arrived (or an admin
+    // asked), their last-session activity was already flushed up on quit, and the DB is the truth.
+    // On a periodic pass, instead HOLD any un-reconciled local change (earn OR spend) — it is being
+    // captured to the DB and will land shortly, so re-depositing a local spend (refunding a
+    // purchase) or withdrawing a local earn would be wrong. Once it lands, db == local and the NOOP
+    // above advances the baseline.
+    if (!forceToDb && localMinor != baselineMinor) {
       return new Decision(Action.HOLD, 0, baselineMinor, false,
           "local changed since last sync; holding until the capture reaches the DB");
     }
