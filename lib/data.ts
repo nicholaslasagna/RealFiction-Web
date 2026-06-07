@@ -519,6 +519,14 @@ export const rules = [
       "Do not ask staff for ranks, gamemode switches, or free or cheated items.",
       "Use common sense — if something seems questionable or disruptive, don't do it. Play fair, be kind, and have fun."
     ]
+  },
+  {
+    category: "Purchases & Account",
+    items: [
+      "Never share your password, login or verification codes, or payment links.",
+      "Chargebacks, payment fraud, and gift-card abuse are reviewed and may remove purchases or access.",
+      "Cosmetic or rank purchases do not exempt you from the rules or from moderation."
+    ]
   }
 ]
 
