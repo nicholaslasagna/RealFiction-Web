@@ -28,6 +28,8 @@ export type Holiday = {
   /** Short festive line shown on the Store page during the window. */
   storeBanner: string
   effect: HolidayEffect
+  /** Founding year (anniversary themes) — drives a dynamic "N years" greeting. */
+  since?: number
 }
 
 /** Effect / greeting / stripe / banner metadata, keyed by theme id. */
@@ -137,8 +139,9 @@ export const HOLIDAYS: Record<string, Holiday> = {
     greeting: "Happy Anniversary",
     greetingEmoji: "🎂",
     stripe: ["#ffd166", "#f6f4ef", "#6ea8ff"],
-    storeBanner: "🎂 RealFiction Anniversary — celebrating another year together",
-    effect: { kind: "fireworks", colors: ["#ffd166", "#ffe6a3", "#f6f4ef", "#ffb347"] }
+    storeBanner: "🎂 RealFiction Anniversary — celebrating since 2018",
+    effect: { kind: "fireworks", colors: ["#ffd166", "#ffe6a3", "#f6f4ef", "#ffb347"] },
+    since: 2018
   }
 }
 
@@ -203,8 +206,8 @@ export const HOLIDAY_SCHEDULE: HolidaySchedule[] = [
     ]
   },
   { id: "christmas", r: [[12, 20, 12, 26]] },
-  // TODO: set to RealFiction's real launch date (network launched 2018).
-  { id: "anniversary", r: [[9, 1, 9, 3]] }
+  // RealFiction launched November 1, 2018.
+  { id: "anniversary", r: [[11, 1, 11, 3]] }
 ]
 
 function localKey(date: Date): number {

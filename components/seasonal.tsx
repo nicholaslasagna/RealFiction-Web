@@ -43,6 +43,9 @@ export function Seasonal() {
   if (!holiday) return null
 
   const { effect, stripe, greeting, greetingEmoji } = holiday
+  const anniversaryYears = holiday.since ? new Date().getFullYear() - holiday.since : 0
+  const greetingLine =
+    anniversaryYears > 0 ? `${greeting} — ${anniversaryYears} years!` : `${greeting} from RealFiction`
 
   return (
     <>
@@ -84,7 +87,7 @@ export function Seasonal() {
       >
         <div className="rounded-full border border-white/15 bg-[#0a1830]/80 px-5 py-2 text-center text-sm font-medium text-white shadow-lg backdrop-blur">
           <span aria-hidden="true" className="mr-2">{greetingEmoji}</span>
-          {greeting} from RealFiction
+          {greetingLine}
           <span aria-hidden="true" className="ml-2">{greetingEmoji}</span>
         </div>
       </div>
