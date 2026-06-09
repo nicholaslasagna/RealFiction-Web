@@ -175,6 +175,48 @@
   --cta-bg: #cc2b2b; --cta-bg-hover: #a82121;
   --accent-line: rgba(64, 190, 108, 0.45); --accent-sel: rgba(255, 107, 107, 0.32);
 }
+:root.theme-lunarnewyear {
+  --gold: #ffd24d; --gold-bright: #ffe08a;
+  --color-amber-100: #fff0c2; --color-amber-200: #ffd24d; --color-amber-300: #f0b32a; --color-amber-400: #d99518;
+  --cta-bg: #d32f2f; --cta-bg-hover: #b3232f;
+  --accent-line: rgba(255, 210, 77, 0.45); --accent-sel: rgba(211, 47, 47, 0.32);
+}
+:root.theme-mardigras {
+  --gold: #ffd23f; --gold-bright: #ffe07a;
+  --color-amber-100: #fff0bd; --color-amber-200: #ffd23f; --color-amber-300: #e9b81f; --color-amber-400: #c99a12;
+  --cta-bg: #7b2cbf; --cta-bg-hover: #65249e;
+  --accent-line: rgba(58, 163, 90, 0.50); --accent-sel: rgba(123, 44, 191, 0.30);
+}
+:root.theme-easter {
+  --gold: #f48fb1; --gold-bright: #ffb3cf;
+  --color-amber-100: #fce4ec; --color-amber-200: #f8bbd0; --color-amber-300: #f48fb1; --color-amber-400: #ec6f9e;
+  --cta-bg: #e266a0; --cta-bg-hover: #c9508a;
+  --accent-line: rgba(179, 157, 219, 0.42); --accent-sel: rgba(244, 143, 177, 0.30);
+}
+:root.theme-pride {
+  --gold: #ff5fb0; --gold-bright: #ff8cc8;
+  --color-amber-100: #ffd6ec; --color-amber-200: #ff9fd1; --color-amber-300: #ff5fb0; --color-amber-400: #e8359e;
+  --cta-bg: #e0359e; --cta-bg-hover: #c22a87;
+  --accent-line: rgba(123, 97, 255, 0.45); --accent-sel: rgba(255, 95, 176, 0.30);
+}
+:root.theme-anniversary {
+  --gold: #ffd166; --gold-bright: #ffe09a;
+  --color-amber-100: #fff1c9; --color-amber-200: #ffd166; --color-amber-300: #f0b73d; --color-amber-400: #d99a1f;
+  --cta-bg: #caa12e; --cta-bg-hover: #a8841f;
+  --accent-line: rgba(140, 185, 255, 0.30); --accent-sel: rgba(255, 209, 102, 0.35);
+}
+
+/* Per-holiday hero aura: a soft top glow in the active palette's accent,
+   layered above the hero's dark overlay (z-index -1) but below the content. */
+.theme-active .hero::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: radial-gradient(100% 60% at 50% 0%, color-mix(in srgb, var(--gold) 32%, transparent), transparent 72%);
+  mix-blend-mode: screen;
+}
 
 * {
   box-sizing: border-box;

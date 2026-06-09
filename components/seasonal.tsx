@@ -6,6 +6,16 @@ import { FallingParticles } from "@/components/falling-particles"
 import { Fireworks } from "@/components/fireworks"
 import { HOLIDAYS, type Holiday } from "@/lib/holidays"
 
+/** Builds an evenly-segmented horizontal gradient from N stripe colors (6 = a pride rainbow). */
+function stripeGradient(colors: string[]): string {
+  if (colors.length < 2) return colors[0] ?? "transparent"
+  const seg = 100 / colors.length
+  const stops = colors
+    .map((color, index) => `${color} ${(index * seg).toFixed(3)}% ${((index + 1) * seg).toFixed(3)}%`)
+    .join(", ")
+  return `linear-gradient(90deg, ${stops})`
+}
+
 /**
  * Renders the active holiday's effect, top stripe, and greeting. The active
  * holiday is decided by the inline boot script (which adds `theme-<id>` to
@@ -39,10 +49,10 @@ export function Seasonal() {
       <div
         aria-hidden="true"
         className="pointer-events-none fixed inset-x-0 top-0 z-[62] h-1"
-        style={{ background: `linear-gradient(90deg, ${stripe[0]} 0 33%, ${stripe[1]} 33% 66%, ${stripe[2]} 66% 100%)` }}
+        style={{ background: stripeGradient(stripe) }}
       />
 
-      {effect.kind === "fireworks" && <Fireworks />}
+      {effect.kind === "fireworks" && <Fireworks colors={effect.colors} />}
       {effect.kind === "snow" && (
         <FallingParticles
           colors={effect.colors}

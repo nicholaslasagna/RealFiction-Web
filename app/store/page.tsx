@@ -4,6 +4,7 @@ import Link from "next/link"
 // All trust-card icons were removed for a cleaner look — no lucide
 // imports needed here anymore.
 
+import { HolidayStoreBanner } from "@/components/holiday-store-banner"
 import { Reveal } from "@/components/reveal"
 import { Storefront } from "@/components/storefront"
 import { Button } from "@/components/ui/button"
@@ -26,6 +27,7 @@ export default async function StorePage() {
   const link = user ? await getVerifiedMinecraftLink(user.id).catch(() => null) : null
   return (
     <section>
+      <HolidayStoreBanner />
       <div className="relative overflow-hidden border-b border-amber-200/10 py-16 md:py-20">
         <Image
           alt="RealFiction store"

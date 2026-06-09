@@ -37,7 +37,7 @@ type Rocket = {
  * prefers-reduced-motion (renders nothing), pauses when the tab is hidden, and
  * caps rockets/particles so it stays cheap.
  */
-export function Fireworks() {
+export function Fireworks({ colors }: { colors?: string[] } = {}) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
 
   useEffect(() => {
@@ -64,7 +64,8 @@ export function Fireworks() {
     let nextLaunchIn = 600
 
     const rand = (min: number, max: number) => min + Math.random() * (max - min)
-    const randomColor = () => COLORS[(Math.random() * COLORS.length) | 0]
+    const palette = colors && colors.length ? colors : COLORS
+    const randomColor = () => palette[(Math.random() * palette.length) | 0]
 
     const resize = () => {
       width = window.innerWidth
@@ -204,7 +205,7 @@ export function Fireworks() {
       window.removeEventListener("pointerdown", onPointerDown)
       document.removeEventListener("visibilitychange", onVisibility)
     }
-  }, [])
+  }, [colors])
 
   return (
     <canvas
