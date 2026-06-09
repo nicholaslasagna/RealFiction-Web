@@ -107,40 +107,74 @@
 }
 
 /* ------------------------------------------------------------------ */
-/* Fourth of July seasonal theme.                                     */
-/* Toggled by the `theme-july4` class on <html> (set by an inline     */
-/* script during the July 1–7 window). It retints the site's          */
-/* amber/gold accent system to a red-white-blue palette over the      */
-/* existing navy base. Tailwind amber-* utilities read CSS variables  */
-/* so they retint for free; the few baked @theme-inline tokens        */
-/* (text-primary, border-border, ring-ring) and the hardcoded gold    */
-/* Store CTA are overridden explicitly. Higher specificity            */
-/* (:root.theme-july4) guarantees these win over the base theme.      */
+/* Seasonal holiday themes.                                           */
+/*                                                                    */
+/* An inline boot script adds `theme-active theme-<id>` to <html>     */
+/* during a holiday window (see lib/holidays.ts). Each theme retints  */
+/* the site's amber/gold accent system to a holiday palette over the  */
+/* navy base by overriding CSS variables: Tailwind amber-* utilities  */
+/* read var(--color-amber-*) so they retint for free, and the raw     */
+/* --gold vars cover custom CSS. The shared `.theme-active` rules     */
+/* restyle the few baked @theme-inline utilities (text-primary,       */
+/* border-border, ring-ring) and the hardcoded gold Store CTA using   */
+/* per-theme vars. `:root.theme-<id>` (specificity 0,2,0) wins over   */
+/* Tailwind's base `:root` tokens.                                    */
 /* ------------------------------------------------------------------ */
-:root.theme-july4 {
-  /* Raw mockup vars used by custom CSS (.mc-button, ::selection, inline styles) */
-  --gold: #ff5d6c;
-  --gold-bright: #ff8b97;
+.theme-active .text-primary { color: var(--gold); }
+.theme-active .mc-button--gold { background-color: var(--cta-bg); color: #fff7f8; }
+.theme-active .mc-button--gold:hover { background-color: var(--cta-bg-hover); color: #fff7f8; }
+.theme-active .border-border { border-color: var(--accent-line); }
+.theme-active .ring-ring { --tw-ring-color: var(--accent-line); }
+.theme-active ::selection { background: var(--accent-sel); }
 
-  /* Tailwind amber family -> patriotic red (retints every amber-* utility) */
-  --color-amber-50: #fff1f2;
-  --color-amber-100: #ffd9dd;
-  --color-amber-200: #ff9aa6;
-  --color-amber-300: #ff7080;
-  --color-amber-400: #f6485f;
-  --color-amber-500: #e5304a;
+:root.theme-newyear {
+  --gold: #ffd86b; --gold-bright: #ffe6a3;
+  --color-amber-100: #fff1c9; --color-amber-200: #ffd86b; --color-amber-300: #f5c33d; --color-amber-400: #e0a91f;
+  --cta-bg: #caa12e; --cta-bg-hover: #a8841f;
+  --accent-line: rgba(140, 185, 255, 0.32); --accent-sel: rgba(255, 216, 107, 0.35);
 }
-
-/* Baked @theme-inline tokens can't be reached through variables. */
-.theme-july4 .text-primary { color: #ff5d6c; }
-.theme-july4 .border-border { border-color: rgba(120, 170, 255, 0.3); }
-.theme-july4 .ring-ring { --tw-ring-color: #5b9bf3; }
-
-/* Hardcoded gold Store CTA -> red. */
-.theme-july4 .mc-button--gold { background-color: #d12f3f; color: #fff7f8; }
-.theme-july4 .mc-button--gold:hover { background-color: #b3232f; color: #fff7f8; }
-
-.theme-july4 ::selection { background: rgba(255, 93, 108, 0.38); }
+:root.theme-valentines {
+  --gold: #ff7aa8; --gold-bright: #ff9ec0;
+  --color-amber-100: #ffd6e6; --color-amber-200: #ff96bb; --color-amber-300: #ff6ea0; --color-amber-400: #f24b86;
+  --cta-bg: #e23e76; --cta-bg-hover: #c52f63;
+  --accent-line: rgba(255, 138, 180, 0.34); --accent-sel: rgba(255, 122, 168, 0.35);
+}
+:root.theme-stpatricks {
+  --gold: #43d074; --gold-bright: #74e398;
+  --color-amber-100: #cdf3d8; --color-amber-200: #5fd986; --color-amber-300: #34c264; --color-amber-400: #1fa84e;
+  --cta-bg: #2fae57; --cta-bg-hover: #23903f;
+  --accent-line: rgba(255, 206, 84, 0.42); --accent-sel: rgba(63, 207, 106, 0.32);
+}
+:root.theme-july4 {
+  --gold: #ff5d6c; --gold-bright: #ff8b97;
+  --color-amber-100: #ffd9dd; --color-amber-200: #ff9aa6; --color-amber-300: #ff7080; --color-amber-400: #f6485f;
+  --cta-bg: #d12f3f; --cta-bg-hover: #b3232f;
+  --accent-line: rgba(120, 170, 255, 0.30); --accent-sel: rgba(255, 93, 108, 0.38);
+}
+:root.theme-halloween {
+  --gold: #ff922e; --gold-bright: #ffb15e;
+  --color-amber-100: #ffdcb8; --color-amber-200: #ff9d4d; --color-amber-300: #ff7d1a; --color-amber-400: #e85d00;
+  --cta-bg: #e06a12; --cta-bg-hover: #bd5408;
+  --accent-line: rgba(167, 103, 255, 0.42); --accent-sel: rgba(255, 146, 46, 0.35);
+}
+:root.theme-thanksgiving {
+  --gold: #eaa84a; --gold-bright: #f5c074;
+  --color-amber-100: #f6dcb0; --color-amber-200: #e9b164; --color-amber-300: #d9923a; --color-amber-400: #bd7522;
+  --cta-bg: #c47b27; --cta-bg-hover: #a4631c;
+  --accent-line: rgba(176, 118, 58, 0.45); --accent-sel: rgba(233, 177, 100, 0.32);
+}
+:root.theme-hanukkah {
+  --gold: #7fb0ff; --gold-bright: #a7c8ff;
+  --color-amber-100: #d6e5ff; --color-amber-200: #7fb0ff; --color-amber-300: #4d8bf0; --color-amber-400: #2f6fd6;
+  --cta-bg: #2f6fd6; --cta-bg-hover: #2459b0;
+  --accent-line: rgba(255, 255, 255, 0.30); --accent-sel: rgba(127, 176, 255, 0.34);
+}
+:root.theme-christmas {
+  --gold: #ff6b6b; --gold-bright: #ff9090;
+  --color-amber-100: #ffd2d2; --color-amber-200: #ff8f8f; --color-amber-300: #ff5a5a; --color-amber-400: #e23b3b;
+  --cta-bg: #cc2b2b; --cta-bg-hover: #a82121;
+  --accent-line: rgba(64, 190, 108, 0.45); --accent-sel: rgba(255, 107, 107, 0.32);
+}
 
 * {
   box-sizing: border-box;

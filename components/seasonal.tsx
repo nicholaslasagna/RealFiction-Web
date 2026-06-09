@@ -2,57 +2,80 @@
 
 import { useEffect, useState } from "react"
 
+import { FallingParticles } from "@/components/falling-particles"
 import { Fireworks } from "@/components/fireworks"
-import { isIndependenceDayWindow } from "@/lib/seasonal"
+import { HOLIDAYS, type Holiday } from "@/lib/holidays"
 
 /**
- * Gates the Independence Day treatment (fireworks + greeting) to the July 1–7
- * window. Renders nothing on the server / outside the window, so there's zero
- * cost the rest of the year.
- *
- * Preview override (any date): add `?fireworks=1` to force it on, or
- * `?fireworks=0` to force it off.
+ * Renders the active holiday's effect, top stripe, and greeting. The active
+ * holiday is decided by the inline boot script (which adds `theme-<id>` to
+ * <html> before paint); this component just reads that class and looks the
+ * holiday up in the registry. Renders nothing outside any window.
  */
 export function Seasonal() {
-  const [active, setActive] = useState(false)
+  const [holiday, setHoliday] = useState<Holiday | null>(null)
   const [greetingVisible, setGreetingVisible] = useState(true)
 
   useEffect(() => {
-    const override = new URLSearchParams(window.location.search).get("fireworks")
-    if (override === "1" || override === "true") {
-      setActive(true)
-    } else if (override === "0" || override === "false") {
-      setActive(false)
-    } else {
-      setActive(isIndependenceDayWindow())
-    }
+    const id = Array.from(document.documentElement.classList)
+      .filter((cls) => cls.startsWith("theme-") && cls !== "theme-active")
+      .map((cls) => cls.slice("theme-".length))
+      .find((candidate) => HOLIDAYS[candidate])
+    if (id) setHoliday(HOLIDAYS[id])
   }, [])
 
   useEffect(() => {
-    if (!active) return
-    const timer = window.setTimeout(() => setGreetingVisible(false), 6500)
+    if (!holiday) return
+    const timer = window.setTimeout(() => setGreetingVisible(false), 6800)
     return () => window.clearTimeout(timer)
-  }, [active])
+  }, [holiday])
 
-  if (!active) return null
+  if (!holiday) return null
+
+  const { effect, stripe, greeting, greetingEmoji } = holiday
 
   return (
     <>
       <div
         aria-hidden="true"
         className="pointer-events-none fixed inset-x-0 top-0 z-[62] h-1"
-        style={{ background: "linear-gradient(90deg, #e5304a 0 33%, #f6f4ef 33% 66%, #4d8bf0 66% 100%)" }}
+        style={{ background: `linear-gradient(90deg, ${stripe[0]} 0 33%, ${stripe[1]} 33% 66%, ${stripe[2]} 66% 100%)` }}
       />
-      <Fireworks />
+
+      {effect.kind === "fireworks" && <Fireworks />}
+      {effect.kind === "snow" && (
+        <FallingParticles
+          colors={effect.colors}
+          count={effect.count}
+          sizeMin={2}
+          sizeMax={5}
+          speedMin={0.4}
+          speedMax={1.3}
+          sway={0.5}
+        />
+      )}
+      {effect.kind === "glyphs" && (
+        <FallingParticles
+          glyphs={effect.glyphs}
+          count={effect.count}
+          spin={effect.spin}
+          sizeMin={16}
+          sizeMax={32}
+          speedMin={0.6}
+          speedMax={1.8}
+          sway={0.9}
+        />
+      )}
+
       <div
         className={`pointer-events-none fixed inset-x-0 bottom-6 z-[61] flex justify-center px-4 transition-opacity duration-1000 ${
           greetingVisible ? "opacity-100" : "opacity-0"
         }`}
       >
         <div className="rounded-full border border-white/15 bg-[#0a1830]/80 px-5 py-2 text-center text-sm font-medium text-white shadow-lg backdrop-blur">
-          <span aria-hidden="true" className="mr-2">🎆</span>
-          Happy Independence Day from RealFiction
-          <span aria-hidden="true" className="ml-2">🎆</span>
+          <span aria-hidden="true" className="mr-2">{greetingEmoji}</span>
+          {greeting} from RealFiction
+          <span aria-hidden="true" className="ml-2">{greetingEmoji}</span>
         </div>
       </div>
     </>
