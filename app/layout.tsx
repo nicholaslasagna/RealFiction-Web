@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next"
 
 import "@/app/globals.css"
+import { Seasonal } from "@/components/seasonal"
 import { SiteChrome } from "@/components/site-chrome"
 import { SiteFooter } from "@/components/site-footer"
 import { SiteHeader } from "@/components/site-header"
@@ -53,6 +54,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
+        <Seasonal />
         <SiteChrome header={<SiteHeader />} footer={<SiteFooter />}>
           {children}
         </SiteChrome>
