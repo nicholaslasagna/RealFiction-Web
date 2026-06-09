@@ -6,7 +6,7 @@ import { FallingParticles } from "@/components/falling-particles"
 import { Fireworks } from "@/components/fireworks"
 import { HOLIDAYS, type Holiday } from "@/lib/holidays"
 
-/** Builds an evenly-segmented horizontal gradient from N stripe colors (6 = a pride rainbow). */
+/** Builds an evenly-segmented horizontal gradient from N stripe colors. */
 function stripeGradient(colors: string[]): string {
   if (colors.length < 2) return colors[0] ?? "transparent"
   const seg = 100 / colors.length

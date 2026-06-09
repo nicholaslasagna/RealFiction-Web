@@ -193,12 +193,6 @@
   --cta-bg: #e266a0; --cta-bg-hover: #c9508a;
   --accent-line: rgba(179, 157, 219, 0.42); --accent-sel: rgba(244, 143, 177, 0.30);
 }
-:root.theme-pride {
-  --gold: #ff5fb0; --gold-bright: #ff8cc8;
-  --color-amber-100: #ffd6ec; --color-amber-200: #ff9fd1; --color-amber-300: #ff5fb0; --color-amber-400: #e8359e;
-  --cta-bg: #e0359e; --cta-bg-hover: #c22a87;
-  --accent-line: rgba(123, 97, 255, 0.45); --accent-sel: rgba(255, 95, 176, 0.30);
-}
 :root.theme-anniversary {
   --gold: #ffd166; --gold-bright: #ffe09a;
   --color-amber-100: #fff1c9; --color-amber-200: #ffd166; --color-amber-300: #f0b73d; --color-amber-400: #d99a1f;

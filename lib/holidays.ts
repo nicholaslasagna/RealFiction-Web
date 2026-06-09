@@ -23,7 +23,7 @@ export type Holiday = {
   name: string
   greeting: string
   greetingEmoji: string
-  /** Top stripe colors, evenly distributed (2+; 6 = a pride rainbow). */
+  /** Top stripe colors, evenly distributed (2 or more). */
   stripe: string[]
   /** Short festive line shown on the Store page during the window. */
   storeBanner: string
@@ -85,15 +85,6 @@ export const HOLIDAYS: Record<string, Holiday> = {
     stripe: ["#f8bbd0", "#fff3c4", "#b3e5c9"],
     storeBanner: "🐰 Easter — hop into something new",
     effect: { kind: "glyphs", glyphs: ["🐰", "🥚", "🌷"], count: 52, spin: true }
-  },
-  pride: {
-    id: "pride",
-    name: "Pride Month",
-    greeting: "Happy Pride",
-    greetingEmoji: "🏳️‍🌈",
-    stripe: ["#e40303", "#ff8c00", "#ffed00", "#008026", "#004dff", "#750787"],
-    storeBanner: "🌈 Pride Month — celebrate with color",
-    effect: { kind: "glyphs", glyphs: ["🌈", "❤️", "🧡", "💛", "💚", "💙", "💜"], count: 60, spin: false }
   },
   july4: {
     id: "july4",
@@ -197,7 +188,6 @@ export const HOLIDAY_SCHEDULE: HolidaySchedule[] = [
       ["2030-04-19", "2030-04-22"]
     ]
   },
-  { id: "pride", r: [[6, 1, 6, 30]] },
   { id: "july4", r: [[7, 1, 7, 7]] },
   { id: "halloween", r: [[10, 24, 10, 31]] },
   { id: "thanksgiving", r: [[11, 22, 11, 28]] },
