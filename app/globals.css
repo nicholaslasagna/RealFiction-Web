@@ -106,6 +106,42 @@
   --shadow-deep: 0 12px 38px rgba(0, 0, 0, 0.45);
 }
 
+/* ------------------------------------------------------------------ */
+/* Fourth of July seasonal theme.                                     */
+/* Toggled by the `theme-july4` class on <html> (set by an inline     */
+/* script during the July 1–7 window). It retints the site's          */
+/* amber/gold accent system to a red-white-blue palette over the      */
+/* existing navy base. Tailwind amber-* utilities read CSS variables  */
+/* so they retint for free; the few baked @theme-inline tokens        */
+/* (text-primary, border-border, ring-ring) and the hardcoded gold    */
+/* Store CTA are overridden explicitly. Higher specificity            */
+/* (:root.theme-july4) guarantees these win over the base theme.      */
+/* ------------------------------------------------------------------ */
+:root.theme-july4 {
+  /* Raw mockup vars used by custom CSS (.mc-button, ::selection, inline styles) */
+  --gold: #ff5d6c;
+  --gold-bright: #ff8b97;
+
+  /* Tailwind amber family -> patriotic red (retints every amber-* utility) */
+  --color-amber-50: #fff1f2;
+  --color-amber-100: #ffd9dd;
+  --color-amber-200: #ff9aa6;
+  --color-amber-300: #ff7080;
+  --color-amber-400: #f6485f;
+  --color-amber-500: #e5304a;
+}
+
+/* Baked @theme-inline tokens can't be reached through variables. */
+.theme-july4 .text-primary { color: #ff5d6c; }
+.theme-july4 .border-border { border-color: rgba(120, 170, 255, 0.3); }
+.theme-july4 .ring-ring { --tw-ring-color: #5b9bf3; }
+
+/* Hardcoded gold Store CTA -> red. */
+.theme-july4 .mc-button--gold { background-color: #d12f3f; color: #fff7f8; }
+.theme-july4 .mc-button--gold:hover { background-color: #b3232f; color: #fff7f8; }
+
+.theme-july4 ::selection { background: rgba(255, 93, 108, 0.38); }
+
 * {
   box-sizing: border-box;
 }

@@ -6,6 +6,15 @@ import { SiteChrome } from "@/components/site-chrome"
 import { SiteFooter } from "@/components/site-footer"
 import { SiteHeader } from "@/components/site-header"
 
+// Adds the Fourth of July theme class to <html> before first paint (no flash),
+// gated to the July 1–7 window. Override anytime with ?fireworks=1 / ?fireworks=0.
+// Keep this rule in sync with isIndependenceDayWindow() and <Seasonal/>.
+const THEME_SCRIPT =
+  "(function(){try{var s=new URLSearchParams(location.search).get('fireworks');var on;" +
+  "if(s==='1'||s==='true'){on=true}else if(s==='0'||s==='false'){on=false}" +
+  "else{var d=new Date();on=d.getMonth()===6&&d.getDate()>=1&&d.getDate()<=7}" +
+  "if(on){document.documentElement.classList.add('theme-july4')}}catch(e){}})();"
+
 export const metadata: Metadata = {
   metadataBase: new URL("https://realfiction.live"),
   title: {
@@ -54,6 +63,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
+        <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
         <Seasonal />
         <SiteChrome header={<SiteHeader />} footer={<SiteFooter />}>
           {children}

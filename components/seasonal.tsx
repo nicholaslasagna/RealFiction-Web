@@ -38,6 +38,11 @@ export function Seasonal() {
 
   return (
     <>
+      <div
+        aria-hidden="true"
+        className="pointer-events-none fixed inset-x-0 top-0 z-[62] h-1"
+        style={{ background: "linear-gradient(90deg, #e5304a 0 33%, #f6f4ef 33% 66%, #4d8bf0 66% 100%)" }}
+      />
       <Fireworks />
       <div
         className={`pointer-events-none fixed inset-x-0 bottom-6 z-[61] flex justify-center px-4 transition-opacity duration-1000 ${
