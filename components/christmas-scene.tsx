@@ -29,47 +29,6 @@ type Light = {
 }
 
 /**
- * Synthesizes a short, quiet, cheerful sleigh-bell jingle via the Web Audio API
- * (no asset): a bright C-major arpeggio with a high shimmer on top.
- */
-function playChristmasJingle() {
-  if (typeof window.AudioContext === "undefined") return
-  const ctx = new AudioContext()
-  void ctx.resume()
-  const now = ctx.currentTime
-
-  const master = ctx.createGain()
-  master.gain.value = 0.08 // quiet
-  master.connect(ctx.destination)
-
-  const bell = (freq: number, start: number, dur: number, vol: number) => {
-    const osc = ctx.createOscillator()
-    const gain = ctx.createGain()
-    osc.type = "triangle"
-    osc.frequency.value = freq
-    gain.gain.setValueAtTime(0.0001, now + start)
-    gain.gain.linearRampToValueAtTime(vol, now + start + 0.01)
-    gain.gain.exponentialRampToValueAtTime(0.0001, now + start + dur)
-    osc.connect(gain)
-    gain.connect(master)
-    osc.start(now + start)
-    osc.stop(now + start + dur + 0.05)
-  }
-
-  bell(523.25, 0.0, 1.0, 0.7) // C5
-  bell(659.25, 0.14, 1.0, 0.7) // E5
-  bell(783.99, 0.28, 1.2, 0.7) // G5
-  bell(1046.5, 0.42, 1.6, 0.7) // C6
-  bell(1568.0, 0.52, 0.5, 0.16) // sleigh shimmer
-  bell(1760.0, 0.64, 0.5, 0.15)
-  bell(2093.0, 0.76, 0.6, 0.13)
-
-  window.setTimeout(() => {
-    void ctx.close().catch(() => {})
-  }, 2600)
-}
-
-/**
  * Dedicated Christmas scene: layered parallax snowfall (nearer flakes fall
  * faster/brighter), twinkling out-of-focus light bokeh, a string of garland
  * lights across the top, and a soft ground-snow drift.
@@ -203,38 +162,6 @@ export function ChristmasScene() {
       cancelAnimationFrame(raf)
       window.removeEventListener("resize", onResize)
       document.removeEventListener("visibilitychange", onVisibility)
-    }
-  }, [])
-
-  // Quiet festive jingle on the first user gesture — once per tab session.
-  useEffect(() => {
-    try {
-      if (window.sessionStorage.getItem("xmas-chime") === "1") return
-    } catch {
-      /* sessionStorage may be blocked; still gesture-gated below */
-    }
-    const onGesture = () => {
-      window.removeEventListener("pointerdown", onGesture)
-      window.removeEventListener("keydown", onGesture)
-      window.removeEventListener("touchstart", onGesture)
-      try {
-        window.sessionStorage.setItem("xmas-chime", "1")
-      } catch {
-        /* ignore */
-      }
-      try {
-        playChristmasJingle()
-      } catch {
-        /* ignore audio failures */
-      }
-    }
-    window.addEventListener("pointerdown", onGesture)
-    window.addEventListener("keydown", onGesture)
-    window.addEventListener("touchstart", onGesture)
-    return () => {
-      window.removeEventListener("pointerdown", onGesture)
-      window.removeEventListener("keydown", onGesture)
-      window.removeEventListener("touchstart", onGesture)
     }
   }, [])
 

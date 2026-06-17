@@ -303,6 +303,64 @@
   50% { opacity: 0.32; }
 }
 
+/* --- Hanukkah, dialed up: festival of lights — menorah row, glow, blue/gold hero. --- */
+.theme-hanukkah .hero::after {
+  background:
+    radial-gradient(circle at 50% 9%, rgba(255, 232, 175, 0.42), rgba(255, 215, 130, 0.12) 20%, transparent 48%),
+    radial-gradient(80% 55% at 50% 0%, rgba(110, 150, 230, 0.26), transparent 72%),
+    radial-gradient(90% 60% at 50% 100%, rgba(255, 200, 120, 0.16), transparent 72%);
+}
+
+.hk-glow {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 18vh;
+  z-index: 59;
+  pointer-events: none;
+  background: linear-gradient(to top, rgba(255, 200, 120, 0.12), rgba(140, 170, 230, 0.05) 50%, transparent);
+}
+
+.hk-menorah {
+  position: fixed;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 56;
+  pointer-events: none;
+  display: flex;
+  align-items: flex-start;
+  gap: clamp(14px, 4vw, 46px);
+  padding-top: 5px;
+}
+
+.hk-flame {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 40%, #fff6d8, #ffd27a 55%, #ffb347 92%);
+  box-shadow: 0 0 10px 3px rgba(255, 200, 110, 0.7);
+}
+
+.hk-flame--shamash {
+  width: 11px;
+  height: 11px;
+  margin-top: -4px;
+  box-shadow: 0 0 14px 4px rgba(255, 210, 130, 0.8);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .hk-flame {
+    animation: hk-flicker 2.2s ease-in-out infinite;
+  }
+}
+
+@keyframes hk-flicker {
+  0%, 100% { opacity: 1; }
+  48% { opacity: 0.6; }
+}
+
 * {
   box-sizing: border-box;
 }

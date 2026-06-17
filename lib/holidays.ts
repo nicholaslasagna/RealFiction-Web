@@ -19,6 +19,7 @@ export type HolidayEffect =
   | { kind: "glyphs"; glyphs: string[]; count: number; spin: boolean }
   | { kind: "halloween" }
   | { kind: "christmas" }
+  | { kind: "hanukkah" }
 
 export type Holiday = {
   id: string
@@ -124,7 +125,7 @@ export const HOLIDAYS: Record<string, Holiday> = {
     greetingEmoji: "🕎",
     stripe: ["#2f6fd6", "#f6f4ef", "#2f6fd6"],
     storeBanner: "🕎 Hanukkah — eight days of fresh looks",
-    effect: { kind: "snow", colors: ["#ffffff", "#9cc4ff"], count: 90 }
+    effect: { kind: "hanukkah" }
   },
   christmas: {
     id: "christmas",

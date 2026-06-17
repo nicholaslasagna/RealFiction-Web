@@ -6,6 +6,7 @@ import { ChristmasScene } from "@/components/christmas-scene"
 import { FallingParticles } from "@/components/falling-particles"
 import { Fireworks } from "@/components/fireworks"
 import { HalloweenHaunt } from "@/components/halloween-haunt"
+import { HanukkahScene } from "@/components/hanukkah-scene"
 import { HOLIDAYS, type Holiday } from "@/lib/holidays"
 
 /** Builds an evenly-segmented horizontal gradient from N stripe colors. */
@@ -60,6 +61,7 @@ export function Seasonal() {
       {effect.kind === "fireworks" && <Fireworks colors={effect.colors} />}
       {effect.kind === "halloween" && <HalloweenHaunt />}
       {effect.kind === "christmas" && <ChristmasScene />}
+      {effect.kind === "hanukkah" && <HanukkahScene />}
       {effect.kind === "snow" && (
         <FallingParticles
           colors={effect.colors}
