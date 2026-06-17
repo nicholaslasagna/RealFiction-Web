@@ -212,6 +212,45 @@
   mix-blend-mode: screen;
 }
 
+/* --- Halloween, dialed up: moonlit hero, low fog, and an edge vignette. --- */
+.theme-halloween .hero::after {
+  background:
+    radial-gradient(circle at 85% 16%, rgba(255, 234, 175, 0.55), rgba(255, 205, 120, 0.16) 26%, transparent 56%),
+    radial-gradient(95% 60% at 50% 100%, rgba(255, 120, 20, 0.30), transparent 70%),
+    radial-gradient(80% 55% at 50% 0%, rgba(150, 70, 210, 0.28), transparent 72%);
+}
+
+.hw-vignette {
+  position: fixed;
+  inset: 0;
+  z-index: 58;
+  pointer-events: none;
+  background: radial-gradient(120% 95% at 50% 32%, transparent 52%, rgba(7, 2, 13, 0.6) 100%);
+}
+
+.hw-fog {
+  position: fixed;
+  left: -10%;
+  right: -10%;
+  bottom: 0;
+  height: 30vh;
+  z-index: 59;
+  pointer-events: none;
+  opacity: 0.7;
+  background: radial-gradient(120% 100% at 50% 120%, rgba(150, 100, 190, 0.30), rgba(80, 50, 120, 0.12) 45%, transparent 72%);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .hw-fog {
+    animation: hw-fog-drift 16s ease-in-out infinite alternate;
+  }
+}
+
+@keyframes hw-fog-drift {
+  from { transform: translateX(-3%); opacity: 0.55; }
+  to { transform: translateX(3%); opacity: 0.9; }
+}
+
 * {
   box-sizing: border-box;
 }
