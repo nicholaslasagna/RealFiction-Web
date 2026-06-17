@@ -47,6 +47,57 @@ type Ghost = {
  * nothing), pauses when the tab is hidden, DPR-capped, fixed pools. No rapid
  * flashing — ember flicker and bat flap are slow and local.
  */
+/**
+ * Synthesizes a short, quiet, eerie bell chime via the Web Audio API (no audio
+ * asset). A low drone under descending bells with an E5->Bb4 tritone — the
+ * classic "creepy" interval. Master gain is deliberately low.
+ */
+function playSpookyChime() {
+  if (typeof window.AudioContext === "undefined") return
+  const ctx = new AudioContext()
+  void ctx.resume()
+  const now = ctx.currentTime
+
+  const master = ctx.createGain()
+  master.gain.value = 0.09 // quiet
+  master.connect(ctx.destination)
+
+  const bell = (freq: number, start: number, dur: number, vol: number) => {
+    const osc = ctx.createOscillator()
+    const gain = ctx.createGain()
+    osc.type = "triangle"
+    osc.frequency.value = freq
+    gain.gain.setValueAtTime(0.0001, now + start)
+    gain.gain.linearRampToValueAtTime(vol, now + start + 0.012)
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + start + dur)
+    osc.connect(gain)
+    gain.connect(master)
+    osc.start(now + start)
+    osc.stop(now + start + dur + 0.05)
+  }
+
+  const drone = ctx.createOscillator()
+  const droneGain = ctx.createGain()
+  drone.type = "sine"
+  drone.frequency.value = 110
+  droneGain.gain.setValueAtTime(0.0001, now)
+  droneGain.gain.linearRampToValueAtTime(0.5, now + 0.1)
+  droneGain.gain.exponentialRampToValueAtTime(0.0001, now + 1.9)
+  drone.connect(droneGain)
+  droneGain.connect(master)
+  drone.start(now)
+  drone.stop(now + 2)
+
+  bell(659.25, 0.0, 1.3, 0.8) // E5
+  bell(554.37, 0.22, 1.3, 0.7) // C#5
+  bell(466.16, 0.46, 1.7, 0.7) // Bb4 (tritone from E5)
+  bell(932.33, 0.46, 1.2, 0.22) // faint high shimmer
+
+  window.setTimeout(() => {
+    void ctx.close().catch(() => {})
+  }, 2800)
+}
+
 export function HalloweenHaunt() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
 
@@ -208,6 +259,39 @@ export function HalloweenHaunt() {
       cancelAnimationFrame(raf)
       window.removeEventListener("resize", onResize)
       document.removeEventListener("visibilitychange", onVisibility)
+    }
+  }, [])
+
+  // A quiet, eerie chime on the first user gesture — once per tab session.
+  // Gated on a gesture because browsers block autoplay audio; never on load.
+  useEffect(() => {
+    try {
+      if (window.sessionStorage.getItem("hw-chime") === "1") return
+    } catch {
+      /* sessionStorage may be blocked; still gesture-gated below */
+    }
+    const onGesture = () => {
+      window.removeEventListener("pointerdown", onGesture)
+      window.removeEventListener("keydown", onGesture)
+      window.removeEventListener("touchstart", onGesture)
+      try {
+        window.sessionStorage.setItem("hw-chime", "1")
+      } catch {
+        /* ignore */
+      }
+      try {
+        playSpookyChime()
+      } catch {
+        /* ignore audio failures */
+      }
+    }
+    window.addEventListener("pointerdown", onGesture)
+    window.addEventListener("keydown", onGesture)
+    window.addEventListener("touchstart", onGesture)
+    return () => {
+      window.removeEventListener("pointerdown", onGesture)
+      window.removeEventListener("keydown", onGesture)
+      window.removeEventListener("touchstart", onGesture)
     }
   }, [])
 
