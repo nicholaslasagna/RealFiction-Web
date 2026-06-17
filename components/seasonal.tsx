@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react"
 
+import { ChristmasScene } from "@/components/christmas-scene"
 import { FallingParticles } from "@/components/falling-particles"
 import { Fireworks } from "@/components/fireworks"
 import { HalloweenHaunt } from "@/components/halloween-haunt"
@@ -58,6 +59,7 @@ export function Seasonal() {
 
       {effect.kind === "fireworks" && <Fireworks colors={effect.colors} />}
       {effect.kind === "halloween" && <HalloweenHaunt />}
+      {effect.kind === "christmas" && <ChristmasScene />}
       {effect.kind === "snow" && (
         <FallingParticles
           colors={effect.colors}

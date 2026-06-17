@@ -251,6 +251,58 @@
   to { transform: translateX(3%); opacity: 0.9; }
 }
 
+/* --- Christmas, dialed up: cozy hero, garland lights, ground snow. --- */
+.theme-christmas .hero::after {
+  background:
+    radial-gradient(70% 50% at 50% 0%, rgba(120, 170, 255, 0.22), transparent 70%),
+    radial-gradient(90% 60% at 50% 100%, rgba(255, 180, 90, 0.20), transparent 72%),
+    radial-gradient(circle at 18% 24%, rgba(80, 200, 120, 0.14), transparent 42%),
+    radial-gradient(circle at 82% 26%, rgba(230, 70, 80, 0.14), transparent 42%);
+}
+
+.xmas-drift {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 16vh;
+  z-index: 59;
+  pointer-events: none;
+  background: linear-gradient(to top, rgba(235, 244, 255, 0.22), rgba(220, 235, 255, 0.06) 55%, transparent);
+}
+
+.xmas-garland {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 56;
+  pointer-events: none;
+  display: flex;
+  justify-content: space-between;
+  padding: 0 16px;
+}
+
+.xmas-light {
+  width: 9px;
+  height: 9px;
+  margin-top: 2px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 9px 2px currentColor;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .xmas-light {
+    animation: xmas-twinkle 2.4s ease-in-out infinite;
+  }
+}
+
+@keyframes xmas-twinkle {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.32; }
+}
+
 * {
   box-sizing: border-box;
 }
