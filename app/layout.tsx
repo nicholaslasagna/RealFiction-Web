@@ -5,6 +5,7 @@ import { Seasonal } from "@/components/seasonal"
 import { SiteChrome } from "@/components/site-chrome"
 import { SiteFooter } from "@/components/site-footer"
 import { SiteHeader } from "@/components/site-header"
+import { THEME_BOOT_SCRIPT } from "@/lib/holidays"
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://realfiction.live"),
@@ -54,6 +55,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
+        <script dangerouslySetInnerHTML={{ __html: THEME_BOOT_SCRIPT }} />
         <Seasonal />
         <SiteChrome header={<SiteHeader />} footer={<SiteFooter />}>
           {children}

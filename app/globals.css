@@ -106,6 +106,261 @@
   --shadow-deep: 0 12px 38px rgba(0, 0, 0, 0.45);
 }
 
+/* ------------------------------------------------------------------ */
+/* Seasonal holiday themes.                                           */
+/*                                                                    */
+/* An inline boot script adds `theme-active theme-<id>` to <html>     */
+/* during a holiday window (see lib/holidays.ts). Each theme retints  */
+/* the site's amber/gold accent system to a holiday palette over the  */
+/* navy base by overriding CSS variables: Tailwind amber-* utilities  */
+/* read var(--color-amber-*) so they retint for free, and the raw     */
+/* --gold vars cover custom CSS. The shared `.theme-active` rules     */
+/* restyle the few baked @theme-inline utilities (text-primary,       */
+/* border-border, ring-ring) and the hardcoded gold Store CTA using   */
+/* per-theme vars. `:root.theme-<id>` (specificity 0,2,0) wins over   */
+/* Tailwind's base `:root` tokens.                                    */
+/* ------------------------------------------------------------------ */
+.theme-active .text-primary { color: var(--gold); }
+.theme-active .mc-button--gold { background-color: var(--cta-bg); color: #fff7f8; }
+.theme-active .mc-button--gold:hover { background-color: var(--cta-bg-hover); color: #fff7f8; }
+.theme-active .border-border { border-color: var(--accent-line); }
+.theme-active .ring-ring { --tw-ring-color: var(--accent-line); }
+.theme-active ::selection { background: var(--accent-sel); }
+
+:root.theme-newyear {
+  --gold: #ffd86b; --gold-bright: #ffe6a3;
+  --color-amber-100: #fff1c9; --color-amber-200: #ffd86b; --color-amber-300: #f5c33d; --color-amber-400: #e0a91f;
+  --cta-bg: #caa12e; --cta-bg-hover: #a8841f;
+  --accent-line: rgba(140, 185, 255, 0.32); --accent-sel: rgba(255, 216, 107, 0.35);
+}
+:root.theme-valentines {
+  --gold: #ff7aa8; --gold-bright: #ff9ec0;
+  --color-amber-100: #ffd6e6; --color-amber-200: #ff96bb; --color-amber-300: #ff6ea0; --color-amber-400: #f24b86;
+  --cta-bg: #e23e76; --cta-bg-hover: #c52f63;
+  --accent-line: rgba(255, 138, 180, 0.34); --accent-sel: rgba(255, 122, 168, 0.35);
+}
+:root.theme-stpatricks {
+  --gold: #43d074; --gold-bright: #74e398;
+  --color-amber-100: #cdf3d8; --color-amber-200: #5fd986; --color-amber-300: #34c264; --color-amber-400: #1fa84e;
+  --cta-bg: #2fae57; --cta-bg-hover: #23903f;
+  --accent-line: rgba(255, 206, 84, 0.42); --accent-sel: rgba(63, 207, 106, 0.32);
+}
+:root.theme-july4 {
+  --gold: #ff5d6c; --gold-bright: #ff8b97;
+  --color-amber-100: #ffd9dd; --color-amber-200: #ff9aa6; --color-amber-300: #ff7080; --color-amber-400: #f6485f;
+  --cta-bg: #d12f3f; --cta-bg-hover: #b3232f;
+  --accent-line: rgba(120, 170, 255, 0.30); --accent-sel: rgba(255, 93, 108, 0.38);
+}
+:root.theme-halloween {
+  --gold: #ff922e; --gold-bright: #ffb15e;
+  --color-amber-100: #ffdcb8; --color-amber-200: #ff9d4d; --color-amber-300: #ff7d1a; --color-amber-400: #e85d00;
+  --cta-bg: #e06a12; --cta-bg-hover: #bd5408;
+  --accent-line: rgba(167, 103, 255, 0.42); --accent-sel: rgba(255, 146, 46, 0.35);
+}
+:root.theme-thanksgiving {
+  --gold: #eaa84a; --gold-bright: #f5c074;
+  --color-amber-100: #f6dcb0; --color-amber-200: #e9b164; --color-amber-300: #d9923a; --color-amber-400: #bd7522;
+  --cta-bg: #c47b27; --cta-bg-hover: #a4631c;
+  --accent-line: rgba(176, 118, 58, 0.45); --accent-sel: rgba(233, 177, 100, 0.32);
+}
+:root.theme-hanukkah {
+  --gold: #7fb0ff; --gold-bright: #a7c8ff;
+  --color-amber-100: #d6e5ff; --color-amber-200: #7fb0ff; --color-amber-300: #4d8bf0; --color-amber-400: #2f6fd6;
+  --cta-bg: #2f6fd6; --cta-bg-hover: #2459b0;
+  --accent-line: rgba(255, 255, 255, 0.30); --accent-sel: rgba(127, 176, 255, 0.34);
+}
+:root.theme-christmas {
+  --gold: #ff6b6b; --gold-bright: #ff9090;
+  --color-amber-100: #ffd2d2; --color-amber-200: #ff8f8f; --color-amber-300: #ff5a5a; --color-amber-400: #e23b3b;
+  --cta-bg: #cc2b2b; --cta-bg-hover: #a82121;
+  --accent-line: rgba(64, 190, 108, 0.45); --accent-sel: rgba(255, 107, 107, 0.32);
+}
+:root.theme-lunarnewyear {
+  --gold: #ffd24d; --gold-bright: #ffe08a;
+  --color-amber-100: #fff0c2; --color-amber-200: #ffd24d; --color-amber-300: #f0b32a; --color-amber-400: #d99518;
+  --cta-bg: #d32f2f; --cta-bg-hover: #b3232f;
+  --accent-line: rgba(255, 210, 77, 0.45); --accent-sel: rgba(211, 47, 47, 0.32);
+}
+:root.theme-mardigras {
+  --gold: #ffd23f; --gold-bright: #ffe07a;
+  --color-amber-100: #fff0bd; --color-amber-200: #ffd23f; --color-amber-300: #e9b81f; --color-amber-400: #c99a12;
+  --cta-bg: #7b2cbf; --cta-bg-hover: #65249e;
+  --accent-line: rgba(58, 163, 90, 0.50); --accent-sel: rgba(123, 44, 191, 0.30);
+}
+:root.theme-easter {
+  --gold: #f48fb1; --gold-bright: #ffb3cf;
+  --color-amber-100: #fce4ec; --color-amber-200: #f8bbd0; --color-amber-300: #f48fb1; --color-amber-400: #ec6f9e;
+  --cta-bg: #e266a0; --cta-bg-hover: #c9508a;
+  --accent-line: rgba(179, 157, 219, 0.42); --accent-sel: rgba(244, 143, 177, 0.30);
+}
+:root.theme-anniversary {
+  --gold: #ffd166; --gold-bright: #ffe09a;
+  --color-amber-100: #fff1c9; --color-amber-200: #ffd166; --color-amber-300: #f0b73d; --color-amber-400: #d99a1f;
+  --cta-bg: #caa12e; --cta-bg-hover: #a8841f;
+  --accent-line: rgba(140, 185, 255, 0.30); --accent-sel: rgba(255, 209, 102, 0.35);
+}
+
+/* Per-holiday hero aura: a soft top glow in the active palette's accent,
+   layered above the hero's dark overlay (z-index -1) but below the content. */
+.theme-active .hero::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: radial-gradient(100% 60% at 50% 0%, color-mix(in srgb, var(--gold) 32%, transparent), transparent 72%);
+  mix-blend-mode: screen;
+}
+
+/* --- Halloween, dialed up: moonlit hero, low fog, and an edge vignette. --- */
+.theme-halloween .hero::after {
+  background:
+    radial-gradient(circle at 85% 16%, rgba(255, 234, 175, 0.55), rgba(255, 205, 120, 0.16) 26%, transparent 56%),
+    radial-gradient(95% 60% at 50% 100%, rgba(255, 120, 20, 0.30), transparent 70%),
+    radial-gradient(80% 55% at 50% 0%, rgba(150, 70, 210, 0.28), transparent 72%);
+}
+
+.hw-vignette {
+  position: fixed;
+  inset: 0;
+  z-index: 58;
+  pointer-events: none;
+  background: radial-gradient(120% 95% at 50% 32%, transparent 52%, rgba(7, 2, 13, 0.6) 100%);
+}
+
+.hw-fog {
+  position: fixed;
+  left: -10%;
+  right: -10%;
+  bottom: 0;
+  height: 30vh;
+  z-index: 59;
+  pointer-events: none;
+  opacity: 0.7;
+  background: radial-gradient(120% 100% at 50% 120%, rgba(150, 100, 190, 0.30), rgba(80, 50, 120, 0.12) 45%, transparent 72%);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .hw-fog {
+    animation: hw-fog-drift 16s ease-in-out infinite alternate;
+  }
+}
+
+@keyframes hw-fog-drift {
+  from { transform: translateX(-3%); opacity: 0.55; }
+  to { transform: translateX(3%); opacity: 0.9; }
+}
+
+/* --- Christmas, dialed up: cozy hero, garland lights, ground snow. --- */
+.theme-christmas .hero::after {
+  background:
+    radial-gradient(70% 50% at 50% 0%, rgba(120, 170, 255, 0.22), transparent 70%),
+    radial-gradient(90% 60% at 50% 100%, rgba(255, 180, 90, 0.20), transparent 72%),
+    radial-gradient(circle at 18% 24%, rgba(80, 200, 120, 0.14), transparent 42%),
+    radial-gradient(circle at 82% 26%, rgba(230, 70, 80, 0.14), transparent 42%);
+}
+
+.xmas-drift {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 16vh;
+  z-index: 59;
+  pointer-events: none;
+  background: linear-gradient(to top, rgba(235, 244, 255, 0.22), rgba(220, 235, 255, 0.06) 55%, transparent);
+}
+
+.xmas-garland {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 56;
+  pointer-events: none;
+  display: flex;
+  justify-content: space-between;
+  padding: 0 16px;
+}
+
+.xmas-light {
+  width: 9px;
+  height: 9px;
+  margin-top: 2px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 9px 2px currentColor;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .xmas-light {
+    animation: xmas-twinkle 2.4s ease-in-out infinite;
+  }
+}
+
+@keyframes xmas-twinkle {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.32; }
+}
+
+/* --- Hanukkah, dialed up: festival of lights — menorah row, glow, blue/gold hero. --- */
+.theme-hanukkah .hero::after {
+  background:
+    radial-gradient(circle at 50% 9%, rgba(255, 232, 175, 0.42), rgba(255, 215, 130, 0.12) 20%, transparent 48%),
+    radial-gradient(80% 55% at 50% 0%, rgba(110, 150, 230, 0.26), transparent 72%),
+    radial-gradient(90% 60% at 50% 100%, rgba(255, 200, 120, 0.16), transparent 72%);
+}
+
+.hk-glow {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 18vh;
+  z-index: 59;
+  pointer-events: none;
+  background: linear-gradient(to top, rgba(255, 200, 120, 0.12), rgba(140, 170, 230, 0.05) 50%, transparent);
+}
+
+.hk-menorah {
+  position: fixed;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 56;
+  pointer-events: none;
+  display: flex;
+  align-items: flex-start;
+  gap: clamp(14px, 4vw, 46px);
+  padding-top: 5px;
+}
+
+.hk-flame {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 40%, #fff6d8, #ffd27a 55%, #ffb347 92%);
+  box-shadow: 0 0 10px 3px rgba(255, 200, 110, 0.7);
+}
+
+.hk-flame--shamash {
+  width: 11px;
+  height: 11px;
+  margin-top: -4px;
+  box-shadow: 0 0 14px 4px rgba(255, 210, 130, 0.8);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .hk-flame {
+    animation: hk-flicker 2.2s ease-in-out infinite;
+  }
+}
+
+@keyframes hk-flicker {
+  0%, 100% { opacity: 1; }
+  48% { opacity: 0.6; }
+}
+
 * {
   box-sizing: border-box;
 }
