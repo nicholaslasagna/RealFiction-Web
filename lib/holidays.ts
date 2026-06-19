@@ -253,7 +253,7 @@ export const THEME_BOOT_SCRIPT =
   "(function(){try{var S=" +
   JSON.stringify(HOLIDAY_SCHEDULE) +
   ";var p=new URLSearchParams(location.search),q=p.get('holiday'),fw=p.get('fireworks'),id=null;" +
-  "if(q!=null){id=(q==='off'||q==='0'||q==='false')?null:q;}" +
+  "if(q!=null){id=(q==='off'||q==='0'||q==='false')?null:(S.some(function(h){return h.id===q;})?q:null);}" +
   "else if(fw==='1'||fw==='true'){id='july4';}" +
   "else{var dt=new Date(),k=(dt.getMonth()+1)*100+dt.getDate()," +
   "iso=dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0')+'-'+String(dt.getDate()).padStart(2,'0');" +
