@@ -124,6 +124,15 @@ public final class EconomyService {
     return fetchBalanceWithGuard(minecraftUuid, dbBalanceReadGuardReason(), economyConfig.dbBalanceReadCacheTtl());
   }
 
+  /**
+   * Like {@link #fetchBalanceReadOnly} but always bypasses the read cache for a fresh DB value, so
+   * a server-join pulls the current balance instead of a previously-cached one. Still refreshes the
+   * cache for other callers.
+   */
+  public CompletableFuture<EconomyBalanceSnapshot> fetchBalanceReadOnlyFresh(UUID minecraftUuid) {
+    return fetchBalanceWithGuard(minecraftUuid, dbBalanceReadGuardReason(), Duration.ZERO);
+  }
+
   private CompletableFuture<EconomyBalanceSnapshot> fetchBalanceWithGuard(UUID minecraftUuid, String guardReason, Duration ttl) {
     if (minecraftUuid == null) {
       return CompletableFuture.failedFuture(new IllegalArgumentException("minecraftUuid is required"));
