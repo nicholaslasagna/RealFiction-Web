@@ -22,7 +22,7 @@ final class EconomyReconciliationDecisionTest {
 
   @Test
   void depositsWhenPlayerEarnedOnAnotherServer() {
-    Decision decision = EconomyReconciliationService.decide(true, 1_000, 1_000, 1_500, CAP);
+    Decision decision = EconomyReconciliationService.decide(true, 1_000, 1_000, 1_500, CAP, false);
     assertEquals(Action.DEPOSIT, decision.action());
     assertEquals(500, decision.vaultDeltaMinor());
     assertTrue(decision.baselineChanged());
@@ -32,7 +32,7 @@ final class EconomyReconciliationDecisionTest {
   @Test
   void withdrawsWhenPlayerSpentOnAnotherServer() {
     // Local has not risen since last sync (local == baseline), so the gap is the DB dropping.
-    Decision decision = EconomyReconciliationService.decide(true, 1_000, 1_000, 700, CAP);
+    Decision decision = EconomyReconciliationService.decide(true, 1_000, 1_000, 700, CAP, false);
     assertEquals(Action.WITHDRAW, decision.action());
     assertEquals(300, decision.vaultDeltaMinor());
     assertTrue(decision.baselineChanged());
@@ -43,7 +43,7 @@ final class EconomyReconciliationDecisionTest {
   void holdsWhenLocalRoseSinceLastSync() {
     // Local rose above baseline (recent captured income not yet flushed, or un-captured /pay):
     // never withdraw it away.
-    Decision decision = EconomyReconciliationService.decide(true, 1_000, 1_050, 1_000, CAP);
+    Decision decision = EconomyReconciliationService.decide(true, 1_000, 1_050, 1_000, CAP, false);
     assertEquals(Action.HOLD, decision.action());
     assertEquals(0, decision.vaultDeltaMinor());
     assertFalse(decision.baselineChanged());
@@ -54,15 +54,43 @@ final class EconomyReconciliationDecisionTest {
     // A local spend (e.g. a shop buy) drops local below baseline before the capture reaches the DB.
     // The DB is still ahead, but we must NOT re-deposit the difference (that would refund the
     // purchase) — hold until the capture lands and db catches down to local.
-    Decision decision = EconomyReconciliationService.decide(true, 1_000, 950, 1_000, CAP);
+    Decision decision = EconomyReconciliationService.decide(true, 1_000, 950, 1_000, CAP, false);
     assertEquals(Action.HOLD, decision.action());
     assertEquals(0, decision.vaultDeltaMinor());
     assertFalse(decision.baselineChanged());
   }
 
   @Test
+  void forceSyncDepositsEvenWhenLocalDiffersFromBaseline() {
+    // On a join/manual force-sync, pull straight to the DB even though local has drifted from the
+    // baseline (e.g. shop sells on a prior session) — the player just arrived and the DB is the truth.
+    Decision decision = EconomyReconciliationService.decide(true, 1_000, 1_050, 1_500, CAP, true);
+    assertEquals(Action.DEPOSIT, decision.action());
+    assertEquals(450, decision.vaultDeltaMinor());
+    assertTrue(decision.baselineChanged());
+    assertEquals(1_500, decision.newBaselineMinor());
+  }
+
+  @Test
+  void forceSyncWithdrawsEvenWhenLocalDiffersFromBaseline() {
+    Decision decision = EconomyReconciliationService.decide(true, 1_000, 1_050, 900, CAP, true);
+    assertEquals(Action.WITHDRAW, decision.action());
+    assertEquals(150, decision.vaultDeltaMinor());
+    assertTrue(decision.baselineChanged());
+    assertEquals(900, decision.newBaselineMinor());
+  }
+
+  @Test
+  void forceSyncStillHoldsOnZeroOrMissingDb() {
+    // Even a forced sync must never wipe local to zero on a zero/absent DB read.
+    Decision decision = EconomyReconciliationService.decide(true, 1_000, 1_050, 0, CAP, true);
+    assertEquals(Action.HOLD, decision.action());
+    assertEquals(0, decision.vaultDeltaMinor());
+  }
+
+  @Test
   void noopWhenAlreadyMatchingDb() {
-    Decision decision = EconomyReconciliationService.decide(true, 1_000, 1_000, 1_000, CAP);
+    Decision decision = EconomyReconciliationService.decide(true, 1_000, 1_000, 1_000, CAP, false);
     assertEquals(Action.NOOP, decision.action());
     assertEquals(0, decision.vaultDeltaMinor());
     assertTrue(decision.baselineChanged());
@@ -71,7 +99,7 @@ final class EconomyReconciliationDecisionTest {
 
   @Test
   void coldStartDepositsUpToDb() {
-    Decision decision = EconomyReconciliationService.decide(false, 0, 200, 500, CAP);
+    Decision decision = EconomyReconciliationService.decide(false, 0, 200, 500, CAP, false);
     assertEquals(Action.DEPOSIT, decision.action());
     assertEquals(300, decision.vaultDeltaMinor());
     assertTrue(decision.baselineChanged());
@@ -81,7 +109,7 @@ final class EconomyReconciliationDecisionTest {
   @Test
   void coldStartNeverWithdrawsOnFirstSight() {
     // DB is lower than local but we have no baseline yet: hold, record baseline = local, no change.
-    Decision decision = EconomyReconciliationService.decide(false, 0, 900, 500, CAP);
+    Decision decision = EconomyReconciliationService.decide(false, 0, 900, 500, CAP, false);
     assertEquals(Action.HOLD, decision.action());
     assertEquals(0, decision.vaultDeltaMinor());
     assertTrue(decision.baselineChanged());
@@ -90,7 +118,7 @@ final class EconomyReconciliationDecisionTest {
 
   @Test
   void coldStartNoopWhenEqual() {
-    Decision decision = EconomyReconciliationService.decide(false, 0, 500, 500, CAP);
+    Decision decision = EconomyReconciliationService.decide(false, 0, 500, 500, CAP, false);
     assertEquals(Action.NOOP, decision.action());
     assertTrue(decision.baselineChanged());
     assertEquals(500, decision.newBaselineMinor());
@@ -98,7 +126,7 @@ final class EconomyReconciliationDecisionTest {
 
   @Test
   void skipsDepositLargerThanCap() {
-    Decision decision = EconomyReconciliationService.decide(true, 0, 0, 10_000_000, CAP);
+    Decision decision = EconomyReconciliationService.decide(true, 0, 0, 10_000_000, CAP, false);
     assertEquals(Action.SKIP_CAP, decision.action());
     assertEquals(0, decision.vaultDeltaMinor());
     assertFalse(decision.baselineChanged());
@@ -107,7 +135,7 @@ final class EconomyReconciliationDecisionTest {
   @Test
   void skipsWithdrawLargerThanCap() {
     // db must be > 0 here so we exercise the cap guard, not the zero-balance guard.
-    Decision decision = EconomyReconciliationService.decide(true, 10_000_000, 10_000_000, 1, CAP);
+    Decision decision = EconomyReconciliationService.decide(true, 10_000_000, 10_000_000, 1, CAP, false);
     assertEquals(Action.SKIP_CAP, decision.action());
     assertEquals(0, decision.vaultDeltaMinor());
     assertFalse(decision.baselineChanged());
@@ -115,7 +143,7 @@ final class EconomyReconciliationDecisionTest {
 
   @Test
   void coldStartSkipsOverCapDepositButRecordsBaseline() {
-    Decision decision = EconomyReconciliationService.decide(false, 0, 0, 10_000_000, CAP);
+    Decision decision = EconomyReconciliationService.decide(false, 0, 0, 10_000_000, CAP, false);
     assertEquals(Action.SKIP_CAP, decision.action());
     assertEquals(0, decision.vaultDeltaMinor());
     // Records baseline = local so subsequent runs are no longer treated as cold start.
@@ -125,7 +153,7 @@ final class EconomyReconciliationDecisionTest {
 
   @Test
   void exactlyAtCapIsAllowed() {
-    Decision decision = EconomyReconciliationService.decide(true, 0, 0, CAP, CAP);
+    Decision decision = EconomyReconciliationService.decide(true, 0, 0, CAP, CAP, false);
     assertEquals(Action.DEPOSIT, decision.action());
     assertEquals(CAP, decision.vaultDeltaMinor());
   }
@@ -134,7 +162,7 @@ final class EconomyReconciliationDecisionTest {
   void zeroOrMissingDbBalanceHoldsRatherThanWipeLocal() {
     // A missing economy_balances row reads as 0 (the RPC coalesces null -> 0). Even with a
     // baseline that would otherwise "prove" a withdraw safe, we must never wipe local to zero.
-    Decision decision = EconomyReconciliationService.decide(true, 5_000, 5_000, 0, CAP);
+    Decision decision = EconomyReconciliationService.decide(true, 5_000, 5_000, 0, CAP, false);
     assertEquals(Action.HOLD, decision.action());
     assertEquals(0, decision.vaultDeltaMinor());
     assertFalse(decision.baselineChanged());
@@ -142,7 +170,7 @@ final class EconomyReconciliationDecisionTest {
 
   @Test
   void zeroDbBalanceOnColdStartHolds() {
-    Decision decision = EconomyReconciliationService.decide(false, 0, 5_000, 0, CAP);
+    Decision decision = EconomyReconciliationService.decide(false, 0, 5_000, 0, CAP, false);
     assertEquals(Action.HOLD, decision.action());
     assertEquals(0, decision.vaultDeltaMinor());
     assertEquals(5_000, decision.newBaselineMinor());
@@ -150,12 +178,12 @@ final class EconomyReconciliationDecisionTest {
 
   @Test
   void dryRunNeverMutatesVaultOrAdvancesBaseline() {
-    Decision deposit = EconomyReconciliationService.decide(true, 1_000, 1_000, 1_500, CAP);
+    Decision deposit = EconomyReconciliationService.decide(true, 1_000, 1_000, 1_500, CAP, false);
     assertEquals(Action.DEPOSIT, deposit.action());
     assertFalse(EconomyReconciliationService.shouldMutateVault(deposit, true));
     assertFalse(EconomyReconciliationService.shouldPersistBaseline(deposit, true));
 
-    Decision withdraw = EconomyReconciliationService.decide(true, 1_000, 1_000, 700, CAP);
+    Decision withdraw = EconomyReconciliationService.decide(true, 1_000, 1_000, 700, CAP, false);
     assertEquals(Action.WITHDRAW, withdraw.action());
     assertFalse(EconomyReconciliationService.shouldMutateVault(withdraw, true));
     assertFalse(EconomyReconciliationService.shouldPersistBaseline(withdraw, true));
@@ -163,18 +191,18 @@ final class EconomyReconciliationDecisionTest {
 
   @Test
   void liveModeAppliesDepositAndAdvancesBaseline() {
-    Decision deposit = EconomyReconciliationService.decide(true, 1_000, 1_000, 1_500, CAP);
+    Decision deposit = EconomyReconciliationService.decide(true, 1_000, 1_000, 1_500, CAP, false);
     assertTrue(EconomyReconciliationService.shouldMutateVault(deposit, false));
     assertTrue(EconomyReconciliationService.shouldPersistBaseline(deposit, false));
   }
 
   @Test
   void holdAndSkipNeverMutateVaultEvenLive() {
-    Decision hold = EconomyReconciliationService.decide(true, 1_000, 1_050, 1_000, CAP);
+    Decision hold = EconomyReconciliationService.decide(true, 1_000, 1_050, 1_000, CAP, false);
     assertEquals(Action.HOLD, hold.action());
     assertFalse(EconomyReconciliationService.shouldMutateVault(hold, false));
 
-    Decision skip = EconomyReconciliationService.decide(true, 0, 0, 10_000_000, CAP);
+    Decision skip = EconomyReconciliationService.decide(true, 0, 0, 10_000_000, CAP, false);
     assertEquals(Action.SKIP_CAP, skip.action());
     assertFalse(EconomyReconciliationService.shouldMutateVault(skip, false));
     assertFalse(EconomyReconciliationService.shouldPersistBaseline(skip, false));
