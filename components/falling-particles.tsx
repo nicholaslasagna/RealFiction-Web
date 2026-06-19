@@ -2,6 +2,10 @@
 
 import { useEffect, useRef } from "react"
 
+// Stable default so it never changes identity across renders (an inline default
+// array would be a new ref each render, re-triggering the effect / re-seeding).
+const DEFAULT_COLORS = ["#ffffff"]
+
 type FallingParticlesProps = {
   /** Emoji/glyphs to draw. If omitted, soft circles are drawn (snow). */
   glyphs?: string[]
@@ -42,7 +46,7 @@ const EMOJI_FONT = '"Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", s
  */
 export function FallingParticles({
   glyphs,
-  colors = ["#ffffff"],
+  colors = DEFAULT_COLORS,
   count = 90,
   speedMin = 0.5,
   speedMax = 1.6,
