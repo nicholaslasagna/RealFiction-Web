@@ -3,6 +3,7 @@ package com.realfiction.realcore.scheduler;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicReference;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.Plugin;
@@ -68,11 +69,22 @@ final class PaperScheduler implements RealCoreScheduler {
 
   @Override
   public ScheduledTaskHandle runGlobalLater(Runnable task, long delayTicks) {
+    AtomicReference<BukkitTask> taskRef = new AtomicReference<>();
     BukkitTask bukkitTask = Bukkit.getScheduler().runTaskLater(
         plugin,
-        task,
+        () -> {
+          try {
+            task.run();
+          } finally {
+            BukkitTask completed = taskRef.get();
+            if (completed != null) {
+              tasks.remove(completed);
+            }
+          }
+        },
         Math.max(0L, delayTicks)
     );
+    taskRef.set(bukkitTask);
     tasks.add(bukkitTask);
     return () -> {
       bukkitTask.cancel();

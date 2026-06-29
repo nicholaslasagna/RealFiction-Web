@@ -5,6 +5,7 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.entity.Player;
@@ -71,11 +72,22 @@ final class FoliaScheduler implements RealCoreScheduler {
 
   @Override
   public ScheduledTaskHandle runGlobalLater(Runnable task, long delayTicks) {
+    AtomicReference<ScheduledTask> taskRef = new AtomicReference<>();
     ScheduledTask scheduledTask = Bukkit.getGlobalRegionScheduler().runDelayed(
         plugin,
-        ignored -> task.run(),
+        ignored -> {
+          try {
+            task.run();
+          } finally {
+            ScheduledTask completed = taskRef.get();
+            if (completed != null) {
+              tasks.remove(completed);
+            }
+          }
+        },
         Math.max(0L, delayTicks)
     );
+    taskRef.set(scheduledTask);
     tasks.add(scheduledTask);
     return () -> {
       scheduledTask.cancel();
@@ -97,12 +109,23 @@ final class FoliaScheduler implements RealCoreScheduler {
     if (location == null || location.getWorld() == null) {
       return runGlobalLater(task, delayTicks);
     }
+    AtomicReference<ScheduledTask> taskRef = new AtomicReference<>();
     ScheduledTask scheduledTask = Bukkit.getRegionScheduler().runDelayed(
         plugin,
         location,
-        ignored -> task.run(),
+        ignored -> {
+          try {
+            task.run();
+          } finally {
+            ScheduledTask completed = taskRef.get();
+            if (completed != null) {
+              tasks.remove(completed);
+            }
+          }
+        },
         Math.max(1L, delayTicks)
     );
+    taskRef.set(scheduledTask);
     tasks.add(scheduledTask);
     return () -> {
       scheduledTask.cancel();
