@@ -416,12 +416,15 @@ halloween:
     # Optional backend gates. Values can match server.id or server.group.
     servers:
       allowlist: []
-      denylist: []
+      denylist:
+        - lobby
+        - arcade
     worlds:
       allowlist: []
       denylist:
         - lobby
         - Void_Spawn
+        - Lobby_Games
     # 0.015 every 45s with cooldowns keeps sightings rare. Raise only for
     # short staging tests; in production, subtle sightings age better.
     chancePerCheck: 0.015

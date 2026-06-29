@@ -143,17 +143,23 @@ public final class HerobrineStalkerService {
 
   public String statusSummary() {
     HerobrineStalkerConfig stalker = config.halloween().herobrineStalker();
+    boolean enabled = config.halloween().enabled() && stalker.enabled();
+    boolean dateActive = calendarActive(LocalDate.now());
     String state;
-    if (!config.halloween().enabled() || !stalker.enabled()) {
+    if (!enabled) {
       state = "disabled";
     } else if (!stalker.serverAllowed(config.serverId(), config.serverGroup())) {
       state = "server blocked";
-    } else if (!calendarActive(LocalDate.now())) {
+    } else if (!dateActive) {
       state = "calendar idle";
     } else {
       state = running() ? (stalker.dryRun() ? "dry-run armed" : "armed") : "not running";
     }
-    return state + " (active=" + activeCount()
+    return state + " (enabled=" + enabled
+        + ", dateActive=" + dateActive
+        + ", window=" + stalker.dateWindow().summary()
+        + ", dryRunMode=" + stalker.dryRun()
+        + ", active=" + activeCount()
         + ", sightings=" + sightingCount()
         + ", dryRun=" + dryRunSightingCount()
         + ", vanished=" + vanishedCount()
@@ -221,7 +227,6 @@ public final class HerobrineStalkerService {
     if (!HerobrineStalkerRules.qualifies(conditions, stalker.requireNightRainMiningOrDarkness())) {
       skippedChecks.incrementAndGet();
       lastSkipReason = "no spooky condition";
-      debug("Herobrine skipped " + player.getName() + ": no spooky condition.");
       return;
     }
     double random = ThreadLocalRandom.current().nextDouble();
@@ -583,16 +588,29 @@ public final class HerobrineStalkerService {
     }
     away.normalize().multiply(0.85);
     Location next = current.clone().add(away);
-    if (isSafeStep(next.getWorld(), next.getBlockX(), next.getBlockY(), next.getBlockZ(),
-        new SpawnRequest(sighting.playerUuid(), sighting.playerName(), playerLocation, playerLocation, new SpookyConditions(true, false, false, false), Instant.now(), Duration.ZERO, List.of()))) {
-      stand.teleport(next);
-      stand.setRotation(yawToward(next, playerLocation), 0.0f);
-      sighting.updateLocation(next);
+    if (isSafeStep(next.getWorld(), next.getBlockX(), next.getBlockY(), next.getBlockZ())) {
+      stand.teleportAsync(next).thenAccept(success -> {
+        if (Boolean.TRUE.equals(success)) {
+          scheduler.runAt(next, () -> {
+            Entity moved = Bukkit.getEntity(sighting.entityUuid());
+            if (moved instanceof ArmorStand movedStand && movedStand.getScoreboardTags().contains(SCOREBOARD_TAG)) {
+              movedStand.setRotation(yawToward(next, playerLocation), 0.0f);
+              sighting.updateLocation(movedStand.getLocation());
+            }
+          });
+        }
+      });
     }
   }
 
-  private boolean isSafeStep(World world, int x, int y, int z, SpawnRequest request) {
-    return safeAt(world, x, y, z, request) != null;
+  private boolean isSafeStep(World world, int x, int y, int z) {
+    if (world == null || y <= world.getMinHeight() + 1 || y >= world.getMaxHeight() - 2) {
+      return false;
+    }
+    Block ground = world.getBlockAt(x, y - 1, z);
+    Block feet = world.getBlockAt(x, y, z);
+    Block head = world.getBlockAt(x, y + 1, z);
+    return solidGround(ground) && emptyForBody(feet) && emptyForBody(head);
   }
 
   private void vanish(HerobrineSighting sighting, boolean maybeSound, String reason) {

@@ -73,5 +73,8 @@ final class HerobrineStalkerConfigTest {
     assertTrue(config.halloween().herobrineStalker().enabled());
     assertEquals(24, config.halloween().herobrineStalker().minSpawnDistance());
     assertFalse(config.halloween().herobrineStalker().worldAllowed("Void_Spawn"));
+    assertFalse(config.halloween().herobrineStalker().worldAllowed("Lobby_Games"));
+    assertFalse(config.halloween().herobrineStalker().serverAllowed("lobby-1", "lobby"));
+    assertFalse(config.halloween().herobrineStalker().serverAllowed("arcade-1", "arcade"));
   }
 }
