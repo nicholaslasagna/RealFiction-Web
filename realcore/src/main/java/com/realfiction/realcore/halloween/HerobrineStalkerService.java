@@ -7,8 +7,10 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
@@ -16,7 +18,9 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.logging.Logger;
 import org.bukkit.Bukkit;
+import org.bukkit.Chunk;
 import org.bukkit.Color;
+import org.bukkit.GameMode;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
@@ -26,12 +30,15 @@ import org.bukkit.block.Block;
 import org.bukkit.entity.ArmorStand;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
+import org.bukkit.event.inventory.InventoryType;
 import org.bukkit.inventory.EntityEquipment;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.LeatherArmorMeta;
 import org.bukkit.inventory.meta.SkullMeta;
+import org.bukkit.metadata.MetadataValue;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.Plugin;
+import org.bukkit.potion.PotionEffectType;
 import org.bukkit.util.Vector;
 
 public final class HerobrineStalkerService {
@@ -46,18 +53,24 @@ public final class HerobrineStalkerService {
   private final RealCoreScheduler scheduler;
   private final Logger logger;
   private final NamespacedKey markerKey;
+  private final NamespacedKey sightingKey;
   private final Map<UUID, HerobrineSighting> activeSightings = new ConcurrentHashMap<>();
   private final Map<UUID, Instant> playerCooldowns = new ConcurrentHashMap<>();
+  private final Map<UUID, Instant> playerSuppressedUntil = new ConcurrentHashMap<>();
+  private final Map<UUID, AtomicLong> playerSoundCooldowns = new ConcurrentHashMap<>();
   private final AtomicReference<Instant> globalCooldown = new AtomicReference<>();
   private final AtomicLong sightings = new AtomicLong();
   private final AtomicLong dryRunSightings = new AtomicLong();
   private final AtomicLong failedSpawns = new AtomicLong();
   private final AtomicLong skippedChecks = new AtomicLong();
   private final AtomicLong vanished = new AtomicLong();
+  private final AtomicLong staleCleaned = new AtomicLong();
+  private final AtomicLong lifecycleGeneration = new AtomicLong();
 
   private volatile RealCoreConfig config;
   private volatile ScheduledTaskHandle checkTask;
   private volatile ScheduledTaskHandle monitorTask;
+  private volatile boolean acceptingSightings;
   private volatile String lastSkipReason = "";
   private volatile String lastFailure = "";
 
@@ -67,11 +80,16 @@ public final class HerobrineStalkerService {
     this.scheduler = scheduler;
     this.logger = logger;
     this.markerKey = new NamespacedKey(plugin, "herobrine_stalker");
+    this.sightingKey = new NamespacedKey(plugin, "herobrine_stalker_sighting");
   }
 
   public void start() {
+    lifecycleGeneration.incrementAndGet();
+    acceptingSightings = false;
     stopTasksOnly();
+    cleanupActiveSightings();
     HerobrineStalkerConfig stalker = config.halloween().herobrineStalker();
+    scheduler.runGlobal(() -> cleanupNearbyLoadedStaleSightings(stalker));
     if (!config.halloween().enabled() || !stalker.enabled()) {
       lastSkipReason = "disabled by config";
       return;
@@ -82,6 +100,7 @@ public final class HerobrineStalkerService {
       return;
     }
     long interval = Math.max(5L, stalker.checkInterval().toSeconds());
+    acceptingSightings = true;
     checkTask = scheduler.runGlobalRepeating(this::checkOnlinePlayers, secondsToTicks(interval), secondsToTicks(interval));
     monitorTask = scheduler.runGlobalRepeating(this::monitorSightings, MONITOR_PERIOD_TICKS, MONITOR_PERIOD_TICKS);
     lastSkipReason = "";
@@ -95,6 +114,8 @@ public final class HerobrineStalkerService {
   }
 
   public void stop() {
+    lifecycleGeneration.incrementAndGet();
+    acceptingSightings = false;
     stopTasksOnly();
     cleanupActiveSightings();
     playerCooldowns.clear();
@@ -129,6 +150,10 @@ public final class HerobrineStalkerService {
     return vanished.get();
   }
 
+  public long staleCleanedCount() {
+    return staleCleaned.get();
+  }
+
   public String lastSkipReason() {
     return lastSkipReason;
   }
@@ -160,11 +185,15 @@ public final class HerobrineStalkerService {
         + ", window=" + stalker.dateWindow().summary()
         + ", dryRunMode=" + stalker.dryRun()
         + ", active=" + activeCount()
+        + "/" + stalker.maxActiveSightings()
         + ", sightings=" + sightingCount()
         + ", dryRun=" + dryRunSightingCount()
         + ", vanished=" + vanishedCount()
+        + ", staleCleaned=" + staleCleanedCount()
         + ", failed=" + failedSpawnCount()
-        + ", skipped=" + skippedCheckCount() + ")";
+        + ", skipped=" + skippedCheckCount()
+        + ", lastSkip=" + blankToNone(lastSkipReason)
+        + ", lastFailure=" + blankToNone(lastFailure) + ")";
   }
 
   private void stopTasksOnly() {
@@ -180,15 +209,25 @@ public final class HerobrineStalkerService {
 
   private void checkOnlinePlayers() {
     RealCoreConfig current = config;
+    if (!acceptingSightings) {
+      return;
+    }
     HerobrineStalkerConfig stalker = current.halloween().herobrineStalker();
     LocalDate today = LocalDate.now();
     if (!current.halloween().stalkerCalendarActive(today)) {
       lastSkipReason = "outside date window";
       return;
     }
+    Instant now = Instant.now();
+    playerSuppressedUntil.entrySet().removeIf(entry -> !now.isBefore(entry.getValue()));
     List<Player> players = new ArrayList<>(Bukkit.getOnlinePlayers());
     if (players.isEmpty()) {
       lastSkipReason = "no players online";
+      return;
+    }
+    if (!HerobrineStalkerRules.activeBelowLimit(activeSightings.size(), stalker.maxActiveSightings())) {
+      skippedChecks.incrementAndGet();
+      lastSkipReason = "max active sightings";
       return;
     }
     for (Player player : players) {
@@ -197,14 +236,26 @@ public final class HerobrineStalkerService {
   }
 
   private void evaluatePlayer(Player player, RealCoreConfig current, HerobrineStalkerConfig stalker, Instant now) {
+    if (!acceptingSightings) {
+      return;
+    }
     if (player == null || !player.isOnline() || player.isDead()) {
       skippedChecks.incrementAndGet();
+      return;
+    }
+    if (!HerobrineStalkerRules.activeBelowLimit(activeSightings.size(), stalker.maxActiveSightings())) {
+      skippedChecks.incrementAndGet();
+      lastSkipReason = "max active sightings";
       return;
     }
     World world = player.getWorld();
     if (world == null || !current.halloween().stalkerAllowedOn(current.serverId(), current.serverGroup(), world.getName())) {
       skippedChecks.incrementAndGet();
       lastSkipReason = "world/server blocked";
+      return;
+    }
+    if (shouldSkipPlayerState(player, now)) {
+      skippedChecks.incrementAndGet();
       return;
     }
     UUID playerUuid = player.getUniqueId();
@@ -244,6 +295,7 @@ public final class HerobrineStalkerService {
         eyeLocation,
         conditions,
         now,
+        lifecycleGeneration.get(),
         randomLinger(stalker),
         buildCandidates(playerLocation, stalker)
     );
@@ -300,6 +352,9 @@ public final class HerobrineStalkerService {
   }
 
   private void trySpawnCandidate(SpawnRequest request, int index) {
+    if (!requestActive(request)) {
+      return;
+    }
     if (index >= request.candidates().size()) {
       failedSpawns.incrementAndGet();
       lastFailure = "no safe spawn found";
@@ -308,6 +363,9 @@ public final class HerobrineStalkerService {
     }
     Location candidate = request.candidates().get(index);
     scheduler.runAt(candidate, () -> {
+      if (!requestActive(request)) {
+        return;
+      }
       Location safe = findSafeSpawnLocation(candidate, request);
       if (safe == null) {
         trySpawnCandidate(request, index + 1);
@@ -378,10 +436,18 @@ public final class HerobrineStalkerService {
         || distanceSq > (stalker.maxSpawnDistance() + 8.0) * (stalker.maxSpawnDistance() + 8.0)) {
       return null;
     }
+    if (tooCloseToWorldSpawn(world, spawn, stalker.minDistanceFromWorldSpawn())) {
+      return null;
+    }
     Block ground = world.getBlockAt(x, y - 1, z);
     Block feet = world.getBlockAt(x, y, z);
     Block head = world.getBlockAt(x, y + 1, z);
     if (!solidGround(ground) || !emptyForBody(feet) || !emptyForBody(head)) {
+      return null;
+    }
+    // TODO: integrate WorldGuard/claim APIs if RealCore adopts one. Until then,
+    // this small bounded scan avoids obvious bases/portals without hard dependencies.
+    if (nearPlayerBaseOrPortalBlock(world, x, y, z, stalker.avoidPlayerBaseBlocksRadius())) {
       return null;
     }
     return spawn;
@@ -399,28 +465,49 @@ public final class HerobrineStalkerService {
 
   private boolean dangerous(Material type) {
     return switch (type) {
-      case LAVA, FIRE, SOUL_FIRE, CACTUS, MAGMA_BLOCK, CAMPFIRE, SOUL_CAMPFIRE, POWDER_SNOW -> true;
+      case LAVA, FIRE, SOUL_FIRE, CACTUS, MAGMA_BLOCK, CAMPFIRE, SOUL_CAMPFIRE, POWDER_SNOW,
+          NETHER_PORTAL, END_PORTAL -> true;
       default -> false;
     };
   }
 
   private void spawnOrDryRun(SpawnRequest request, Location safe) {
     HerobrineStalkerConfig stalker = config.halloween().herobrineStalker();
+    if (!requestActive(request)) {
+      return;
+    }
     if (activeSightings.containsKey(request.playerUuid())) {
+      return;
+    }
+    if (!HerobrineStalkerRules.activeBelowLimit(activeSightings.size(), stalker.maxActiveSightings())) {
+      skippedChecks.incrementAndGet();
+      lastSkipReason = "max active sightings";
+      return;
+    }
+    Instant now = Instant.now();
+    if (suppressed(request.playerUuid(), now)) {
+      skippedChecks.incrementAndGet();
+      lastSkipReason = "recent player state change";
+      return;
+    }
+    if (!HerobrineStalkerRules.cooldownElapsed(now, globalCooldown.get(), stalker.globalCooldown())) {
+      skippedChecks.incrementAndGet();
+      lastSkipReason = "global cooldown";
       return;
     }
     if (stalker.dryRun()) {
       dryRunSightings.incrementAndGet();
-      recordCooldowns(request.playerUuid(), request.createdAt());
+      recordCooldowns(request.playerUuid(), now);
       debug("Dry-run Herobrine sighting for " + request.playerName()
           + " at " + formatLocation(safe)
           + " conditions=" + request.conditions().summary() + ".");
       return;
     }
 
-    ArmorStand stand = safe.getWorld().spawn(safe, ArmorStand.class, entity -> configureStand(entity, request, safe));
+    UUID sightingId = UUID.randomUUID();
+    ArmorStand stand = safe.getWorld().spawn(safe, ArmorStand.class, entity -> configureStand(entity, request, safe, sightingId));
     HerobrineSighting sighting = new HerobrineSighting(
-        UUID.randomUUID(),
+        sightingId,
         request.playerUuid(),
         request.playerName(),
         stand.getUniqueId(),
@@ -430,7 +517,7 @@ public final class HerobrineStalkerService {
     );
     activeSightings.put(request.playerUuid(), sighting);
     sightings.incrementAndGet();
-    recordCooldowns(request.playerUuid(), request.createdAt());
+    recordCooldowns(request.playerUuid(), now);
     lastFailure = "";
     debug("Spawned Herobrine sighting " + sighting.sightingId() + " for " + request.playerName()
         + " at " + formatLocation(safe)
@@ -439,9 +526,10 @@ public final class HerobrineStalkerService {
     maybePlaySound(request.playerUuid(), stalker.caveSoundChanceOnSpawn());
   }
 
-  private void configureStand(ArmorStand stand, SpawnRequest request, Location safe) {
+  private void configureStand(ArmorStand stand, SpawnRequest request, Location safe, UUID sightingId) {
     stand.addScoreboardTag(SCOREBOARD_TAG);
     stand.getPersistentDataContainer().set(markerKey, PersistentDataType.STRING, request.playerUuid().toString());
+    stand.getPersistentDataContainer().set(sightingKey, PersistentDataType.STRING, sightingId.toString());
     stand.setPersistent(false);
     stand.setRemoveWhenFarAway(true);
     stand.setCustomName(null);
@@ -466,6 +554,48 @@ public final class HerobrineStalkerService {
       equipment.setChestplateDropChance(0.0f);
       equipment.setLeggingsDropChance(0.0f);
       equipment.setBootsDropChance(0.0f);
+    }
+  }
+
+  public void suppressPlayer(Player player, String reason) {
+    if (player == null) {
+      return;
+    }
+    HerobrineStalkerConfig stalker = config.halloween().herobrineStalker();
+    Duration grace = stalker.playerStateGrace();
+    if (!grace.isZero() && !grace.isNegative()) {
+      playerSuppressedUntil.put(player.getUniqueId(), Instant.now().plus(grace));
+    }
+    lastSkipReason = reason == null || reason.isBlank() ? "player state changed" : reason;
+    vanishForPlayer(player.getUniqueId(), lastSkipReason);
+  }
+
+  public void vanishForPlayer(UUID playerUuid, String reason) {
+    if (playerUuid == null) {
+      return;
+    }
+    HerobrineSighting sighting = activeSightings.get(playerUuid);
+    if (sighting != null) {
+      vanish(sighting, false, reason == null ? "player state changed" : reason);
+    }
+  }
+
+  public void cleanupChunk(Chunk chunk, String reason) {
+    if (chunk == null) {
+      return;
+    }
+    Set<UUID> removedEntities = new HashSet<>();
+    for (Entity entity : chunk.getEntities()) {
+      if (isRealCoreHerobrineEntity(entity)) {
+        removedEntities.add(entity.getUniqueId());
+        entity.remove();
+        staleCleaned.incrementAndGet();
+      }
+    }
+    if (!removedEntities.isEmpty()) {
+      activeSightings.entrySet().removeIf(entry -> removedEntities.contains(entry.getValue().entityUuid()));
+      debug("Cleaned " + removedEntities.size() + " stale Herobrine entities in chunk " + chunk.getWorld().getName()
+          + " " + chunk.getX() + "," + chunk.getZ() + " (" + reason + ").");
     }
   }
 
@@ -578,6 +708,17 @@ public final class HerobrineStalkerService {
     if (current == null || current.getWorld() == null) {
       return;
     }
+    scheduler.runAt(current, () -> stepBackwardAtCurrentLocation(sighting, playerLocation));
+  }
+
+  private void stepBackwardAtCurrentLocation(HerobrineSighting sighting, Location playerLocation) {
+    if (activeSightings.get(sighting.playerUuid()) != sighting) {
+      return;
+    }
+    Location current = sighting.location();
+    if (current == null || current.getWorld() == null) {
+      return;
+    }
     Entity entity = Bukkit.getEntity(sighting.entityUuid());
     if (!(entity instanceof ArmorStand stand) || !stand.getScoreboardTags().contains(SCOREBOARD_TAG)) {
       return;
@@ -592,6 +733,9 @@ public final class HerobrineStalkerService {
       stand.teleportAsync(next).thenAccept(success -> {
         if (Boolean.TRUE.equals(success)) {
           scheduler.runAt(next, () -> {
+            if (activeSightings.get(sighting.playerUuid()) != sighting) {
+              return;
+            }
             Entity moved = Bukkit.getEntity(sighting.entityUuid());
             if (moved instanceof ArmorStand movedStand && movedStand.getScoreboardTags().contains(SCOREBOARD_TAG)) {
               movedStand.setRotation(yawToward(next, playerLocation), 0.0f);
@@ -644,6 +788,166 @@ public final class HerobrineStalkerService {
         scheduler.runAt(location, () -> removeEntity(sighting.entityUuid()));
       }
     }
+    playerSuppressedUntil.clear();
+    playerSoundCooldowns.clear();
+  }
+
+  private boolean shouldSkipPlayerState(Player player, Instant now) {
+    if (player.getGameMode() == GameMode.CREATIVE || player.getGameMode() == GameMode.SPECTATOR) {
+      lastSkipReason = "creative/spectator player";
+      return true;
+    }
+    if (suppressed(player.getUniqueId(), now)) {
+      lastSkipReason = "recent player state change";
+      return true;
+    }
+    if (metadataTrue(player, "vanished") || metadataTrue(player, "vanish")) {
+      lastSkipReason = "vanished player";
+      return true;
+    }
+    if (metadataTrue(player, "afk") || metadataTrue(player, "essentials_afk") || metadataTrue(player, "Essentials_afk")) {
+      lastSkipReason = "afk player";
+      return true;
+    }
+    if (player.hasPotionEffect(PotionEffectType.INVISIBILITY)) {
+      lastSkipReason = "invisible player";
+      return true;
+    }
+    if (guiOpen(player)) {
+      lastSkipReason = "player menu open";
+      return true;
+    }
+    return false;
+  }
+
+  private boolean suppressed(UUID playerUuid, Instant now) {
+    Instant until = playerSuppressedUntil.get(playerUuid);
+    if (until == null) {
+      return false;
+    }
+    if (!now.isBefore(until)) {
+      playerSuppressedUntil.remove(playerUuid, until);
+      return false;
+    }
+    return true;
+  }
+
+  private boolean metadataTrue(Player player, String key) {
+    if (!player.hasMetadata(key)) {
+      return false;
+    }
+    for (MetadataValue value : player.getMetadata(key)) {
+      if (value.asBoolean()) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  private boolean guiOpen(Player player) {
+    return player.getOpenInventory() != null
+        && player.getOpenInventory().getType() != InventoryType.CRAFTING
+        && player.getOpenInventory().getTopInventory().getType() != InventoryType.CRAFTING;
+  }
+
+  private boolean tooCloseToWorldSpawn(World world, Location spawn, int minDistance) {
+    if (minDistance <= 0) {
+      return false;
+    }
+    Location worldSpawn = world.getSpawnLocation();
+    if (!worldSpawn.getWorld().equals(spawn.getWorld())) {
+      return false;
+    }
+    return worldSpawn.distanceSquared(spawn) < (double) minDistance * minDistance;
+  }
+
+  private boolean nearPlayerBaseOrPortalBlock(World world, int x, int y, int z, int radius) {
+    if (radius <= 0) {
+      return false;
+    }
+    int startY = Math.max(world.getMinHeight(), y - 1);
+    int endY = Math.min(world.getMaxHeight() - 1, y + 2);
+    for (int dx = -radius; dx <= radius; dx++) {
+      for (int dz = -radius; dz <= radius; dz++) {
+        for (int scanY = startY; scanY <= endY; scanY++) {
+          Material type = world.getBlockAt(x + dx, scanY, z + dz).getType();
+          if (protectedOrBaseBlock(type)) {
+            return true;
+          }
+        }
+      }
+    }
+    return false;
+  }
+
+  private boolean protectedOrBaseBlock(Material type) {
+    return switch (type) {
+      case CHEST, TRAPPED_CHEST, BARREL, FURNACE, BLAST_FURNACE, SMOKER,
+          CRAFTING_TABLE, ENCHANTING_TABLE, ANVIL, CHIPPED_ANVIL, DAMAGED_ANVIL,
+          BEDROCK, RESPAWN_ANCHOR, END_PORTAL_FRAME, NETHER_PORTAL, END_PORTAL,
+          BEACON, HOPPER, DROPPER, DISPENSER -> true;
+      default -> type.name().endsWith("_BED") || type.name().endsWith("_DOOR");
+    };
+  }
+
+  private void cleanupNearbyLoadedStaleSightings(HerobrineStalkerConfig stalker) {
+    if (!stalker.cleanupStaleSightings() || stalker.startupCleanupMaxChunks() <= 0) {
+      return;
+    }
+    Set<String> scheduled = ConcurrentHashMap.newKeySet();
+    AtomicLong scheduledChunks = new AtomicLong();
+    for (Player player : Bukkit.getOnlinePlayers()) {
+      scheduler.runForPlayer(player, () -> scheduleLoadedChunkCleanupNear(player, stalker, scheduled, scheduledChunks));
+    }
+  }
+
+  private void scheduleLoadedChunkCleanupNear(
+      Player player,
+      HerobrineStalkerConfig stalker,
+      Set<String> scheduled,
+      AtomicLong scheduledChunks
+  ) {
+    if (player == null || !player.isOnline() || player.getWorld() == null) {
+      return;
+    }
+    World world = player.getWorld();
+    int radius = stalker.startupCleanupLoadedChunkRadius();
+    int centerX = player.getLocation().getBlockX() >> 4;
+    int centerZ = player.getLocation().getBlockZ() >> 4;
+    for (int dx = -radius; dx <= radius; dx++) {
+      for (int dz = -radius; dz <= radius; dz++) {
+        if (scheduledChunks.get() >= stalker.startupCleanupMaxChunks()) {
+          return;
+        }
+        int chunkX = centerX + dx;
+        int chunkZ = centerZ + dz;
+        String key = world.getUID() + ":" + chunkX + ":" + chunkZ;
+        if (!scheduled.add(key)) {
+          continue;
+        }
+        scheduledChunks.incrementAndGet();
+        Location center = new Location(world, (chunkX << 4) + 8.0, player.getLocation().getY(), (chunkZ << 4) + 8.0);
+        scheduler.runAt(center, () -> cleanupLoadedChunk(world, chunkX, chunkZ, "startup"));
+      }
+    }
+  }
+
+  private void cleanupLoadedChunk(World world, int chunkX, int chunkZ, String reason) {
+    if (world == null || !world.isChunkLoaded(chunkX, chunkZ)) {
+      return;
+    }
+    cleanupChunk(world.getChunkAt(chunkX, chunkZ), reason);
+  }
+
+  private boolean requestActive(SpawnRequest request) {
+    return acceptingSightings && request.generation() == lifecycleGeneration.get();
+  }
+
+  private boolean isRealCoreHerobrineEntity(Entity entity) {
+    return entity != null
+        && entity.getScoreboardTags().contains(SCOREBOARD_TAG)
+        && (entity.getPersistentDataContainer().has(markerKey, PersistentDataType.STRING)
+            || entity.getPersistentDataContainer().has(sightingKey, PersistentDataType.STRING));
   }
 
   private void maybePlaySound(UUID playerUuid, double chance) {
@@ -660,6 +964,15 @@ public final class HerobrineStalkerService {
 
   private void playCaveSound(Player player) {
     if (player == null || !player.isOnline()) {
+      return;
+    }
+    long nowMillis = System.currentTimeMillis();
+    AtomicLong cooldown = playerSoundCooldowns.computeIfAbsent(player.getUniqueId(), ignored -> new AtomicLong());
+    long last = cooldown.get();
+    if (last > 0 && nowMillis - last < SOUND_COOLDOWN_MILLIS) {
+      return;
+    }
+    if (!cooldown.compareAndSet(last, nowMillis)) {
       return;
     }
     player.playSound(player.getLocation(), Sound.AMBIENT_CAVE, 0.35f, 0.72f);
@@ -683,6 +996,10 @@ public final class HerobrineStalkerService {
         + location.getBlockX() + "," + location.getBlockY() + "," + location.getBlockZ();
   }
 
+  private String blankToNone(String value) {
+    return value == null || value.isBlank() ? "none" : value;
+  }
+
   private record SpawnRequest(
       UUID playerUuid,
       String playerName,
@@ -690,6 +1007,7 @@ public final class HerobrineStalkerService {
       Location eyeLocation,
       SpookyConditions conditions,
       Instant createdAt,
+      long generation,
       Duration linger,
       List<Location> candidates
   ) {

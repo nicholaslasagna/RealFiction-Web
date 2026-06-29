@@ -42,4 +42,12 @@ final class HerobrineStalkerRulesTest {
     assertFalse(HerobrineStalkerRules.shouldAttempt(0.02, 0.015));
     assertFalse(HerobrineStalkerRules.shouldAttempt(0.0, 0.0));
   }
+
+  @Test
+  void activeCapPreventsMassSightings() {
+    assertTrue(HerobrineStalkerRules.activeBelowLimit(0, 2));
+    assertTrue(HerobrineStalkerRules.activeBelowLimit(1, 2));
+    assertFalse(HerobrineStalkerRules.activeBelowLimit(2, 2));
+    assertFalse(HerobrineStalkerRules.activeBelowLimit(1, 0));
+  }
 }

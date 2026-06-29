@@ -1,6 +1,7 @@
 package com.realfiction.realcore.halloween;
 
 import java.time.Duration;
+import java.time.Month;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
@@ -19,8 +20,15 @@ public record HerobrineStalkerConfig(
     Duration checkInterval,
     Duration perPlayerCooldown,
     Duration globalCooldown,
+    int maxActiveSightings,
     int minSpawnDistance,
     int maxSpawnDistance,
+    int minDistanceFromWorldSpawn,
+    int avoidPlayerBaseBlocksRadius,
+    Duration playerStateGrace,
+    boolean cleanupStaleSightings,
+    int startupCleanupLoadedChunkRadius,
+    int startupCleanupMaxChunks,
     Duration minLinger,
     Duration maxLinger,
     boolean vanishWhenSeen,
@@ -36,11 +44,13 @@ public record HerobrineStalkerConfig(
       return defaults();
     }
     ConfigurationSection date = section.getConfigurationSection("dateWindow");
+    int startMonth = clampMonth(date == null ? 10 : date.getInt("startMonth", 10));
+    int endMonth = clampMonth(date == null ? 11 : date.getInt("endMonth", 11));
     HalloweenEventWindow window = new HalloweenEventWindow(
-        clampMonth(date == null ? 10 : date.getInt("startMonth", 10)),
-        clampDay(date == null ? 15 : date.getInt("startDay", 15)),
-        clampMonth(date == null ? 11 : date.getInt("endMonth", 11)),
-        clampDay(date == null ? 1 : date.getInt("endDay", 1))
+        startMonth,
+        clampDayForMonth(startMonth, date == null ? 15 : date.getInt("startDay", 15)),
+        endMonth,
+        clampDayForMonth(endMonth, date == null ? 1 : date.getInt("endDay", 1))
     );
     int minDistance = Math.max(8, section.getInt("minSpawnDistance", 24));
     int maxDistance = Math.max(minDistance, section.getInt("maxSpawnDistance", 48));
@@ -58,8 +68,15 @@ public record HerobrineStalkerConfig(
         Duration.ofSeconds(Math.max(5L, section.getLong("checkIntervalSeconds", 45))),
         Duration.ofSeconds(Math.max(1L, section.getLong("perPlayerCooldownSeconds", 600))),
         Duration.ofSeconds(Math.max(1L, section.getLong("globalCooldownSeconds", 45))),
+        Math.max(1, section.getInt("maxActiveSightings", 2)),
         minDistance,
         maxDistance,
+        Math.max(0, section.getInt("minDistanceFromWorldSpawn", 64)),
+        Math.max(0, Math.min(6, section.getInt("avoidPlayerBaseBlocksRadius", 3))),
+        Duration.ofSeconds(Math.max(0L, section.getLong("playerStateGraceSeconds", 12))),
+        section.getBoolean("cleanupStaleSightings", true),
+        Math.max(0, Math.min(4, section.getInt("startupCleanupLoadedChunkRadius", 2))),
+        Math.max(0, Math.min(256, section.getInt("startupCleanupMaxChunks", 64))),
         Duration.ofSeconds(minLinger),
         Duration.ofSeconds(maxLinger),
         section.getBoolean("vanishWhenSeen", true),
@@ -80,13 +97,20 @@ public record HerobrineStalkerConfig(
         Set.of(),
         Set.of("lobby", "void_spawn", "lobby_games"),
         Set.of(),
-        Set.of("lobby", "arcade"),
+        Set.of("lobby", "arcade", "anarchy"),
         0.015,
         Duration.ofSeconds(45),
         Duration.ofSeconds(600),
         Duration.ofSeconds(45),
+        2,
         24,
         48,
+        64,
+        3,
+        Duration.ofSeconds(12),
+        true,
+        2,
+        64,
         Duration.ofSeconds(5),
         Duration.ofSeconds(12),
         true,
@@ -113,6 +137,9 @@ public record HerobrineStalkerConfig(
   public boolean serverAllowed(String serverId, String serverGroup) {
     String id = normalize(serverId);
     String group = normalize(serverGroup);
+    if ("anarchy".equals(id) || "anarchy".equals(group) || id.startsWith("anarchy-")) {
+      return false;
+    }
     if (serverDenylist.contains(id) || serverDenylist.contains(group)) {
       return false;
     }
@@ -151,5 +178,9 @@ public record HerobrineStalkerConfig(
 
   private static int clampDay(int day) {
     return Math.max(1, Math.min(31, day));
+  }
+
+  private static int clampDayForMonth(int month, int day) {
+    return Math.min(clampDay(day), Month.of(month).maxLength());
   }
 }

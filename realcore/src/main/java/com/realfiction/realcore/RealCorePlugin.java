@@ -127,7 +127,7 @@ public final class RealCorePlugin extends JavaPlugin {
     getServer().getPluginManager().registerEvents(new EconomyReconciliationListener(this), this);
     // Always registered; late-binds the economy provider (shadow/preload) and no-ops while disabled.
     getServer().getPluginManager().registerEvents(new EconomyProviderListener(this), this);
-    getServer().getPluginManager().registerEvents(new HerobrineStalkerListener(), this);
+    getServer().getPluginManager().registerEvents(new HerobrineStalkerListener(this::herobrineStalkerService), this);
     setupPlaceholders();
 
     RealFictionCommand commandExecutor = new RealFictionCommand(this);
@@ -721,6 +721,13 @@ public final class RealCorePlugin extends JavaPlugin {
         || !getConfig().isConfigurationSection("halloween.herobrineStalker")
         || !getConfig().contains("halloween.herobrineStalker.servers.allowlist")
         || !getConfig().contains("halloween.herobrineStalker.servers.denylist")
+        || !getConfig().contains("halloween.herobrineStalker.maxActiveSightings")
+        || !getConfig().contains("halloween.herobrineStalker.minDistanceFromWorldSpawn")
+        || !getConfig().contains("halloween.herobrineStalker.avoidPlayerBaseBlocksRadius")
+        || !getConfig().contains("halloween.herobrineStalker.playerStateGraceSeconds")
+        || !getConfig().contains("halloween.herobrineStalker.cleanupStaleSightings")
+        || !getConfig().contains("halloween.herobrineStalker.startupCleanupLoadedChunkRadius")
+        || !getConfig().contains("halloween.herobrineStalker.startupCleanupMaxChunks")
         || !getConfig().contains("economy.dbBalanceReadEnabled")
         || !getConfig().contains("economy.dbBalanceReadBackendAllowlist")
         || !getConfig().contains("economy.dbBalanceReadCacheSeconds")
