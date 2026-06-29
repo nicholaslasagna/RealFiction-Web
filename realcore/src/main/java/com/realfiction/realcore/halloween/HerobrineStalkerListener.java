@@ -111,12 +111,6 @@ public final class HerobrineStalkerListener implements Listener {
     HerobrineStalkerService service = service();
     if (service != null) {
       service.cleanupChunk(event.getChunk(), "chunk load");
-      return;
-    }
-    for (Entity entity : event.getChunk().getEntities()) {
-      if (isHerobrine(entity)) {
-        entity.remove();
-      }
     }
   }
 

@@ -1,6 +1,7 @@
 package com.realfiction.realcore.halloween;
 
 import java.time.Duration;
+import java.time.Month;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
@@ -43,11 +44,13 @@ public record HerobrineStalkerConfig(
       return defaults();
     }
     ConfigurationSection date = section.getConfigurationSection("dateWindow");
+    int startMonth = clampMonth(date == null ? 10 : date.getInt("startMonth", 10));
+    int endMonth = clampMonth(date == null ? 11 : date.getInt("endMonth", 11));
     HalloweenEventWindow window = new HalloweenEventWindow(
-        clampMonth(date == null ? 10 : date.getInt("startMonth", 10)),
-        clampDay(date == null ? 15 : date.getInt("startDay", 15)),
-        clampMonth(date == null ? 11 : date.getInt("endMonth", 11)),
-        clampDay(date == null ? 1 : date.getInt("endDay", 1))
+        startMonth,
+        clampDayForMonth(startMonth, date == null ? 15 : date.getInt("startDay", 15)),
+        endMonth,
+        clampDayForMonth(endMonth, date == null ? 1 : date.getInt("endDay", 1))
     );
     int minDistance = Math.max(8, section.getInt("minSpawnDistance", 24));
     int maxDistance = Math.max(minDistance, section.getInt("maxSpawnDistance", 48));
@@ -134,6 +137,9 @@ public record HerobrineStalkerConfig(
   public boolean serverAllowed(String serverId, String serverGroup) {
     String id = normalize(serverId);
     String group = normalize(serverGroup);
+    if ("anarchy".equals(id) || "anarchy".equals(group) || id.startsWith("anarchy-")) {
+      return false;
+    }
     if (serverDenylist.contains(id) || serverDenylist.contains(group)) {
       return false;
     }
@@ -172,5 +178,9 @@ public record HerobrineStalkerConfig(
 
   private static int clampDay(int day) {
     return Math.max(1, Math.min(31, day));
+  }
+
+  private static int clampDayForMonth(int month, int day) {
+    return Math.min(clampDay(day), Month.of(month).maxLength());
   }
 }

@@ -61,6 +61,7 @@ final class HerobrineStalkerConfigTest {
     assertTrue(stalker.cleanupStaleSightings());
     assertTrue(stalker.serverAllowed("smp-1", "smp"));
     assertFalse(stalker.serverAllowed("anarchy-1", "anarchy"));
+    assertFalse(stalker.serverAllowed("survival-1", "anarchy"));
     assertTrue(stalker.worldAllowed("world"));
     assertFalse(stalker.worldAllowed("Void_Spawn"));
   }
@@ -87,5 +88,40 @@ final class HerobrineStalkerConfigTest {
     assertEquals(3, config.halloween().herobrineStalker().avoidPlayerBaseBlocksRadius());
     assertEquals(12, config.halloween().herobrineStalker().playerStateGrace().toSeconds());
     assertTrue(config.halloween().herobrineStalker().cleanupStaleSightings());
+  }
+
+  @Test
+  void invalidDateValuesClampSafely() throws InvalidConfigurationException {
+    YamlConfiguration yaml = new YamlConfiguration();
+    yaml.loadFromString("""
+        halloween:
+          herobrineStalker:
+            dateWindow:
+              startMonth: 2
+              startDay: 31
+              endMonth: 99
+              endDay: 99
+        """);
+
+    HerobrineStalkerConfig stalker = HalloweenConfig.from(yaml.getConfigurationSection("halloween")).herobrineStalker();
+
+    assertEquals("2/29-12/31", stalker.dateWindow().summary());
+  }
+
+  @Test
+  void anarchyIsBlockedEvenIfAllowlisted() throws InvalidConfigurationException {
+    YamlConfiguration yaml = new YamlConfiguration();
+    yaml.loadFromString("""
+        halloween:
+          herobrineStalker:
+            servers:
+              allowlist:
+                - anarchy
+                - anarchy-1
+        """);
+
+    HerobrineStalkerConfig stalker = HalloweenConfig.from(yaml.getConfigurationSection("halloween")).herobrineStalker();
+
+    assertFalse(stalker.serverAllowed("anarchy-1", "anarchy"));
   }
 }
