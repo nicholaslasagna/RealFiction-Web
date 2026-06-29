@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import com.realfiction.realcore.halloween.HalloweenConfig;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
 
@@ -35,7 +36,8 @@ public record RealCoreConfig(
     boolean refuseOnDuplicateServerId,
     ServerModules modules,
     Set<String> skipUsernames,
-    EconomyConfig economy
+    EconomyConfig economy,
+    HalloweenConfig halloween
 ) {
   public static RealCoreConfig from(FileConfiguration config) {
     URI baseUrl = URI.create(trimTrailingSlash(config.getString("baseUrl", "https://realfiction.live")));
@@ -101,7 +103,8 @@ public record RealCoreConfig(
         refuseOnDuplicateServerId,
         modules,
         Set.copyOf(skipUsernames),
-        EconomyConfig.from(config.getConfigurationSection("economy"))
+        EconomyConfig.from(config.getConfigurationSection("economy")),
+        HalloweenConfig.from(config.getConfigurationSection("halloween"))
     );
   }
 

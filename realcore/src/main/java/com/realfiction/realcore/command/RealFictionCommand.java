@@ -39,6 +39,7 @@ import com.realfiction.realcore.economy.VaultBalanceSyncService;
 import com.realfiction.realcore.economy.VaultDeltaShadowService;
 import com.realfiction.realcore.economy.VoteRewardLedgerShadowService;
 import com.realfiction.realcore.economy.VoteRewardLedgerWriteService;
+import com.realfiction.realcore.halloween.HerobrineStalkerService;
 import com.realfiction.realcore.stats.BufferedNetworkStatWriter;
 import com.realfiction.realcore.stats.EconomyMirrorService;
 import com.realfiction.realcore.stats.NetworkStatService;
@@ -610,6 +611,7 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
     send(sender, ChatColor.YELLOW + "Cosmetics: " + statusText(plugin.cosmeticsManager() != null));
     appendCosmeticPetStatus(sender);
     appendSeasonalStatus(sender);
+    appendHalloweenStatus(sender);
     appendPlaytimeStatus(sender, config);
     appendNetworkStatsStatus(sender, config);
     appendEconomyStatus(sender);
@@ -629,6 +631,21 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
         + ChatColor.GRAY + ", show lock " + (status.showLockRunning() ? "on" : "off")
         + ", ambience " + (status.spawnAmbienceRunning() ? "running" : "idle")
         + ", theme " + status.ambienceTheme());
+  }
+
+  private void appendHalloweenStatus(CommandSender sender) {
+    HerobrineStalkerService stalker = plugin.herobrineStalkerService();
+    if (stalker == null) {
+      send(sender, ChatColor.YELLOW + "Halloween Herobrine: " + ChatColor.GRAY + "not loaded");
+      return;
+    }
+    send(sender, ChatColor.YELLOW + "Halloween Herobrine: " + ChatColor.WHITE + stalker.statusSummary());
+    if (stalker.lastSkipReason() != null && !stalker.lastSkipReason().isBlank()) {
+      send(sender, ChatColor.YELLOW + "Halloween last skip: " + ChatColor.GRAY + stalker.lastSkipReason());
+    }
+    if (stalker.lastFailure() != null && !stalker.lastFailure().isBlank()) {
+      send(sender, ChatColor.YELLOW + "Halloween last issue: " + ChatColor.RED + stalker.lastFailure());
+    }
   }
 
   private void appendCosmeticPetStatus(CommandSender sender) {

@@ -396,8 +396,51 @@ rewards:
           - "{player} hit a 15 vote streak and earned a bonus!"
         vote.milestone.30:
           - "{player} hit a 30 vote streak and earned a bonus!"
-        vote.milestone.75:
-          - "{player} hit a 75 vote streak and earned a bonus!"
+      vote.milestone.75:
+        - "{player} hit a 75 vote streak and earned a bonus!"
+
+# ---------------------------------------------------------------------------
+# Halloween event. Herobrine is atmospheric only: no combat, drops, chat spam,
+# bossbars, titles, or forced player movement. Leave dryRun true while testing.
+# ---------------------------------------------------------------------------
+halloween:
+  enabled: true
+  herobrineStalker:
+    enabled: true
+    dryRun: false
+    dateWindow:
+      startMonth: 10
+      startDay: 15
+      endMonth: 11
+      endDay: 1
+    # Optional backend gates. Values can match server.id or server.group.
+    servers:
+      allowlist: []
+      denylist: []
+    worlds:
+      allowlist: []
+      denylist:
+        - lobby
+        - Void_Spawn
+    # 0.015 every 45s with cooldowns keeps sightings rare. Raise only for
+    # short staging tests; in production, subtle sightings age better.
+    chancePerCheck: 0.015
+    checkIntervalSeconds: 45
+    perPlayerCooldownSeconds: 600
+    globalCooldownSeconds: 45
+    minSpawnDistance: 24
+    maxSpawnDistance: 48
+    minLingerSeconds: 5
+    maxLingerSeconds: 12
+    vanishWhenSeen: true
+    caveSoundChanceOnSpawn: 0.15
+    caveSoundChanceWhileStalking: 0.08
+    caveSoundChanceOnVanish: 0.25
+    requireNightRainMiningOrDarkness: true
+    # Name used for the skull skin lookup. If the server cannot resolve it,
+    # Minecraft falls back to a normal player head without breaking the event.
+    headOwner: "Herobrine"
+    debug: false
 
 # ---------------------------------------------------------------------------
 # Lobby module (replaces PhoenixLobby). Everything below is local to this

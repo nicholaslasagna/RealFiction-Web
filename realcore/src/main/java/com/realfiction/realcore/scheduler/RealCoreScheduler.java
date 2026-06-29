@@ -1,6 +1,7 @@
 package com.realfiction.realcore.scheduler;
 
 import java.util.concurrent.CompletableFuture;
+import org.bukkit.Location;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 
@@ -30,6 +31,19 @@ public interface RealCoreScheduler extends AutoCloseable {
     runGlobal(task);
     return () -> {
     };
+  }
+
+  /**
+   * Runs world/location work on the owning region where available. Use this for
+   * block checks, entity spawns, entity removal, and other location-bound work.
+   */
+  default void runAt(Location location, Runnable task) {
+    runGlobal(task);
+  }
+
+  /** Runs location-bound work after a tick delay. */
+  default ScheduledTaskHandle runAtLater(Location location, Runnable task, long delayTicks) {
+    return runGlobalLater(task, delayTicks);
   }
 
   void runForPlayer(Player player, Runnable task);
