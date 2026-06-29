@@ -7,6 +7,7 @@ import com.realfiction.realcore.config.EconomyConfig;
 import com.realfiction.realcore.config.RealCoreConfig;
 import com.realfiction.realcore.config.RewardEconomyConfig;
 import com.realfiction.realcore.config.ServerModules;
+import com.realfiction.realcore.halloween.HalloweenConfig;
 import java.net.URI;
 import java.time.Duration;
 import java.util.List;
@@ -40,7 +41,8 @@ final class RewardCommandFormatterTest {
         false,
         ServerModules.defaults(),
         Set.of(),
-        EconomyConfig.disabledDefaults()
+        EconomyConfig.disabledDefaults(),
+        HalloweenConfig.defaults()
     );
 
     RewardPayload reward = new RewardPayload();

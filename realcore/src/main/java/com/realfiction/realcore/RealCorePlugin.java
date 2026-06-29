@@ -43,6 +43,8 @@ import com.realfiction.realcore.stats.producer.KillStatProducer;
 import com.realfiction.realcore.stats.producer.VoteStatProducer;
 import com.realfiction.realcore.economy.VoteRewardLedgerShadowService;
 import com.realfiction.realcore.economy.VoteRewardLedgerWriteService;
+import com.realfiction.realcore.halloween.HerobrineStalkerListener;
+import com.realfiction.realcore.halloween.HerobrineStalkerService;
 import com.realfiction.realcore.rewards.RewardDispatcher;
 import com.realfiction.realcore.rewards.RewardPoller;
 import com.realfiction.realcore.scheduler.RealCoreScheduler;
@@ -84,6 +86,7 @@ public final class RealCorePlugin extends JavaPlugin {
   private EconomyProviderService economyProviderService;
   private VoteRewardLedgerShadowService voteRewardLedgerShadowService;
   private VoteRewardLedgerWriteService voteRewardLedgerWriteService;
+  private HerobrineStalkerService herobrineStalkerService;
   // Listeners are registered exactly once on enable; producers are swapped on
   // reload so the new writer/group are picked up without a restart.
   private StatKillsListener statKillsListener;
@@ -124,6 +127,7 @@ public final class RealCorePlugin extends JavaPlugin {
     getServer().getPluginManager().registerEvents(new EconomyReconciliationListener(this), this);
     // Always registered; late-binds the economy provider (shadow/preload) and no-ops while disabled.
     getServer().getPluginManager().registerEvents(new EconomyProviderListener(this), this);
+    getServer().getPluginManager().registerEvents(new HerobrineStalkerListener(), this);
     setupPlaceholders();
 
     RealFictionCommand commandExecutor = new RealFictionCommand(this);
@@ -223,6 +227,8 @@ public final class RealCorePlugin extends JavaPlugin {
           scheduler,
           getLogger());
       gameplayEconomySyncService.start();
+      herobrineStalkerService = new HerobrineStalkerService(this, realCoreConfig, scheduler, getLogger());
+      herobrineStalkerService.start();
       servicesLoaded = true;
 
       if (lobbyManager != null) {
@@ -394,6 +400,10 @@ public final class RealCorePlugin extends JavaPlugin {
     return voteRewardLedgerWriteService;
   }
 
+  public HerobrineStalkerService herobrineStalkerService() {
+    return herobrineStalkerService;
+  }
+
   private List<String> registerCommands(RealFictionCommand commandExecutor) {
     List<String> labels = List.of("realfiction", "rf", "realcore", "cosmetics");
     for (String label : labels) {
@@ -484,6 +494,9 @@ public final class RealCorePlugin extends JavaPlugin {
     getLogger().info("| Playtime: " + playtime);
     getLogger().info("| Stats: " + stats);
     getLogger().info("| Global economy: " + economy);
+    if (herobrineStalkerService != null) {
+      getLogger().info("| Halloween Herobrine: " + herobrineStalkerService.statusSummary());
+    }
     if (voteRewardLedgerShadowService != null) {
       getLogger().info("| Vote reward ledger shadow: "
           + (voteRewardLedgerShadowService.enabled() ? "enabled" : "disabled")
@@ -704,6 +717,10 @@ public final class RealCorePlugin extends JavaPlugin {
         || !getConfig().isConfigurationSection("rewards.messages")
         || !getConfig().isConfigurationSection("rewards.economy")
         || !getConfig().isConfigurationSection("economy")
+        || !getConfig().isConfigurationSection("halloween")
+        || !getConfig().isConfigurationSection("halloween.herobrineStalker")
+        || !getConfig().contains("halloween.herobrineStalker.servers.allowlist")
+        || !getConfig().contains("halloween.herobrineStalker.servers.denylist")
         || !getConfig().contains("economy.dbBalanceReadEnabled")
         || !getConfig().contains("economy.dbBalanceReadBackendAllowlist")
         || !getConfig().contains("economy.dbBalanceReadCacheSeconds")
@@ -771,6 +788,10 @@ public final class RealCorePlugin extends JavaPlugin {
     gameplayEconomyTransactionBuffer = null;
     voteRewardLedgerShadowService = null;
     voteRewardLedgerWriteService = null;
+    if (herobrineStalkerService != null) {
+      herobrineStalkerService.stop();
+      herobrineStalkerService = null;
+    }
     if (economyMirrorService != null) {
       economyMirrorService.stop();
       economyMirrorService = null;

@@ -6,6 +6,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import org.bukkit.Bukkit;
+import org.bukkit.Location;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.Plugin;
 
@@ -74,6 +75,33 @@ final class FoliaScheduler implements RealCoreScheduler {
         plugin,
         ignored -> task.run(),
         Math.max(0L, delayTicks)
+    );
+    tasks.add(scheduledTask);
+    return () -> {
+      scheduledTask.cancel();
+      tasks.remove(scheduledTask);
+    };
+  }
+
+  @Override
+  public void runAt(Location location, Runnable task) {
+    if (location == null || location.getWorld() == null) {
+      runGlobal(task);
+      return;
+    }
+    Bukkit.getRegionScheduler().run(plugin, location, ignored -> task.run());
+  }
+
+  @Override
+  public ScheduledTaskHandle runAtLater(Location location, Runnable task, long delayTicks) {
+    if (location == null || location.getWorld() == null) {
+      return runGlobalLater(task, delayTicks);
+    }
+    ScheduledTask scheduledTask = Bukkit.getRegionScheduler().runDelayed(
+        plugin,
+        location,
+        ignored -> task.run(),
+        Math.max(1L, delayTicks)
     );
     tasks.add(scheduledTask);
     return () -> {
