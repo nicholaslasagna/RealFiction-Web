@@ -127,7 +127,7 @@ public final class RealCorePlugin extends JavaPlugin {
     getServer().getPluginManager().registerEvents(new EconomyReconciliationListener(this), this);
     // Always registered; late-binds the economy provider (shadow/preload) and no-ops while disabled.
     getServer().getPluginManager().registerEvents(new EconomyProviderListener(this), this);
-    getServer().getPluginManager().registerEvents(new HerobrineStalkerListener(), this);
+    getServer().getPluginManager().registerEvents(new HerobrineStalkerListener(this::herobrineStalkerService), this);
     setupPlaceholders();
 
     RealFictionCommand commandExecutor = new RealFictionCommand(this);

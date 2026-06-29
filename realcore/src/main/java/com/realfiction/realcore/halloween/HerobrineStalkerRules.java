@@ -45,4 +45,8 @@ public final class HerobrineStalkerRules {
     }
     return randomValue <= Math.min(1.0, chancePerCheck);
   }
+
+  public static boolean activeBelowLimit(int activeSightings, int maxActiveSightings) {
+    return activeSightings < Math.max(1, maxActiveSightings);
+  }
 }

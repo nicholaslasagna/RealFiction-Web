@@ -401,38 +401,58 @@ rewards:
 
 # ---------------------------------------------------------------------------
 # Halloween event. Herobrine is atmospheric only: no combat, drops, chat spam,
-# bossbars, titles, or forced player movement. Leave dryRun true while testing.
+# bossbars, titles, or forced player movement. Leave dryRun true while testing:
+# dry-run records cooldowns/logs but performs no world or entity mutations.
 # ---------------------------------------------------------------------------
 halloween:
   enabled: true
   herobrineStalker:
     enabled: true
     dryRun: false
+    # Active only during this date window unless staff temporarily changes it
+    # for staging. The default window is inclusive: Oct 15 through Nov 1.
     dateWindow:
       startMonth: 10
       startDay: 15
       endMonth: 11
       endDay: 1
-    # Optional backend gates. Values can match server.id or server.group.
+    # Optional backend gates. Values can match exact server.id (preferred:
+    # smp-1, factions-1) or server.group (smp, factions). Keep lobby, arcade,
+    # and anarchy denied unless staff intentionally tests somewhere else.
     servers:
       allowlist: []
       denylist:
         - lobby
         - arcade
+        - anarchy
     worlds:
       allowlist: []
       denylist:
         - lobby
         - Void_Spawn
         - Lobby_Games
-    # 0.015 every 45s with cooldowns keeps sightings rare. Raise only for
-    # short staging tests; in production, subtle sightings age better.
+    # 0.015 every 45s with cooldowns keeps sightings rare. Raise only for short
+    # staging tests; in production, subtle sightings age better.
     chancePerCheck: 0.015
     checkIntervalSeconds: 45
     perPlayerCooldownSeconds: 600
     globalCooldownSeconds: 45
+    # Hard cap on concurrent Herobrine entities across this backend.
+    maxActiveSightings: 2
     minSpawnDistance: 24
     maxSpawnDistance: 48
+    # Avoid obvious hub/spawn areas and obvious player-base blocks without
+    # adding WorldGuard/claim hard dependencies.
+    minDistanceFromWorldSpawn: 64
+    avoidPlayerBaseBlocksRadius: 3
+    # Suppress sightings briefly after joins, teleports, deaths, respawns,
+    # world changes, or combat.
+    playerStateGraceSeconds: 12
+    # Bounded cleanup for stale tagged entities from a prior crash. This only
+    # checks already-loaded chunks near online players and chunk-load events.
+    cleanupStaleSightings: true
+    startupCleanupLoadedChunkRadius: 2
+    startupCleanupMaxChunks: 64
     minLingerSeconds: 5
     maxLingerSeconds: 12
     vanishWhenSeen: true
@@ -443,6 +463,7 @@ halloween:
     # Name used for the skull skin lookup. If the server cannot resolve it,
     # Minecraft falls back to a normal player head without breaking the event.
     headOwner: "Herobrine"
+    # Debug is off by default. Turn on only during a short staff test.
     debug: false
 
 # ---------------------------------------------------------------------------

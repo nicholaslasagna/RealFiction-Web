@@ -54,6 +54,11 @@ final class HerobrineStalkerConfigTest {
     assertTrue(stalker.debug());
     assertEquals(0.025, stalker.chancePerCheck(), 0.0001);
     assertEquals(5, stalker.checkInterval().toSeconds());
+    assertEquals(2, stalker.maxActiveSightings());
+    assertEquals(64, stalker.minDistanceFromWorldSpawn());
+    assertEquals(3, stalker.avoidPlayerBaseBlocksRadius());
+    assertEquals(12, stalker.playerStateGrace().toSeconds());
+    assertTrue(stalker.cleanupStaleSightings());
     assertTrue(stalker.serverAllowed("smp-1", "smp"));
     assertFalse(stalker.serverAllowed("anarchy-1", "anarchy"));
     assertTrue(stalker.worldAllowed("world"));
@@ -76,5 +81,11 @@ final class HerobrineStalkerConfigTest {
     assertFalse(config.halloween().herobrineStalker().worldAllowed("Lobby_Games"));
     assertFalse(config.halloween().herobrineStalker().serverAllowed("lobby-1", "lobby"));
     assertFalse(config.halloween().herobrineStalker().serverAllowed("arcade-1", "arcade"));
+    assertFalse(config.halloween().herobrineStalker().serverAllowed("anarchy-1", "anarchy"));
+    assertEquals(2, config.halloween().herobrineStalker().maxActiveSightings());
+    assertEquals(64, config.halloween().herobrineStalker().minDistanceFromWorldSpawn());
+    assertEquals(3, config.halloween().herobrineStalker().avoidPlayerBaseBlocksRadius());
+    assertEquals(12, config.halloween().herobrineStalker().playerStateGrace().toSeconds());
+    assertTrue(config.halloween().herobrineStalker().cleanupStaleSightings());
   }
 }
