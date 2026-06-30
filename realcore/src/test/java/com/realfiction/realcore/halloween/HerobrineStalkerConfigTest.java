@@ -88,7 +88,7 @@ final class HerobrineStalkerConfigTest {
     assertEquals(3, config.halloween().herobrineStalker().avoidPlayerBaseBlocksRadius());
     assertEquals(12, config.halloween().herobrineStalker().playerStateGrace().toSeconds());
     assertTrue(config.halloween().herobrineStalker().cleanupStaleSightings());
-    assertEquals("armor_stand", config.halloween().herobrineStalker().appearance().mode());
+    assertEquals("packet_npc", config.halloween().herobrineStalker().appearance().mode());
     assertTrue(config.halloween().herobrineStalker().appearance().fallbackToArmorStand());
     assertEquals("Herobrine", config.halloween().herobrineStalker().appearance().skinOwner());
     assertTrue(config.halloween().herobrineStalker().vanishOnLook().enabled());

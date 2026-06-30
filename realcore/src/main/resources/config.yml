@@ -459,11 +459,11 @@ halloween:
     caveSoundChanceOnSpawn: 0.15
     caveSoundChanceWhileStalking: 0.08
     caveSoundChanceOnVanish: 0.25
-    # RealCore-native appearance. packet_npc is reserved for a future stable
-    # packet implementation; without an NPC plugin or version-bound NMS,
-    # RealCore safely falls back to its built-in ArmorStand silhouette.
+    # RealCore-native appearance. packet_npc uses ProtocolLib as an optional
+    # packet layer to show a target-only fake player; auto falls back to the
+    # built-in ArmorStand silhouette if ProtocolLib is missing/unsupported.
     appearance:
-      mode: "armor_stand"
+      mode: "packet_npc"
       fallbackToArmorStand: true
       skinOwner: "Herobrine"
       hideFromTabAfterTicks: 20

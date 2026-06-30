@@ -11,7 +11,7 @@ public final class HerobrineSighting {
   private final UUID sightingId;
   private final UUID playerUuid;
   private final String playerName;
-  private final UUID entityUuid;
+  private final HerobrineAppearanceHandle appearance;
   private final Instant createdAt;
   private final Instant vanishAt;
   private final boolean miningIntent;
@@ -27,7 +27,7 @@ public final class HerobrineSighting {
       UUID sightingId,
       UUID playerUuid,
       String playerName,
-      UUID entityUuid,
+      HerobrineAppearanceHandle appearance,
       Instant createdAt,
       Instant vanishAt,
       boolean miningIntent,
@@ -37,12 +37,36 @@ public final class HerobrineSighting {
     this.sightingId = sightingId;
     this.playerUuid = playerUuid;
     this.playerName = playerName == null ? "" : playerName;
-    this.entityUuid = entityUuid;
+    this.appearance = appearance;
     this.createdAt = createdAt;
     this.vanishAt = vanishAt;
     this.miningIntent = miningIntent;
     this.silhouette = silhouette;
     this.location = new AtomicReference<>(location == null ? null : location.clone());
+  }
+
+  public HerobrineSighting(
+      UUID sightingId,
+      UUID playerUuid,
+      String playerName,
+      UUID entityUuid,
+      Instant createdAt,
+      Instant vanishAt,
+      boolean miningIntent,
+      boolean silhouette,
+      Location location
+  ) {
+    this(
+        sightingId,
+        playerUuid,
+        playerName,
+        new StaticAppearanceHandle(sightingId, playerUuid, entityUuid, location),
+        createdAt,
+        vanishAt,
+        miningIntent,
+        silhouette,
+        location
+    );
   }
 
   public UUID sightingId() {
@@ -57,8 +81,12 @@ public final class HerobrineSighting {
     return playerName;
   }
 
+  public HerobrineAppearanceHandle appearance() {
+    return appearance;
+  }
+
   public UUID entityUuid() {
-    return entityUuid;
+    return appearance == null ? null : appearance.bukkitEntityUuid().orElse(null);
   }
 
   public Instant createdAt() {
@@ -85,6 +113,9 @@ public final class HerobrineSighting {
   public void updateLocation(Location next) {
     if (next != null) {
       location.set(next.clone());
+      if (appearance != null) {
+        appearance.updateLocation(next);
+      }
     }
   }
 
@@ -122,5 +153,67 @@ public final class HerobrineSighting {
 
   public void clearProximityEnteredAt() {
     proximityEnteredAt.set(null);
+  }
+
+  private static final class StaticAppearanceHandle implements HerobrineAppearanceHandle {
+    private final UUID sightingId;
+    private final UUID viewerUuid;
+    private final UUID entityUuid;
+    private volatile Location location;
+    private volatile boolean active = true;
+
+    private StaticAppearanceHandle(UUID sightingId, UUID viewerUuid, UUID entityUuid, Location location) {
+      this.sightingId = sightingId;
+      this.viewerUuid = viewerUuid;
+      this.entityUuid = entityUuid;
+      this.location = location == null ? null : location.clone();
+    }
+
+    @Override
+    public UUID sightingId() {
+      return sightingId;
+    }
+
+    @Override
+    public UUID viewerUuid() {
+      return viewerUuid;
+    }
+
+    @Override
+    public String backend() {
+      return HerobrineAppearanceConfig.MODE_ARMOR_STAND;
+    }
+
+    @Override
+    public Location location() {
+      Location value = location;
+      return value == null ? null : value.clone();
+    }
+
+    @Override
+    public void updateLocation(Location location) {
+      if (location != null) {
+        this.location = location.clone();
+      }
+    }
+
+    @Override
+    public void face(Location target) {
+    }
+
+    @Override
+    public void despawn(String reason) {
+      active = false;
+    }
+
+    @Override
+    public boolean active() {
+      return active;
+    }
+
+    @Override
+    public java.util.Optional<UUID> bukkitEntityUuid() {
+      return java.util.Optional.ofNullable(entityUuid);
+    }
   }
 }
