@@ -724,9 +724,13 @@ public final class HerobrineStalkerService {
       vanish(sighting, true, "linger complete");
       return;
     }
-    maybePlayDistantFootsteps(player, sighting);
-    maybePlayMiningFakeout(player, sighting);
-    if (!sighting.miningIntent() && ThreadLocalRandom.current().nextDouble() <= stalker.caveSoundChanceWhileStalking()) {
+    boolean ambiencePlayed = maybePlayDistantFootsteps(player, sighting);
+    if (!ambiencePlayed) {
+      ambiencePlayed = maybePlayMiningFakeout(player, sighting);
+    }
+    if (!ambiencePlayed
+        && !sighting.miningIntent()
+        && ThreadLocalRandom.current().nextDouble() <= stalker.caveSoundChanceWhileStalking()) {
       long nowMillis = System.currentTimeMillis();
       if (sighting.soundCooldownElapsed(nowMillis, SOUND_COOLDOWN_MILLIS)) {
         playCaveSound(player, null);
@@ -738,30 +742,32 @@ public final class HerobrineStalkerService {
     return lookingAt(player, target, DIRECT_LOOK_DOT);
   }
 
-  private void maybePlayDistantFootsteps(Player player, HerobrineSighting sighting) {
+  private boolean maybePlayDistantFootsteps(Player player, HerobrineSighting sighting) {
     HerobrineDistantFootstepsConfig footsteps = config.halloween().herobrineStalker().distantFootsteps();
     if (!footsteps.enabled()
         || ThreadLocalRandom.current().nextDouble() > footsteps.chance()
         || !sightingActive(sighting)
         || !cooldownReady(playerFootstepCooldowns, player.getUniqueId(), footsteps.cooldown())) {
-      return;
+      return false;
     }
     Location soundAt = offsetAroundPlayer(player, footsteps.minDistance(), footsteps.maxDistance(), true);
     player.playSound(soundAt, Sound.BLOCK_STONE_STEP, 0.18f, 0.55f);
+    return true;
   }
 
-  private void maybePlayMiningFakeout(Player player, HerobrineSighting sighting) {
+  private boolean maybePlayMiningFakeout(Player player, HerobrineSighting sighting) {
     HerobrineMiningFakeoutConfig fakeout = config.halloween().herobrineStalker().miningFakeout();
     if (!fakeout.enabled()
         || ThreadLocalRandom.current().nextDouble() > fakeout.chance()
         || !sightingActive(sighting)
         || !HerobrineStalkerRules.miningIntentEligible(conditionsFor(player))
         || !cooldownReady(playerMiningFakeoutCooldowns, player.getUniqueId(), fakeout.cooldown())) {
-      return;
+      return false;
     }
     Location soundAt = offsetAroundPlayer(player, 6, fakeout.radius(), false);
     soundAt.add(0.0, ThreadLocalRandom.current().nextDouble(-3.0, 1.5), 0.0);
     player.playSound(soundAt, Sound.BLOCK_STONE_BREAK, 0.22f, 0.62f);
+    return true;
   }
 
   private Location offsetAroundPlayer(Player player, int minDistance, int maxDistance, boolean preferBehind) {
@@ -885,8 +891,13 @@ public final class HerobrineStalkerService {
     Location location = sighting.location();
     UUID expectedWorldId = location == null || location.getWorld() == null ? null : location.getWorld().getUID();
     if (maybeSound) {
-      maybePlayPlayerCaveSound(sighting.playerUuid(), config.halloween().herobrineStalker().caveSoundChanceOnVanish(), expectedWorldId);
-      maybePlayLookAwayUnease(sighting.playerUuid(), expectedWorldId);
+      boolean caveQueued = maybePlayPlayerCaveSound(
+          sighting.playerUuid(),
+          config.halloween().herobrineStalker().caveSoundChanceOnVanish(),
+          expectedWorldId);
+      if (!caveQueued) {
+        maybePlayLookAwayUnease(sighting.playerUuid(), expectedWorldId);
+      }
     }
     if (location != null) {
       scheduler.runAt(location, () -> removeEntity(sighting.entityUuid()));
@@ -1240,9 +1251,9 @@ public final class HerobrineStalkerService {
     });
   }
 
-  private void maybePlayPlayerCaveSound(UUID playerUuid, double chance, UUID expectedWorldId) {
+  private boolean maybePlayPlayerCaveSound(UUID playerUuid, double chance, UUID expectedWorldId) {
     if (chance <= 0.0 || ThreadLocalRandom.current().nextDouble() > chance) {
-      return;
+      return false;
     }
     scheduler.runGlobal(() -> {
       Player player = Bukkit.getPlayer(playerUuid);
@@ -1250,6 +1261,7 @@ public final class HerobrineStalkerService {
         scheduler.runForPlayer(player, () -> playCaveSound(player, expectedWorldId));
       }
     });
+    return true;
   }
 
   private void maybePlayLookAwayUnease(UUID playerUuid, UUID expectedWorldId) {
