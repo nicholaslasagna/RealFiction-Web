@@ -13,6 +13,7 @@ softdepend:
   - PlaceholderAPI
   - EconomyShopGUI
   - EconomyShopGUI-Premium
+  - ProtocolLib
 commands:
   realfiction:
     description: RealFiction linking, rewards, and lobby commands.

@@ -28,7 +28,7 @@ final class HerobrineStalkerArmorStandEquipmentTest {
         }
     );
 
-    HerobrineStalkerService.configureArmorStandEquipment(
+    ArmorStandHerobrineAppearance.configureArmorStandEquipment(
         equipment,
         null,
         null,

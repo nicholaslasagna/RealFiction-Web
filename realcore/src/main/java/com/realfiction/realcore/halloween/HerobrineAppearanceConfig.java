@@ -11,6 +11,7 @@ public record HerobrineAppearanceConfig(
 ) {
   public static final String MODE_PACKET_NPC = "packet_npc";
   public static final String MODE_ARMOR_STAND = "armor_stand";
+  public static final String MODE_AUTO = "auto";
 
   public static HerobrineAppearanceConfig from(ConfigurationSection section, String legacyHeadOwner) {
     if (section == null) {
@@ -26,7 +27,7 @@ public record HerobrineAppearanceConfig(
 
   public static HerobrineAppearanceConfig defaults(String legacyHeadOwner) {
     return new HerobrineAppearanceConfig(
-        MODE_ARMOR_STAND,
+        MODE_PACKET_NPC,
         true,
         clean(legacyHeadOwner, "Herobrine"),
         20
@@ -41,11 +42,16 @@ public record HerobrineAppearanceConfig(
     return MODE_ARMOR_STAND.equals(mode);
   }
 
+  public boolean autoRequested() {
+    return MODE_AUTO.equals(mode);
+  }
+
   private static String normalizeMode(String value) {
     String normalized = value == null ? "" : value.trim().toLowerCase(Locale.ROOT);
     return switch (normalized) {
       case MODE_PACKET_NPC -> MODE_PACKET_NPC;
       case MODE_ARMOR_STAND -> MODE_ARMOR_STAND;
+      case MODE_AUTO -> MODE_AUTO;
       default -> MODE_ARMOR_STAND;
     };
   }

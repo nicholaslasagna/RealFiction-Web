@@ -29,13 +29,10 @@ import org.bukkit.Particle;
 import org.bukkit.Sound;
 import org.bukkit.World;
 import org.bukkit.block.Block;
-import org.bukkit.entity.ArmorStand;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
 import org.bukkit.event.inventory.InventoryType;
-import org.bukkit.inventory.EntityEquipment;
 import org.bukkit.inventory.ItemStack;
-import org.bukkit.inventory.meta.LeatherArmorMeta;
 import org.bukkit.inventory.meta.SkullMeta;
 import org.bukkit.metadata.MetadataValue;
 import org.bukkit.persistence.PersistentDataType;
@@ -57,6 +54,7 @@ public final class HerobrineStalkerService {
   private final Logger logger;
   private final NamespacedKey markerKey;
   private final NamespacedKey sightingKey;
+  private final HerobrineAppearanceService appearanceService;
   private final Map<UUID, HerobrineSighting> activeSightings = new ConcurrentHashMap<>();
   private final Map<UUID, Instant> playerCooldowns = new ConcurrentHashMap<>();
   private final Map<UUID, Instant> playerSuppressedUntil = new ConcurrentHashMap<>();
@@ -88,6 +86,7 @@ public final class HerobrineStalkerService {
     this.logger = logger;
     this.markerKey = new NamespacedKey(plugin, "herobrine_stalker");
     this.sightingKey = new NamespacedKey(plugin, "herobrine_stalker_sighting");
+    this.appearanceService = new HerobrineAppearanceService(plugin, scheduler, logger, markerKey, sightingKey, this::herobrineHead);
   }
 
   public void start() {
@@ -96,6 +95,7 @@ public final class HerobrineStalkerService {
     stopTasksOnly();
     cleanupActiveSightings();
     HerobrineStalkerConfig stalker = config.halloween().herobrineStalker();
+    appearanceService.configure(stalker.appearance(), lifecycleGeneration.get());
     scheduler.runGlobal(() -> cleanupNearbyLoadedStaleSightings(stalker));
     if (!config.halloween().enabled() || !stalker.enabled()) {
       lastSkipReason = "disabled by config";
@@ -203,8 +203,7 @@ public final class HerobrineStalkerService {
         + ", staleCleaned=" + staleCleanedCount()
         + ", failed=" + failedSpawnCount()
         + ", skipped=" + skippedCheckCount()
-        + ", appearance=" + stalker.appearance().mode()
-        + ", activeAppearance=" + activeAppearanceMode(stalker.appearance())
+        + ", " + appearanceService.status(stalker.appearance()).summary()
         + ", vanishOnLook=" + (stalker.vanishOnLook().enabled() ? "on" : "off")
         + "/" + stalker.vanishOnLook().normalViewDegrees()
         + "deg"
@@ -212,16 +211,6 @@ public final class HerobrineStalkerService {
         + ", dropChanceGuard=" + ARMOR_STAND_DROPS_FIX_MARKER
         + ", lastSkip=" + blankToNone(lastSkipReason)
         + ", lastFailure=" + blankToNone(lastFailure) + ")";
-  }
-
-  private String activeAppearanceMode(HerobrineAppearanceConfig appearance) {
-    if (appearance == null || appearance.armorStandRequested()) {
-      return "armor_stand";
-    }
-    if (appearance.packetNpcRequested()) {
-      return appearance.fallbackToArmorStand() ? "armor_stand_fallback" : "packet_npc_unavailable";
-    }
-    return "armor_stand";
   }
 
   private void stopTasksOnly() {
@@ -546,43 +535,114 @@ public final class HerobrineStalkerService {
       return;
     }
     HerobrineAppearanceConfig appearance = stalker.appearance();
-    if (appearance.packetNpcRequested() && !appearance.fallbackToArmorStand()) {
+    HerobrineAppearanceService.Selection selection = appearanceService.select(appearance);
+    if (selection.backend() == HerobrineAppearanceService.Backend.SKIP) {
       failedSpawns.incrementAndGet();
-      lastFailure = "packet_npc appearance unavailable without fallback";
+      lastFailure = selection.reason();
       debug("Skipped Herobrine sighting for " + request.playerName()
-          + ": packet_npc appearance is not available through Paper/Folia API and fallback is disabled.");
+          + ": " + selection.reason() + ".");
       return;
     }
 
     UUID sightingId = UUID.randomUUID();
-    ArmorStand stand = safe.getWorld().spawn(safe, ArmorStand.class, entity -> configureStand(entity, request, safe, sightingId));
-    HerobrineSighting sighting = new HerobrineSighting(
+    if (selection.backend() == HerobrineAppearanceService.Backend.PACKET_NPC) {
+      Player player = Bukkit.getPlayer(request.playerUuid());
+      if (player == null || !player.isOnline()) {
+        failedSpawns.incrementAndGet();
+        lastFailure = "viewer offline before packet spawn";
+        return;
+      }
+      scheduler.runForPlayer(player, () -> spawnPacketSighting(request, safe, sightingId, now));
+      return;
+    }
+
+    spawnArmorStandSighting(request, safe, sightingId, now, selection.reason());
+  }
+
+  private void spawnPacketSighting(SpawnRequest request, Location safe, UUID sightingId, Instant now) {
+    if (!requestActive(request) || activeSightings.containsKey(request.playerUuid())) {
+      return;
+    }
+    HerobrineStalkerConfig stalker = config.halloween().herobrineStalker();
+    if (!HerobrineStalkerRules.activeBelowLimit(activeSightings.size(), stalker.maxActiveSightings())) {
+      skippedChecks.incrementAndGet();
+      lastSkipReason = "max active sightings";
+      return;
+    }
+    try {
+      HerobrineAppearanceHandle handle = appearanceService.spawnPacket(
+          sightingId,
+          request.playerUuid(),
+          request.playerName(),
+          safe,
+          request.playerLocation(),
+          stalker.appearance()
+      );
+      registerSighting(request, handle, now, "");
+    } catch (RuntimeException error) {
+      failedSpawns.incrementAndGet();
+      lastFailure = "packet spawn failed: " + shortError(error);
+      debug("Packet Herobrine spawn failed for " + request.playerName() + ": " + shortError(error) + ".");
+      if (stalker.appearance().fallbackToArmorStand()) {
+        scheduler.runAt(safe, () -> spawnArmorStandSighting(request, safe, sightingId, now, lastFailure));
+      }
+    }
+  }
+
+  private void spawnArmorStandSighting(SpawnRequest request, Location safe, UUID sightingId, Instant now, String fallbackReason) {
+    if (!requestActive(request) || activeSightings.containsKey(request.playerUuid())) {
+      return;
+    }
+    HerobrineStalkerConfig stalker = config.halloween().herobrineStalker();
+    if (!HerobrineStalkerRules.activeBelowLimit(activeSightings.size(), stalker.maxActiveSightings())) {
+      skippedChecks.incrementAndGet();
+      lastSkipReason = "max active sightings";
+      return;
+    }
+    HerobrineAppearanceHandle handle = appearanceService.spawnArmorStand(
         sightingId,
         request.playerUuid(),
+        request.playerLocation(),
+        safe
+    );
+    registerSighting(request, handle, now, fallbackReason);
+  }
+
+  private void registerSighting(SpawnRequest request, HerobrineAppearanceHandle handle, Instant now, String fallbackReason) {
+    HerobrineStalkerConfig stalker = config.halloween().herobrineStalker();
+    HerobrineSighting sighting = new HerobrineSighting(
+        handle.sightingId(),
+        request.playerUuid(),
         request.playerName(),
-        stand.getUniqueId(),
+        handle,
         request.createdAt(),
         request.createdAt().plus(request.linger()),
         request.miningIntent(),
         request.silhouette(),
-        stand.getLocation()
+        handle.location()
     );
-    activeSightings.put(request.playerUuid(), sighting);
+    HerobrineSighting previous = activeSightings.putIfAbsent(request.playerUuid(), sighting);
+    if (previous != null) {
+      handle.despawn("duplicate active sighting");
+      return;
+    }
     sightings.incrementAndGet();
     recordCooldowns(request.playerUuid(), now);
     lastFailure = "";
     debug("Spawned Herobrine sighting " + sighting.sightingId() + " for " + request.playerName()
-        + " at " + formatLocation(safe)
+        + " at " + formatLocation(sighting.location())
         + " linger=" + request.linger().toSeconds() + "s"
         + " mode=" + sightingMode(request)
+        + " appearance=" + handle.backend()
+        + (fallbackReason == null || fallbackReason.isBlank() ? "" : " fallbackReason=" + fallbackReason)
         + " conditions=" + request.conditions().summary() + ".");
     if (!request.miningIntent() && !request.silhouette()) {
       maybePlaySightingCaveSound(sighting, stalker.caveSoundChanceOnSpawn());
     }
     if (!request.silhouette()) {
-      scheduleLightningOmen(sighting, safe);
+      scheduleLightningOmen(sighting, sighting.location());
     }
-    scheduleOmenMarker(sighting, safe);
+    scheduleOmenMarker(sighting, sighting.location());
   }
 
   private String sightingMode(SpawnRequest request) {
@@ -590,56 +650,6 @@ public final class HerobrineStalkerService {
       return "distantSilhouette";
     }
     return request.miningIntent() ? "miningIntent" : "normal";
-  }
-
-  private void configureStand(ArmorStand stand, SpawnRequest request, Location safe, UUID sightingId) {
-    stand.addScoreboardTag(SCOREBOARD_TAG);
-    stand.getPersistentDataContainer().set(markerKey, PersistentDataType.STRING, request.playerUuid().toString());
-    stand.getPersistentDataContainer().set(sightingKey, PersistentDataType.STRING, sightingId.toString());
-    stand.setPersistent(false);
-    stand.setRemoveWhenFarAway(true);
-    stand.setCustomName(null);
-    stand.setCustomNameVisible(false);
-    stand.setVisible(false);
-    stand.setInvulnerable(true);
-    stand.setSilent(true);
-    stand.setGravity(false);
-    stand.setCollidable(false);
-    // Do not use marker mode for live sightings: full-size invisible carrier
-    // keeps the head/armor at player-like proportions while event guards and
-    // cleanup keep it non-gameplay.
-    stand.setMarker(false);
-    stand.setSmall(false);
-    stand.setBasePlate(false);
-    stand.setArms(true);
-    stand.setCanPickupItems(false);
-    stand.setRotation(yawToward(safe, request.playerLocation()), 0.0f);
-    EntityEquipment equipment = stand.getEquipment();
-    if (equipment != null) {
-      configureArmorStandEquipment(
-          equipment,
-          herobrineHead(),
-          leather(Material.LEATHER_CHESTPLATE, Color.fromRGB(24, 94, 171)),
-          leather(Material.LEATHER_LEGGINGS, Color.fromRGB(34, 61, 150)),
-          leather(Material.LEATHER_BOOTS, Color.fromRGB(22, 22, 22))
-      );
-    }
-  }
-
-  static void configureArmorStandEquipment(
-      EntityEquipment equipment,
-      ItemStack helmet,
-      ItemStack chestplate,
-      ItemStack leggings,
-      ItemStack boots
-  ) {
-    if (equipment == null) {
-      return;
-    }
-    equipment.setHelmet(helmet);
-    equipment.setChestplate(chestplate);
-    equipment.setLeggings(leggings);
-    equipment.setBoots(boots);
   }
 
   public void suppressPlayer(Player player, String reason) {
@@ -678,7 +688,10 @@ public final class HerobrineStalkerService {
       }
     }
     if (!removedEntities.isEmpty()) {
-      activeSightings.entrySet().removeIf(entry -> removedEntities.contains(entry.getValue().entityUuid()));
+      activeSightings.entrySet().removeIf(entry -> {
+        UUID entityUuid = entry.getValue().entityUuid();
+        return entityUuid != null && removedEntities.contains(entityUuid);
+      });
       debug("Cleaned " + removedEntities.size() + " stale Herobrine entities in chunk " + chunk.getWorld().getName()
           + " " + chunk.getX() + "," + chunk.getZ() + " (" + reason + ").");
     }
@@ -692,21 +705,6 @@ public final class HerobrineStalkerService {
       item.setItemMeta(meta);
     }
     return item;
-  }
-
-  private ItemStack leather(Material material, Color color) {
-    ItemStack item = new ItemStack(material);
-    if (item.getItemMeta() instanceof LeatherArmorMeta meta) {
-      meta.setColor(color);
-      item.setItemMeta(meta);
-    }
-    return item;
-  }
-
-  private float yawToward(Location from, Location target) {
-    double dx = target.getX() - from.getX();
-    double dz = target.getZ() - from.getZ();
-    return (float) Math.toDegrees(Math.atan2(-dx, dz));
   }
 
   private void recordCooldowns(UUID playerUuid, Instant now) {
@@ -743,6 +741,7 @@ public final class HerobrineStalkerService {
       vanish(sighting, false, "player moved away");
       return;
     }
+    sighting.appearance().face(playerLocation);
     HerobrineStalkerConfig stalker = config.halloween().herobrineStalker();
     if (sighting.silhouette()) {
       if (noticedByPlayer(player, herobrine, stalker.vanishOnLook().normalViewDegrees()) || !now.isBefore(sighting.vanishAt())) {
@@ -962,57 +961,10 @@ public final class HerobrineStalkerService {
   }
 
   private void stepBackward(HerobrineSighting sighting, Location playerLocation) {
-    Location current = sighting.location();
-    if (current == null || current.getWorld() == null) {
-      return;
-    }
-    scheduler.runAt(current, () -> stepBackwardAtCurrentLocation(sighting, playerLocation));
-  }
-
-  private void stepBackwardAtCurrentLocation(HerobrineSighting sighting, Location playerLocation) {
     if (activeSightings.get(sighting.playerUuid()) != sighting) {
       return;
     }
-    Location current = sighting.location();
-    if (current == null || current.getWorld() == null) {
-      return;
-    }
-    Entity entity = Bukkit.getEntity(sighting.entityUuid());
-    if (!(entity instanceof ArmorStand stand) || !stand.getScoreboardTags().contains(SCOREBOARD_TAG)) {
-      return;
-    }
-    Vector away = current.toVector().subtract(playerLocation.toVector());
-    if (away.lengthSquared() < 0.001) {
-      away = new Vector(0, 0, 1);
-    }
-    away.normalize().multiply(0.85);
-    Location next = current.clone().add(away);
-    if (isSafeStep(next.getWorld(), next.getBlockX(), next.getBlockY(), next.getBlockZ())) {
-      stand.teleportAsync(next).thenAccept(success -> {
-        if (Boolean.TRUE.equals(success)) {
-          scheduler.runAt(next, () -> {
-            if (activeSightings.get(sighting.playerUuid()) != sighting) {
-              return;
-            }
-            Entity moved = Bukkit.getEntity(sighting.entityUuid());
-            if (moved instanceof ArmorStand movedStand && movedStand.getScoreboardTags().contains(SCOREBOARD_TAG)) {
-              movedStand.setRotation(yawToward(next, playerLocation), 0.0f);
-              sighting.updateLocation(movedStand.getLocation());
-            }
-          });
-        }
-      });
-    }
-  }
-
-  private boolean isSafeStep(World world, int x, int y, int z) {
-    if (world == null || y <= world.getMinHeight() + 1 || y >= world.getMaxHeight() - 2) {
-      return false;
-    }
-    Block ground = world.getBlockAt(x, y - 1, z);
-    Block feet = world.getBlockAt(x, y, z);
-    Block head = world.getBlockAt(x, y + 1, z);
-    return solidGround(ground) && emptyForBody(feet) && emptyForBody(head);
+    sighting.appearance().stepAwayFrom(playerLocation);
   }
 
   private void vanish(HerobrineSighting sighting, boolean maybeSound, String reason) {
@@ -1032,27 +984,16 @@ public final class HerobrineStalkerService {
         maybePlayLookAwayUnease(sighting.playerUuid(), expectedWorldId);
       }
     }
-    if (location != null) {
-      scheduler.runAt(location, () -> removeEntity(sighting.entityUuid()));
-    }
+    sighting.appearance().despawn(reason);
     debug("Herobrine sighting " + sighting.sightingId() + " vanished: " + reason + ".");
-  }
-
-  private void removeEntity(UUID entityUuid) {
-    Entity entity = Bukkit.getEntity(entityUuid);
-    if (entity != null && entity.getScoreboardTags().contains(SCOREBOARD_TAG)) {
-      entity.remove();
-    }
   }
 
   private void cleanupActiveSightings() {
     for (HerobrineSighting sighting : List.copyOf(activeSightings.values())) {
       activeSightings.remove(sighting.playerUuid());
-      Location location = sighting.location();
-      if (location != null) {
-        scheduler.runAt(location, () -> removeEntity(sighting.entityUuid()));
-      }
+      sighting.appearance().despawn("service cleanup");
     }
+    appearanceService.cleanupAll("service cleanup");
     playerSuppressedUntil.clear();
     playerSoundCooldowns.clear();
     playerFootstepCooldowns.clear();
@@ -1474,6 +1415,11 @@ public final class HerobrineStalkerService {
 
   private String blankToNone(String value) {
     return value == null || value.isBlank() ? "none" : value;
+  }
+
+  private String shortError(Throwable error) {
+    String message = error.getMessage();
+    return message == null || message.isBlank() ? error.getClass().getSimpleName() : message;
   }
 
   private record SpawnRequest(
