@@ -35,6 +35,9 @@ public record HerobrineStalkerConfig(
     double caveSoundChanceOnSpawn,
     double caveSoundChanceWhileStalking,
     double caveSoundChanceOnVanish,
+    HerobrineAppearanceConfig appearance,
+    HerobrineVanishOnLookConfig vanishOnLook,
+    HerobrineProximityEffectConfig proximityEffect,
     HerobrineLightningOmenConfig lightningOmen,
     HerobrineMiningIntentConfig miningIntent,
     HerobrineDistantFootstepsConfig distantFootsteps,
@@ -63,6 +66,7 @@ public record HerobrineStalkerConfig(
     int maxDistance = Math.max(minDistance, section.getInt("maxSpawnDistance", 48));
     long minLinger = Math.max(1L, section.getLong("minLingerSeconds", 5));
     long maxLinger = Math.max(minLinger, section.getLong("maxLingerSeconds", 12));
+    String headOwner = clean(section.getString("headOwner", "Herobrine"), "Herobrine");
     return new HerobrineStalkerConfig(
         section.getBoolean("enabled", true),
         section.getBoolean("dryRun", false),
@@ -90,6 +94,9 @@ public record HerobrineStalkerConfig(
         clampChance(section.getDouble("caveSoundChanceOnSpawn", 0.15)),
         clampChance(section.getDouble("caveSoundChanceWhileStalking", 0.08)),
         clampChance(section.getDouble("caveSoundChanceOnVanish", 0.25)),
+        HerobrineAppearanceConfig.from(section.getConfigurationSection("appearance"), headOwner),
+        HerobrineVanishOnLookConfig.from(section.getConfigurationSection("vanishOnLook")),
+        HerobrineProximityEffectConfig.from(section.getConfigurationSection("proximityEffect")),
         HerobrineLightningOmenConfig.from(section.getConfigurationSection("lightningOmen")),
         HerobrineMiningIntentConfig.from(section.getConfigurationSection("miningIntent")),
         HerobrineDistantFootstepsConfig.from(section.getConfigurationSection("distantFootsteps")),
@@ -99,7 +106,7 @@ public record HerobrineStalkerConfig(
         HerobrineLookAwayUneaseConfig.from(section.getConfigurationSection("lookAwayUnease")),
         section.getBoolean("requireNightRainMiningOrDarkness", true),
         section.getBoolean("debug", false),
-        clean(section.getString("headOwner", "Herobrine"), "Herobrine")
+        headOwner
     );
   }
 
@@ -131,6 +138,9 @@ public record HerobrineStalkerConfig(
         0.15,
         0.08,
         0.25,
+        HerobrineAppearanceConfig.defaults("Herobrine"),
+        HerobrineVanishOnLookConfig.defaults(),
+        HerobrineProximityEffectConfig.defaults(),
         HerobrineLightningOmenConfig.defaults(),
         HerobrineMiningIntentConfig.defaults(),
         HerobrineDistantFootstepsConfig.defaults(),

@@ -79,4 +79,48 @@ final class HerobrineStalkerRulesTest {
     assertEquals(Math.cos(Math.toRadians(1.0)), HerobrineStalkerRules.dotForViewDegrees(-5.0), 0.0001);
     assertEquals(Math.cos(Math.toRadians(179.0)), HerobrineStalkerRules.dotForViewDegrees(500.0), 0.0001);
   }
+
+  @Test
+  void configuredViewConeDetectsDirectLookButRejectsOutsideCone() {
+    Vector eye = new Vector(0, 64, 0);
+    Vector direction = new Vector(0, 0, 1);
+    double normalDot = HerobrineStalkerRules.dotForViewDegrees(32.0);
+
+    assertTrue(HerobrineStalkerRules.directLook(eye, direction, new Vector(0, 65, 20), 64, normalDot));
+    assertFalse(HerobrineStalkerRules.directLook(eye, direction, new Vector(20, 65, 20), 64, normalDot));
+  }
+
+  @Test
+  void miningIntentWiderConeDetectsRoughCameraSweep() {
+    Vector eye = new Vector(0, 64, 0);
+    Vector direction = new Vector(0, 0, 1);
+    Vector roughTarget = new Vector(18, 65, 20);
+
+    assertFalse(HerobrineStalkerRules.directLook(
+        eye,
+        direction,
+        roughTarget,
+        64,
+        HerobrineStalkerRules.dotForViewDegrees(32.0)
+    ));
+    assertTrue(HerobrineStalkerRules.directLook(
+        eye,
+        direction,
+        roughTarget,
+        64,
+        HerobrineStalkerRules.dotForViewDegrees(52.0)
+    ));
+  }
+
+  @Test
+  void proximityRequiresRadiusAndSustainedTime() {
+    Instant now = Instant.parse("2026-10-20T05:00:00Z");
+
+    assertFalse(HerobrineStalkerRules.insideRadius(25.0, 4.0));
+    assertTrue(HerobrineStalkerRules.insideRadius(16.0, 4.0));
+    assertFalse(HerobrineStalkerRules.sustainedFor(now, now.minusMillis(900), Duration.ofSeconds(1)));
+    assertTrue(HerobrineStalkerRules.sustainedFor(now, now.minusSeconds(1), Duration.ofSeconds(1)));
+    assertFalse(HerobrineStalkerRules.cooldownElapsed(now, now.minusSeconds(119), Duration.ofSeconds(120)));
+    assertTrue(HerobrineStalkerRules.cooldownElapsed(now, now.minusSeconds(120), Duration.ofSeconds(120)));
+  }
 }

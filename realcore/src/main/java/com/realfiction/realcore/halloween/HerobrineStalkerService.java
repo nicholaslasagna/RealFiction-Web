@@ -20,6 +20,7 @@ import java.util.logging.Logger;
 import org.bukkit.Bukkit;
 import org.bukkit.Chunk;
 import org.bukkit.Color;
+import org.bukkit.FluidCollisionMode;
 import org.bukkit.GameMode;
 import org.bukkit.Location;
 import org.bukkit.Material;
@@ -39,17 +40,17 @@ import org.bukkit.inventory.meta.SkullMeta;
 import org.bukkit.metadata.MetadataValue;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.Plugin;
+import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
+import org.bukkit.util.RayTraceResult;
 import org.bukkit.util.Vector;
 
 public final class HerobrineStalkerService {
   public static final String SCOREBOARD_TAG = "realcore_herobrine_stalker";
   public static final String ARMOR_STAND_DROPS_FIX_MARKER = "v2/no-armorstand-dropchance";
-  private static final double DIRECT_LOOK_DOT = 0.982;
   private static final double CLOSE_DISTANCE_SQUARED = 8.0 * 8.0;
   private static final double LOST_DISTANCE_SQUARED = 96.0 * 96.0;
   private static final long SOUND_COOLDOWN_MILLIS = 10_000L;
-  private static final long MONITOR_PERIOD_TICKS = 20L;
 
   private final Plugin plugin;
   private final RealCoreScheduler scheduler;
@@ -63,6 +64,7 @@ public final class HerobrineStalkerService {
   private final Map<UUID, AtomicLong> playerFootstepCooldowns = new ConcurrentHashMap<>();
   private final Map<UUID, AtomicLong> playerMiningFakeoutCooldowns = new ConcurrentHashMap<>();
   private final Map<UUID, AtomicLong> playerLookAwayCooldowns = new ConcurrentHashMap<>();
+  private final Map<UUID, Instant> playerProximityEffectCooldowns = new ConcurrentHashMap<>();
   private final AtomicReference<Instant> globalCooldown = new AtomicReference<>();
   private final AtomicLong sightings = new AtomicLong();
   private final AtomicLong dryRunSightings = new AtomicLong();
@@ -105,9 +107,12 @@ public final class HerobrineStalkerService {
       return;
     }
     long interval = Math.max(5L, stalker.checkInterval().toSeconds());
+    long monitorTicks = stalker.vanishOnLook().enabled()
+        ? stalker.vanishOnLook().checkIntervalTicks()
+        : 20L;
     acceptingSightings = true;
     checkTask = scheduler.runGlobalRepeating(this::checkOnlinePlayers, secondsToTicks(interval), secondsToTicks(interval));
-    monitorTask = scheduler.runGlobalRepeating(this::monitorSightings, MONITOR_PERIOD_TICKS, MONITOR_PERIOD_TICKS);
+    monitorTask = scheduler.runGlobalRepeating(this::monitorSightings, monitorTicks, monitorTicks);
     lastSkipReason = "";
     logger.info("Herobrine armorstand dropchance guard: " + ARMOR_STAND_DROPS_FIX_MARKER);
     debug("Halloween Herobrine Stalker armed. Window=" + stalker.dateWindow().summary()
@@ -198,9 +203,25 @@ public final class HerobrineStalkerService {
         + ", staleCleaned=" + staleCleanedCount()
         + ", failed=" + failedSpawnCount()
         + ", skipped=" + skippedCheckCount()
+        + ", appearance=" + stalker.appearance().mode()
+        + ", activeAppearance=" + activeAppearanceMode(stalker.appearance())
+        + ", vanishOnLook=" + (stalker.vanishOnLook().enabled() ? "on" : "off")
+        + "/" + stalker.vanishOnLook().normalViewDegrees()
+        + "deg"
+        + ", proximityEffect=" + (stalker.proximityEffect().enabled() ? "on" : "off")
         + ", dropChanceGuard=" + ARMOR_STAND_DROPS_FIX_MARKER
         + ", lastSkip=" + blankToNone(lastSkipReason)
         + ", lastFailure=" + blankToNone(lastFailure) + ")";
+  }
+
+  private String activeAppearanceMode(HerobrineAppearanceConfig appearance) {
+    if (appearance == null || appearance.armorStandRequested()) {
+      return "armor_stand";
+    }
+    if (appearance.packetNpcRequested()) {
+      return appearance.fallbackToArmorStand() ? "armor_stand_fallback" : "packet_npc_unavailable";
+    }
+    return "armor_stand";
   }
 
   private void stopTasksOnly() {
@@ -524,6 +545,14 @@ public final class HerobrineStalkerService {
           + " conditions=" + request.conditions().summary() + ".");
       return;
     }
+    HerobrineAppearanceConfig appearance = stalker.appearance();
+    if (appearance.packetNpcRequested() && !appearance.fallbackToArmorStand()) {
+      failedSpawns.incrementAndGet();
+      lastFailure = "packet_npc appearance unavailable without fallback";
+      debug("Skipped Herobrine sighting for " + request.playerName()
+          + ": packet_npc appearance is not available through Paper/Folia API and fallback is disabled.");
+      return;
+    }
 
     UUID sightingId = UUID.randomUUID();
     ArmorStand stand = safe.getWorld().spawn(safe, ArmorStand.class, entity -> configureStand(entity, request, safe, sightingId));
@@ -576,7 +605,11 @@ public final class HerobrineStalkerService {
     stand.setSilent(true);
     stand.setGravity(false);
     stand.setCollidable(false);
-    stand.setMarker(true);
+    // Do not use marker mode for live sightings: full-size invisible carrier
+    // keeps the head/armor at player-like proportions while event guards and
+    // cleanup keep it non-gameplay.
+    stand.setMarker(false);
+    stand.setSmall(false);
     stand.setBasePlate(false);
     stand.setArms(true);
     stand.setCanPickupItems(false);
@@ -655,7 +688,7 @@ public final class HerobrineStalkerService {
   private ItemStack herobrineHead() {
     ItemStack item = new ItemStack(Material.PLAYER_HEAD);
     if (item.getItemMeta() instanceof SkullMeta meta) {
-      meta.setOwningPlayer(Bukkit.getOfflinePlayer(config.halloween().herobrineStalker().headOwner()));
+      meta.setOwningPlayer(Bukkit.getOfflinePlayer(config.halloween().herobrineStalker().appearance().skinOwner()));
       item.setItemMeta(meta);
     }
     return item;
@@ -712,16 +745,25 @@ public final class HerobrineStalkerService {
     }
     HerobrineStalkerConfig stalker = config.halloween().herobrineStalker();
     if (sighting.silhouette()) {
-      if (roughLookingAt(player, herobrine) || !now.isBefore(sighting.vanishAt())) {
+      if (noticedByPlayer(player, herobrine, stalker.vanishOnLook().normalViewDegrees()) || !now.isBefore(sighting.vanishAt())) {
         vanish(sighting, false, "distant silhouette faded");
       }
       return;
     }
-    if (sighting.miningIntent() && (roughLookingAt(player, herobrine) || playerLocation.distanceSquared(herobrine) <= CLOSE_DISTANCE_SQUARED)) {
+    if (sighting.miningIntent() && noticedByPlayer(player, herobrine, stalker.vanishOnLook().miningIntentViewDegrees())) {
       vanish(sighting, false, "mining intent noticed");
       return;
     }
-    if (stalker.vanishWhenSeen() && (playerLocation.distanceSquared(herobrine) <= CLOSE_DISTANCE_SQUARED || lookingAt(player, herobrine))) {
+    if (handleProximityEffect(player, sighting, playerLocation, herobrine, now, stalker.proximityEffect())) {
+      return;
+    }
+    if (stalker.vanishOnLook().enabled() && noticedByPlayer(player, herobrine, stalker.vanishOnLook().normalViewDegrees())) {
+      vanish(sighting, true, "seen");
+      return;
+    }
+    if (!stalker.vanishOnLook().enabled()
+        && stalker.vanishWhenSeen()
+        && (playerLocation.distanceSquared(herobrine) <= CLOSE_DISTANCE_SQUARED || lookingAt(player, herobrine))) {
       retreatAndVanish(sighting, playerLocation);
       return;
     }
@@ -743,8 +785,59 @@ public final class HerobrineStalkerService {
     }
   }
 
+  private boolean handleProximityEffect(
+      Player player,
+      HerobrineSighting sighting,
+      Location playerLocation,
+      Location herobrine,
+      Instant now,
+      HerobrineProximityEffectConfig proximity
+  ) {
+    if (proximity == null || !proximity.enabled()) {
+      sighting.clearProximityEnteredAt();
+      return false;
+    }
+    if (!HerobrineStalkerRules.insideRadius(playerLocation.distanceSquared(herobrine), proximity.radius())) {
+      sighting.clearProximityEnteredAt();
+      return false;
+    }
+    if (!HerobrineStalkerRules.cooldownElapsed(now, playerProximityEffectCooldowns.get(player.getUniqueId()), proximity.cooldown())) {
+      return false;
+    }
+    if (sighting.proximityEnteredAt() == null) {
+      sighting.markProximityEnteredAt(now);
+      return false;
+    }
+    if (!HerobrineStalkerRules.sustainedFor(now, sighting.proximityEnteredAt(), proximity.required())) {
+      return false;
+    }
+
+    PotionEffectType type = proximityEffectType(proximity.effect());
+    int durationTicks = (int) Math.max(1L, Math.min(Integer.MAX_VALUE, proximity.duration().toMillis() / 50L));
+    player.addPotionEffect(new PotionEffect(type, durationTicks, proximity.amplifier(), false, false, false));
+    playerProximityEffectCooldowns.put(player.getUniqueId(), now);
+    debug("Applied Herobrine proximity effect to " + player.getName()
+        + " effect=" + proximity.effect()
+        + " duration=" + proximity.duration().toSeconds() + "s"
+        + " sighting=" + sighting.sightingId() + ".");
+    if (proximity.vanishAfterApply()) {
+      vanish(sighting, false, "proximity darkness");
+    }
+    return true;
+  }
+
+  @SuppressWarnings("deprecation")
+  private PotionEffectType proximityEffectType(String configured) {
+    PotionEffectType type = PotionEffectType.getByName(configured == null ? "" : configured);
+    return type == null ? PotionEffectType.DARKNESS : type;
+  }
+
   private boolean lookingAt(Player player, Location target) {
-    return lookingAt(player, target, DIRECT_LOOK_DOT);
+    return lookingAt(
+        player,
+        target,
+        HerobrineStalkerRules.dotForViewDegrees(config.halloween().herobrineStalker().vanishOnLook().normalViewDegrees())
+    );
   }
 
   private boolean maybePlayDistantFootsteps(Player player, HerobrineSighting sighting) {
@@ -800,21 +893,56 @@ public final class HerobrineStalkerService {
     return stored.compareAndSet(last, nowMillis);
   }
 
-  private boolean roughLookingAt(Player player, Location target) {
-    double dot = HerobrineStalkerRules.dotForViewDegrees(config.halloween().herobrineStalker().miningIntent().vanishViewDegrees());
-    return lookingAt(player, target, dot);
+  private boolean lookingAt(Player player, Location target, double minDot) {
+    return lookingAt(player, target, minDot, false);
   }
 
-  private boolean lookingAt(Player player, Location target, double minDot) {
+  private boolean noticedByPlayer(Player player, Location target, double viewDegrees) {
+    HerobrineVanishOnLookConfig vanishOnLook = config.halloween().herobrineStalker().vanishOnLook();
+    if (!vanishOnLook.enabled()) {
+      return false;
+    }
+    return lookingAt(
+        player,
+        target,
+        HerobrineStalkerRules.dotForViewDegrees(viewDegrees),
+        vanishOnLook.requireLineOfSight()
+    );
+  }
+
+  private boolean lookingAt(Player player, Location target, double minDot, boolean requireLineOfSight) {
     Location eye = player.getEyeLocation();
     Vector targetVector = target.clone().add(0, 1.55, 0).toVector();
-    return HerobrineStalkerRules.directLook(
+    boolean inCone = HerobrineStalkerRules.directLook(
         eye.toVector(),
         eye.getDirection(),
         targetVector,
         config.halloween().herobrineStalker().maxSpawnDistance() + 16.0,
         minDot
     );
+    if (!inCone || !requireLineOfSight) {
+      return inCone;
+    }
+    return hasLineOfSightTo(eye, targetVector);
+  }
+
+  private boolean hasLineOfSightTo(Location eye, Vector targetVector) {
+    if (eye == null || eye.getWorld() == null || targetVector == null) {
+      return false;
+    }
+    Vector toTarget = targetVector.clone().subtract(eye.toVector());
+    double distance = toTarget.length();
+    if (distance <= 0.01) {
+      return true;
+    }
+    RayTraceResult hit = eye.getWorld().rayTraceBlocks(
+        eye,
+        toTarget.normalize(),
+        distance,
+        FluidCollisionMode.NEVER,
+        true
+    );
+    return hit == null;
   }
 
   private void retreatAndVanish(HerobrineSighting sighting, Location playerLocation) {
@@ -930,6 +1058,7 @@ public final class HerobrineStalkerService {
     playerFootstepCooldowns.clear();
     playerMiningFakeoutCooldowns.clear();
     playerLookAwayCooldowns.clear();
+    playerProximityEffectCooldowns.clear();
   }
 
   private boolean shouldSkipPlayerState(Player player, Instant now) {
