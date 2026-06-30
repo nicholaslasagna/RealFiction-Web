@@ -30,7 +30,6 @@ import org.bukkit.World;
 import org.bukkit.block.Block;
 import org.bukkit.entity.ArmorStand;
 import org.bukkit.entity.Entity;
-import org.bukkit.entity.Mob;
 import org.bukkit.entity.Player;
 import org.bukkit.event.inventory.InventoryType;
 import org.bukkit.inventory.EntityEquipment;
@@ -45,6 +44,7 @@ import org.bukkit.util.Vector;
 
 public final class HerobrineStalkerService {
   public static final String SCOREBOARD_TAG = "realcore_herobrine_stalker";
+  public static final String ARMOR_STAND_DROPS_FIX_MARKER = "v2/no-armorstand-dropchance";
   private static final double DIRECT_LOOK_DOT = 0.982;
   private static final double CLOSE_DISTANCE_SQUARED = 8.0 * 8.0;
   private static final double LOST_DISTANCE_SQUARED = 96.0 * 96.0;
@@ -109,6 +109,7 @@ public final class HerobrineStalkerService {
     checkTask = scheduler.runGlobalRepeating(this::checkOnlinePlayers, secondsToTicks(interval), secondsToTicks(interval));
     monitorTask = scheduler.runGlobalRepeating(this::monitorSightings, MONITOR_PERIOD_TICKS, MONITOR_PERIOD_TICKS);
     lastSkipReason = "";
+    logger.info("Herobrine armorstand dropchance guard: " + ARMOR_STAND_DROPS_FIX_MARKER);
     debug("Halloween Herobrine Stalker armed. Window=" + stalker.dateWindow().summary()
         + ", chance=" + stalker.chancePerCheck() + ", dryRun=" + stalker.dryRun() + ".");
   }
@@ -197,6 +198,7 @@ public final class HerobrineStalkerService {
         + ", staleCleaned=" + staleCleanedCount()
         + ", failed=" + failedSpawnCount()
         + ", skipped=" + skippedCheckCount()
+        + ", dropChanceGuard=" + ARMOR_STAND_DROPS_FIX_MARKER
         + ", lastSkip=" + blankToNone(lastSkipReason)
         + ", lastFailure=" + blankToNone(lastFailure) + ")";
   }
@@ -581,27 +583,30 @@ public final class HerobrineStalkerService {
     stand.setRotation(yawToward(safe, request.playerLocation()), 0.0f);
     EntityEquipment equipment = stand.getEquipment();
     if (equipment != null) {
-      equipment.setHelmet(herobrineHead());
-      equipment.setChestplate(leather(Material.LEATHER_CHESTPLATE, Color.fromRGB(24, 94, 171)));
-      equipment.setLeggings(leather(Material.LEATHER_LEGGINGS, Color.fromRGB(34, 61, 150)));
-      equipment.setBoots(leather(Material.LEATHER_BOOTS, Color.fromRGB(22, 22, 22)));
-      clearDropChancesIfSupported(stand, equipment);
+      configureArmorStandEquipment(
+          equipment,
+          herobrineHead(),
+          leather(Material.LEATHER_CHESTPLATE, Color.fromRGB(24, 94, 171)),
+          leather(Material.LEATHER_LEGGINGS, Color.fromRGB(34, 61, 150)),
+          leather(Material.LEATHER_BOOTS, Color.fromRGB(22, 22, 22))
+      );
     }
   }
 
-  static void clearDropChancesIfSupported(Entity equipmentOwner, EntityEquipment equipment) {
-    if (equipment == null || !supportsEquipmentDropChance(equipmentOwner)) {
+  static void configureArmorStandEquipment(
+      EntityEquipment equipment,
+      ItemStack helmet,
+      ItemStack chestplate,
+      ItemStack leggings,
+      ItemStack boots
+  ) {
+    if (equipment == null) {
       return;
     }
-    // Folia/Purpur 26.x rejects drop-chance setters for non-Mob owners such as ArmorStand.
-    equipment.setHelmetDropChance(0.0f);
-    equipment.setChestplateDropChance(0.0f);
-    equipment.setLeggingsDropChance(0.0f);
-    equipment.setBootsDropChance(0.0f);
-  }
-
-  static boolean supportsEquipmentDropChance(Entity entity) {
-    return entity instanceof Mob;
+    equipment.setHelmet(helmet);
+    equipment.setChestplate(chestplate);
+    equipment.setLeggings(leggings);
+    equipment.setBoots(boots);
   }
 
   public void suppressPlayer(Player player, String reason) {
