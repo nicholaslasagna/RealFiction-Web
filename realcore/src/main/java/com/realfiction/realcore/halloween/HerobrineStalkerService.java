@@ -29,6 +29,7 @@ import org.bukkit.World;
 import org.bukkit.block.Block;
 import org.bukkit.entity.ArmorStand;
 import org.bukkit.entity.Entity;
+import org.bukkit.entity.Mob;
 import org.bukkit.entity.Player;
 import org.bukkit.event.inventory.InventoryType;
 import org.bukkit.inventory.EntityEquipment;
@@ -550,11 +551,23 @@ public final class HerobrineStalkerService {
       equipment.setChestplate(leather(Material.LEATHER_CHESTPLATE, Color.fromRGB(24, 94, 171)));
       equipment.setLeggings(leather(Material.LEATHER_LEGGINGS, Color.fromRGB(34, 61, 150)));
       equipment.setBoots(leather(Material.LEATHER_BOOTS, Color.fromRGB(22, 22, 22)));
-      equipment.setHelmetDropChance(0.0f);
-      equipment.setChestplateDropChance(0.0f);
-      equipment.setLeggingsDropChance(0.0f);
-      equipment.setBootsDropChance(0.0f);
+      clearDropChancesIfSupported(stand, equipment);
     }
+  }
+
+  static void clearDropChancesIfSupported(Entity equipmentOwner, EntityEquipment equipment) {
+    if (equipment == null || !supportsEquipmentDropChance(equipmentOwner)) {
+      return;
+    }
+    // Folia/Purpur 26.x rejects drop-chance setters for non-Mob owners such as ArmorStand.
+    equipment.setHelmetDropChance(0.0f);
+    equipment.setChestplateDropChance(0.0f);
+    equipment.setLeggingsDropChance(0.0f);
+    equipment.setBootsDropChance(0.0f);
+  }
+
+  static boolean supportsEquipmentDropChance(Entity entity) {
+    return entity instanceof Mob;
   }
 
   public void suppressPlayer(Player player, String reason) {
