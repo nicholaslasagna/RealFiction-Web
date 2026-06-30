@@ -14,8 +14,12 @@ public final class HerobrineSighting {
   private final UUID entityUuid;
   private final Instant createdAt;
   private final Instant vanishAt;
+  private final boolean miningIntent;
+  private final boolean silhouette;
   private final AtomicReference<Location> location;
   private final AtomicBoolean vanishing = new AtomicBoolean(false);
+  private final AtomicBoolean lightningOmenScheduled = new AtomicBoolean(false);
+  private final AtomicBoolean omenMarkerScheduled = new AtomicBoolean(false);
   private final AtomicLong lastSoundAtMillis = new AtomicLong(0);
 
   public HerobrineSighting(
@@ -25,6 +29,8 @@ public final class HerobrineSighting {
       UUID entityUuid,
       Instant createdAt,
       Instant vanishAt,
+      boolean miningIntent,
+      boolean silhouette,
       Location location
   ) {
     this.sightingId = sightingId;
@@ -33,6 +39,8 @@ public final class HerobrineSighting {
     this.entityUuid = entityUuid;
     this.createdAt = createdAt;
     this.vanishAt = vanishAt;
+    this.miningIntent = miningIntent;
+    this.silhouette = silhouette;
     this.location = new AtomicReference<>(location == null ? null : location.clone());
   }
 
@@ -60,6 +68,14 @@ public final class HerobrineSighting {
     return vanishAt;
   }
 
+  public boolean miningIntent() {
+    return miningIntent;
+  }
+
+  public boolean silhouette() {
+    return silhouette;
+  }
+
   public Location location() {
     Location value = location.get();
     return value == null ? null : value.clone();
@@ -77,6 +93,14 @@ public final class HerobrineSighting {
 
   public boolean vanishing() {
     return vanishing.get();
+  }
+
+  public boolean markLightningOmenScheduled() {
+    return lightningOmenScheduled.compareAndSet(false, true);
+  }
+
+  public boolean markOmenMarkerScheduled() {
+    return omenMarkerScheduled.compareAndSet(false, true);
   }
 
   public boolean soundCooldownElapsed(long nowMillis, long cooldownMillis) {
