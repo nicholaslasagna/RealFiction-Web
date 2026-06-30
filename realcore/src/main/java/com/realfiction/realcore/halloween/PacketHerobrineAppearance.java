@@ -7,6 +7,7 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.LongSupplier;
 import java.util.logging.Logger;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
@@ -17,6 +18,7 @@ public final class PacketHerobrineAppearance {
   private final ProtocolLibHerobrinePackets packets;
   private final HerobrineSkinProfileService skinProfiles;
   private final Logger logger;
+  private final LongSupplier serviceGenerationSupplier;
   private final Map<UUID, PacketNpcSession> sessions = new ConcurrentHashMap<>();
   private final AtomicInteger entityIds = new AtomicInteger(1_450_000_000);
 
@@ -24,12 +26,14 @@ public final class PacketHerobrineAppearance {
       RealCoreScheduler scheduler,
       ProtocolLibHerobrinePackets packets,
       HerobrineSkinProfileService skinProfiles,
-      Logger logger
+      Logger logger,
+      LongSupplier serviceGenerationSupplier
   ) {
     this.scheduler = scheduler;
     this.packets = packets;
     this.skinProfiles = skinProfiles;
     this.logger = logger;
+    this.serviceGenerationSupplier = serviceGenerationSupplier == null ? () -> Long.MIN_VALUE : serviceGenerationSupplier;
   }
 
   public HerobrineAppearanceHandle spawn(
@@ -95,7 +99,7 @@ public final class PacketHerobrineAppearance {
 
   private void scheduleTabRemoval(Player viewer, PacketNpcSession session, int delayTicks) {
     scheduler.runForPlayerLater(viewer, () -> {
-      if (!session.accepts(session.serviceGeneration(), session.sessionGeneration())) {
+      if (!sessionCurrent(session)) {
         return;
       }
       Player current = Bukkit.getPlayer(session.viewerUuid());
@@ -175,7 +179,7 @@ public final class PacketHerobrineAppearance {
         return;
       }
       scheduler.runForPlayer(viewer, () -> {
-        if (session.active()) {
+        if (sessionCurrent(session)) {
           packets.rotate(viewer, session, target);
         }
       });
@@ -201,7 +205,7 @@ public final class PacketHerobrineAppearance {
         return;
       }
       scheduler.runForPlayer(viewer, () -> {
-        if (session.active()) {
+        if (sessionCurrent(session)) {
           packets.teleport(viewer, session, next, target);
         }
       });
@@ -216,5 +220,9 @@ public final class PacketHerobrineAppearance {
     public boolean active() {
       return session.active();
     }
+  }
+
+  private boolean sessionCurrent(PacketNpcSession session) {
+    return session != null && session.accepts(serviceGenerationSupplier.getAsLong(), session.sessionGeneration());
   }
 }

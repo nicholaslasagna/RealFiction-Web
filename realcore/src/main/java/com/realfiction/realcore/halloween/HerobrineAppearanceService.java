@@ -76,7 +76,7 @@ public final class HerobrineAppearanceService {
       protocolLibDetected = init.detected();
       protocolLibSupported = init.supported();
       if (init.supported()) {
-        packetAppearance = new PacketHerobrineAppearance(scheduler, init.packets(), skinProfiles, logger);
+        packetAppearance = new PacketHerobrineAppearance(scheduler, init.packets(), skinProfiles, logger, () -> this.generation);
         fallbackReason = "";
         return;
       }
