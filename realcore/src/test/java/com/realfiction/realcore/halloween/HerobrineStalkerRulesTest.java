@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.Duration;
 import java.time.Instant;
+import org.bukkit.Material;
 import org.bukkit.util.Vector;
 import org.junit.jupiter.api.Test;
 
@@ -122,5 +123,31 @@ final class HerobrineStalkerRulesTest {
     assertTrue(HerobrineStalkerRules.sustainedFor(now, now.minusSeconds(1), Duration.ofSeconds(1)));
     assertFalse(HerobrineStalkerRules.cooldownElapsed(now, now.minusSeconds(119), Duration.ofSeconds(120)));
     assertTrue(HerobrineStalkerRules.cooldownElapsed(now, now.minusSeconds(120), Duration.ofSeconds(120)));
+  }
+
+  @Test
+  void windowStalkRequiresConfiguredDarkAndRainGates() {
+    HerobrineWindowStalkConfig config = HerobrineWindowStalkConfig.defaults();
+
+    assertFalse(HerobrineStalkerRules.windowStalkWeatherAllowed(false, true, config));
+    assertFalse(HerobrineStalkerRules.windowStalkWeatherAllowed(true, false, config));
+    assertTrue(HerobrineStalkerRules.windowStalkWeatherAllowed(true, true, config));
+  }
+
+  @Test
+  void glassAndBaseLikeMaterialsAreConservative() {
+    assertTrue(HerobrineStalkerRules.glassLike(Material.GLASS));
+    assertTrue(HerobrineStalkerRules.glassLike(Material.GLASS_PANE));
+    assertTrue(HerobrineStalkerRules.glassLike(Material.BLACK_STAINED_GLASS));
+    assertFalse(HerobrineStalkerRules.glassLike(Material.STONE));
+
+    assertTrue(HerobrineStalkerRules.baseLikeBlock(Material.CHEST));
+    assertTrue(HerobrineStalkerRules.baseLikeBlock(Material.OAK_DOOR));
+    assertTrue(HerobrineStalkerRules.baseLikeBlock(Material.FARMLAND));
+    assertTrue(HerobrineStalkerRules.baseLikeBlock(Material.WHEAT));
+    assertTrue(HerobrineStalkerRules.baseLikeBlock(Material.REDSTONE_WIRE));
+    assertTrue(HerobrineStalkerRules.baseLikeBlock(Material.GLASS));
+    assertFalse(HerobrineStalkerRules.baseLikeBlock(Material.STONE));
+    assertFalse(HerobrineStalkerRules.baseLikeBlock(Material.DIRT));
   }
 }

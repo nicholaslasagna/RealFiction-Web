@@ -14,6 +14,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.logging.Logger;
@@ -78,6 +79,8 @@ public final class HerobrineStalkerService {
   private volatile boolean acceptingSightings;
   private volatile String lastSkipReason = "";
   private volatile String lastFailure = "";
+  private volatile String lastWindowStalkResult = "";
+  private volatile String lastDistantOmenResult = "";
 
   public HerobrineStalkerService(Plugin plugin, RealCoreConfig config, RealCoreScheduler scheduler, Logger logger) {
     this.plugin = plugin;
@@ -208,8 +211,14 @@ public final class HerobrineStalkerService {
         + "/" + stalker.vanishOnLook().normalViewDegrees()
         + "deg"
         + ", proximityEffect=" + (stalker.proximityEffect().enabled() ? "on" : "off")
+        + ", windowStalk=" + (stalker.windowStalk().enabled() ? "on" : "off")
+        + ", distantOmenStructure=" + (stalker.distantOmenStructure().enabled() ? "on" : "off")
+        + "/particlesOnly=" + stalker.distantOmenStructure().particlesOnly()
+        + "/persistentBlocks=" + stalker.distantOmenStructure().persistentBlocks()
         + ", dropChanceGuard=" + ARMOR_STAND_DROPS_FIX_MARKER
         + ", lastSkip=" + blankToNone(lastSkipReason)
+        + ", lastWindowStalk=" + blankToNone(lastWindowStalkResult)
+        + ", lastDistantOmen=" + blankToNone(lastDistantOmenResult)
         + ", lastFailure=" + blankToNone(lastFailure) + ")";
   }
 
@@ -297,6 +306,14 @@ public final class HerobrineStalkerService {
       lastSkipReason = "no spooky condition";
       return;
     }
+
+    if (maybeStartWindowStalk(player, stalker, conditions, now)) {
+      return;
+    }
+    if (maybeStartDistantOmenStructure(player, stalker, conditions, now)) {
+      return;
+    }
+
     double random = ThreadLocalRandom.current().nextDouble();
     double effectiveChance = HerobrineStalkerRules.effectiveChance(stalker.chancePerCheck(), conditions, stalker.miningIntent());
     if (!HerobrineStalkerRules.shouldAttempt(random, effectiveChance)) {
@@ -320,6 +337,7 @@ public final class HerobrineStalkerService {
         randomLinger(stalker, miningIntent, silhouette),
         miningIntent,
         silhouette,
+        false,
         buildCandidates(playerLocation, stalker)
     );
     if (request.candidates().isEmpty()) {
@@ -357,6 +375,228 @@ public final class HerobrineStalkerService {
       max = Math.max(min, Math.min(max, stalker.miningIntent().maxLinger().toSeconds()));
     }
     return Duration.ofSeconds(ThreadLocalRandom.current().nextLong(min, max + 1));
+  }
+
+  private boolean maybeStartWindowStalk(
+      Player player,
+      HerobrineStalkerConfig stalker,
+      SpookyConditions conditions,
+      Instant now
+  ) {
+    HerobrineWindowStalkConfig window = stalker.windowStalk();
+    if (!window.enabled()) {
+      return false;
+    }
+    World world = player.getWorld();
+    if (!HerobrineStalkerRules.windowStalkWeatherAllowed(darkOutside(world), rainOrSnow(world), window)) {
+      lastWindowStalkResult = "weather/darkness gate";
+      return false;
+    }
+    if (ThreadLocalRandom.current().nextDouble() > window.chance()) {
+      return false;
+    }
+    List<Location> candidates = buildWindowStalkCandidates(player, window);
+    if (candidates.isEmpty()) {
+      lastWindowStalkResult = "no glass/outside candidate";
+      debug("Window stalk rejected for " + player.getName() + ": no glass/outside candidate.");
+      return false;
+    }
+    SpawnRequest request = new SpawnRequest(
+        player.getUniqueId(),
+        player.getName(),
+        player.getLocation().clone(),
+        player.getEyeLocation().clone(),
+        conditions,
+        now,
+        lifecycleGeneration.get(),
+        window.maxLinger(),
+        false,
+        false,
+        true,
+        candidates
+    );
+    lastWindowStalkResult = "candidate search queued";
+    trySpawnCandidate(request, 0);
+    return true;
+  }
+
+  private List<Location> buildWindowStalkCandidates(Player player, HerobrineWindowStalkConfig window) {
+    List<Location> candidates = new ArrayList<>();
+    Location eye = player.getEyeLocation().clone();
+    List<Vector> directions = windowSearchDirections(eye);
+    Set<String> seen = new HashSet<>();
+    for (Vector direction : directions) {
+      if (candidates.size() >= window.maxCandidateChecks()) {
+        break;
+      }
+      Location candidate = windowCandidateFromDirection(player, eye, direction, window);
+      if (candidate == null) {
+        continue;
+      }
+      String key = candidate.getBlockX() + ":" + candidate.getBlockY() + ":" + candidate.getBlockZ();
+      if (seen.add(key)) {
+        candidates.add(candidate);
+      }
+    }
+    return candidates;
+  }
+
+  private List<Vector> windowSearchDirections(Location eye) {
+    List<Vector> directions = new ArrayList<>();
+    Vector facing = eye.getDirection().clone();
+    if (facing.lengthSquared() > 0.0001) {
+      directions.add(facing.normalize());
+    }
+    float yaw = eye.getYaw();
+    for (double offset : new double[] {-45, -25, 25, 45, 90, -90, 135, -135, 180}) {
+      double radians = Math.toRadians(yaw + offset);
+      directions.add(new Vector(-Math.sin(radians), 0.0, Math.cos(radians)).normalize());
+    }
+    return directions;
+  }
+
+  private Location windowCandidateFromDirection(
+      Player player,
+      Location eye,
+      Vector direction,
+      HerobrineWindowStalkConfig window
+  ) {
+    if (eye.getWorld() == null || direction == null || direction.lengthSquared() <= 0.0001) {
+      return null;
+    }
+    World world = eye.getWorld();
+    Vector normalized = direction.clone().normalize();
+    int searchBlocks = Math.max(3, Math.min(12, window.maxOutsideDistance()));
+    for (int step = 1; step <= searchBlocks; step++) {
+      Location probe = eye.clone().add(normalized.clone().multiply(step));
+      if (!sameChunk(player.getLocation(), probe) || !world.isChunkLoaded(probe.getBlockX() >> 4, probe.getBlockZ() >> 4)) {
+        return null;
+      }
+      Block block = world.getBlockAt(probe);
+      Material type = block.getType();
+      if (HerobrineStalkerRules.glassLike(type)) {
+        if (!outsideAirBeyondGlass(world, block.getLocation(), normalized)) {
+          lastWindowStalkResult = "blocked beyond glass";
+          return null;
+        }
+        Location candidate = block.getLocation().add(0.5, 0.0, 0.5)
+            .add(normalized.clone().multiply(window.minOutsideDistance()));
+        if (!sameChunk(player.getLocation(), candidate)) {
+          lastWindowStalkResult = "candidate crosses chunk boundary";
+          return null;
+        }
+        return candidate;
+      }
+      if (!type.isAir() && type.isSolid() && !block.isPassable()) {
+        return null;
+      }
+    }
+    return null;
+  }
+
+  private boolean outsideAirBeyondGlass(World world, Location glass, Vector direction) {
+    for (int step = 1; step <= 3; step++) {
+      Location probe = glass.clone().add(0.5, 0.5, 0.5).add(direction.clone().normalize().multiply(step));
+      if (!world.isChunkLoaded(probe.getBlockX() >> 4, probe.getBlockZ() >> 4)) {
+        return false;
+      }
+      Block block = world.getBlockAt(probe);
+      if (block.isLiquid() || dangerous(block.getType())) {
+        return false;
+      }
+      if (!emptyForBody(block)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  private boolean maybeStartDistantOmenStructure(
+      Player player,
+      HerobrineStalkerConfig stalker,
+      SpookyConditions conditions,
+      Instant now
+  ) {
+    HerobrineDistantOmenStructureConfig omen = stalker.distantOmenStructure();
+    if (!omen.enabled()) {
+      return false;
+    }
+    if (omen.realBlockPlacementRequested() || omen.packetFakeBlocks()) {
+      lastDistantOmenResult = "real/fake block omen deferred";
+      debug("Distant omen structure skipped for " + player.getName()
+          + ": this build only permits particles-only omen structures.");
+      return false;
+    }
+    if (!omen.particlesOnly()) {
+      lastDistantOmenResult = "particlesOnly required";
+      return false;
+    }
+    if (conditions.underground() || conditions.darkCave()) {
+      lastDistantOmenResult = "not outdoor";
+      return false;
+    }
+    if (ThreadLocalRandom.current().nextDouble() > omen.chance()) {
+      return false;
+    }
+    List<Location> candidates = buildDistantOmenCandidates(player.getLocation().clone(), omen);
+    if (candidates.isEmpty()) {
+      lastDistantOmenResult = "no candidates";
+      return false;
+    }
+    tryDistantOmenCandidate(player.getUniqueId(), player.getName(), candidates, 0, omen, now, lifecycleGeneration.get());
+    return true;
+  }
+
+  private List<Location> buildDistantOmenCandidates(Location playerLocation, HerobrineDistantOmenStructureConfig omen) {
+    List<Location> candidates = new ArrayList<>();
+    if (playerLocation == null || playerLocation.getWorld() == null) {
+      return candidates;
+    }
+    ThreadLocalRandom random = ThreadLocalRandom.current();
+    int attempts = omen.maxCandidateChecks();
+    for (int i = 0; i < attempts; i++) {
+      double distance = random.nextDouble(omen.minDistance(), omen.maxDistance() + 0.01);
+      double yaw = playerLocation.getYaw() + random.nextDouble(-70.0, 70.0);
+      double radians = Math.toRadians(yaw);
+      double x = playerLocation.getX() - Math.sin(radians) * distance;
+      double z = playerLocation.getZ() + Math.cos(radians) * distance;
+      candidates.add(new Location(playerLocation.getWorld(), x, playerLocation.getY(), z));
+    }
+    return candidates;
+  }
+
+  private void tryDistantOmenCandidate(
+      UUID playerUuid,
+      String playerName,
+      List<Location> candidates,
+      int index,
+      HerobrineDistantOmenStructureConfig omen,
+      Instant now,
+      long generation
+  ) {
+    if (!generationActive(generation)) {
+      return;
+    }
+    if (index >= candidates.size()) {
+      lastDistantOmenResult = "no safe open-area candidate";
+      debug("Distant omen rejected for " + playerName + ": no safe open-area candidate.");
+      return;
+    }
+    Location candidate = candidates.get(index);
+    scheduler.runAt(candidate, () -> {
+      if (!generationActive(generation)) {
+        return;
+      }
+      Location safe = findDistantOmenLocation(candidate, omen);
+      if (safe == null) {
+        tryDistantOmenCandidate(playerUuid, playerName, candidates, index + 1, omen, now, generation);
+        return;
+      }
+      recordCooldowns(playerUuid, now);
+      lastDistantOmenResult = "shown at " + formatLocation(safe);
+      debug("Distant omen accepted for " + playerName + " at " + formatLocation(safe) + ".");
+      showDistantOmenParticles(playerUuid, safe, omen, generation);
+    });
   }
 
   private List<Location> buildCandidates(Location playerLocation, HerobrineStalkerConfig stalker) {
@@ -433,6 +673,11 @@ public final class HerobrineStalkerService {
     if (!world.isChunkLoaded(x >> 4, z >> 4)) {
       return null;
     }
+    if (request.windowStalk()) {
+      int highest = Math.min(world.getMaxHeight() - 2, world.getHighestBlockYAt(x, z) + 1);
+      Location surface = safeAt(world, x, highest, z, request);
+      return surface != null && windowStalkLocationAllowed(surface, request) ? surface : null;
+    }
     int playerY = request.playerLocation().getBlockY();
     boolean cavePreferred = request.conditions().underground() || request.conditions().darkCave();
     if (!cavePreferred) {
@@ -463,8 +708,13 @@ public final class HerobrineStalkerService {
     }
     double distanceSq = spawn.distanceSquared(request.playerLocation());
     HerobrineStalkerConfig stalker = config.halloween().herobrineStalker();
-    if (distanceSq < stalker.minSpawnDistance() * stalker.minSpawnDistance()
-        || distanceSq > (stalker.maxSpawnDistance() + 8.0) * (stalker.maxSpawnDistance() + 8.0)) {
+    int minDistance = request.windowStalk()
+        ? stalker.windowStalk().minOutsideDistance()
+        : stalker.minSpawnDistance();
+    double maxDistance = request.windowStalk()
+        ? stalker.windowStalk().maxOutsideDistance()
+        : stalker.maxSpawnDistance() + 8.0;
+    if (distanceSq < minDistance * minDistance || distanceSq > maxDistance * maxDistance) {
       return null;
     }
     if (tooCloseToWorldSpawn(world, spawn, stalker.minDistanceFromWorldSpawn())) {
@@ -478,10 +728,44 @@ public final class HerobrineStalkerService {
     }
     // TODO: integrate WorldGuard/claim APIs if RealCore adopts one. Until then,
     // this small bounded scan avoids obvious bases/portals without hard dependencies.
-    if (nearPlayerBaseOrPortalBlock(world, x, y, z, stalker.avoidPlayerBaseBlocksRadius())) {
+    int baseRadius = request.windowStalk()
+        ? stalker.windowStalk().avoidPlayerBaseBlocksRadius()
+        : stalker.avoidPlayerBaseBlocksRadius();
+    if (nearPlayerBaseOrPortalBlock(world, x, y, z, baseRadius, request.windowStalk())) {
       return null;
     }
     return spawn;
+  }
+
+  private boolean windowStalkLocationAllowed(Location spawn, SpawnRequest request) {
+    if (spawn == null || spawn.getWorld() == null) {
+      lastWindowStalkResult = "invalid location";
+      return false;
+    }
+    HerobrineWindowStalkConfig window = config.halloween().herobrineStalker().windowStalk();
+    World world = spawn.getWorld();
+    if (window.requireDarkOutside() && !darkOutside(world)) {
+      lastWindowStalkResult = "outside not dark";
+      return false;
+    }
+    if (window.requireRainOrSnow() && !rainOrSnow(world)) {
+      lastWindowStalkResult = "no rain/snow";
+      return false;
+    }
+    if (window.requireGlassLineOfSight() && !lineOfSightAllowsWindowGlass(request.eyeLocation(), spawn)) {
+      lastWindowStalkResult = "no glass line of sight";
+      return false;
+    }
+    if (window.minHeadroom() > 2 && !hasAirClearance(world, spawn.getBlockX(), spawn.getBlockY(), spawn.getBlockZ(), window.minHeadroom())) {
+      lastWindowStalkResult = "insufficient headroom";
+      return false;
+    }
+    if (!openSkyAt(world, spawn.getBlockX(), spawn.getBlockY(), spawn.getBlockZ())) {
+      lastWindowStalkResult = "not outside";
+      return false;
+    }
+    lastWindowStalkResult = "accepted";
+    return true;
   }
 
   private boolean solidGround(Block block) {
@@ -500,6 +784,217 @@ public final class HerobrineStalkerService {
           NETHER_PORTAL, END_PORTAL -> true;
       default -> false;
     };
+  }
+
+  private boolean darkOutside(World world) {
+    if (world == null) {
+      return false;
+    }
+    long time = world.getTime();
+    return time >= 13000L && time <= 23000L;
+  }
+
+  private boolean rainOrSnow(World world) {
+    return world != null && (world.hasStorm() || world.isThundering());
+  }
+
+  private boolean sameChunk(Location first, Location second) {
+    return first != null
+        && second != null
+        && first.getWorld() != null
+        && first.getWorld().equals(second.getWorld())
+        && (first.getBlockX() >> 4) == (second.getBlockX() >> 4)
+        && (first.getBlockZ() >> 4) == (second.getBlockZ() >> 4);
+  }
+
+  private boolean openSkyAt(World world, int x, int y, int z) {
+    if (world == null || !world.isChunkLoaded(x >> 4, z >> 4)) {
+      return false;
+    }
+    return world.getHighestBlockYAt(x, z) <= y - 1;
+  }
+
+  private boolean hasAirClearance(World world, int x, int y, int z, int height) {
+    if (world == null) {
+      return false;
+    }
+    int safeHeight = Math.max(2, height);
+    for (int dy = 0; dy < safeHeight; dy++) {
+      if (!emptyForBody(world.getBlockAt(x, y + dy, z))) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  private boolean lineOfSightAllowsWindowGlass(Location fromEye, Location targetFeet) {
+    if (fromEye == null || fromEye.getWorld() == null || targetFeet == null || targetFeet.getWorld() == null) {
+      return false;
+    }
+    if (!fromEye.getWorld().equals(targetFeet.getWorld())) {
+      return false;
+    }
+    World world = fromEye.getWorld();
+    Vector start = fromEye.toVector();
+    Vector end = targetFeet.clone().add(0, 1.55, 0).toVector();
+    Vector delta = end.clone().subtract(start);
+    double distance = delta.length();
+    if (distance <= 0.01 || distance > 48.0) {
+      return false;
+    }
+    Vector step = delta.normalize().multiply(0.35);
+    Vector cursor = start.clone();
+    boolean sawGlass = false;
+    int checks = Math.min(160, (int) Math.ceil(distance / 0.35));
+    for (int i = 0; i <= checks; i++) {
+      Location probe = cursor.toLocation(world);
+      if (!world.isChunkLoaded(probe.getBlockX() >> 4, probe.getBlockZ() >> 4)) {
+        return false;
+      }
+      Material type = world.getBlockAt(probe).getType();
+      if (HerobrineStalkerRules.glassLike(type)) {
+        sawGlass = true;
+      } else if (!type.isAir() && type.isSolid() && !world.getBlockAt(probe).isPassable()) {
+        return false;
+      }
+      cursor.add(step);
+    }
+    return sawGlass;
+  }
+
+  private Location findDistantOmenLocation(Location candidate, HerobrineDistantOmenStructureConfig omen) {
+    if (candidate == null || candidate.getWorld() == null || omen == null || !omen.particlesOnly() || omen.realBlockPlacementRequested()) {
+      return null;
+    }
+    World world = candidate.getWorld();
+    int x = candidate.getBlockX();
+    int z = candidate.getBlockZ();
+    if (!world.isChunkLoaded(x >> 4, z >> 4)) {
+      return null;
+    }
+    int y = Math.min(world.getMaxHeight() - 2, world.getHighestBlockYAt(x, z) + 1);
+    Location origin = new Location(world, x + 0.5, y, z + 0.5);
+    if (tooCloseToWorldSpawn(world, origin, omen.minDistanceFromWorldSpawn())) {
+      lastDistantOmenResult = "too close to spawn";
+      return null;
+    }
+    if (omen.requireOpenSky() && !openSkyAt(world, x, y, z)) {
+      lastDistantOmenResult = "no open sky";
+      return null;
+    }
+    Block ground = world.getBlockAt(x, y - 1, z);
+    if (!solidGround(ground)
+        || !naturalOmenGround(ground.getType())
+        || !hasAirClearance(world, x, y, z, omen.minHeightClearance())) {
+      lastDistantOmenResult = "unsafe ground/clearance";
+      return null;
+    }
+    if (!openAreaAround(world, x, y, z, omen.minOpenRadius(), omen.minHeightClearance())) {
+      lastDistantOmenResult = "not open wilderness";
+      return null;
+    }
+    if (nearPlayerBaseOrPortalBlock(world, x, y, z, omen.avoidPlayerBaseBlocksRadius())) {
+      lastDistantOmenResult = "near base-like blocks";
+      return null;
+    }
+    return origin;
+  }
+
+  private boolean naturalOmenGround(Material type) {
+    return switch (type) {
+      case GRASS_BLOCK, DIRT, COARSE_DIRT, ROOTED_DIRT, PODZOL, MYCELIUM,
+          STONE, DEEPSLATE, TUFF, ANDESITE, DIORITE, GRANITE, CALCITE,
+          BLACKSTONE, BASALT, SMOOTH_BASALT, GRAVEL, SAND, RED_SAND,
+          MOSS_BLOCK, MUD, PACKED_MUD, SNOW_BLOCK -> true;
+      default -> false;
+    };
+  }
+
+  private boolean openAreaAround(World world, int x, int y, int z, int radius, int clearance) {
+    int safeRadius = Math.max(1, radius);
+    int safeClearance = Math.max(2, clearance);
+    for (int dx = -safeRadius; dx <= safeRadius; dx++) {
+      for (int dz = -safeRadius; dz <= safeRadius; dz++) {
+        if ((dx * dx) + (dz * dz) > safeRadius * safeRadius) {
+          continue;
+        }
+        int checkX = x + dx;
+        int checkZ = z + dz;
+        if (!world.isChunkLoaded(checkX >> 4, checkZ >> 4)) {
+          return false;
+        }
+        for (int dy = 0; dy < safeClearance; dy++) {
+          Block block = world.getBlockAt(checkX, y + dy, checkZ);
+          if (!emptyForBody(block)) {
+            return false;
+          }
+        }
+      }
+    }
+    return true;
+  }
+
+  private void showDistantOmenParticles(
+      UUID playerUuid,
+      Location origin,
+      HerobrineDistantOmenStructureConfig omen,
+      long generation
+  ) {
+    AtomicBoolean active = new AtomicBoolean(true);
+    int pulses = Math.max(1, (int) Math.min(24, omen.linger().toSeconds() * 2));
+    for (int i = 0; i < pulses; i++) {
+      scheduler.runGlobalLater(() -> {
+        if (!generationActive(generation) || !active.get()) {
+          return;
+        }
+        Player player = Bukkit.getPlayer(playerUuid);
+        if (player == null || !player.isOnline() || player.isDead() || !sameWorld(player, origin)) {
+          active.set(false);
+          return;
+        }
+        scheduler.runForPlayer(player, () -> {
+          if (!generationActive(generation) || !active.get() || !player.isOnline() || player.isDead() || !sameWorld(player, origin)) {
+            active.set(false);
+            return;
+          }
+          if (noticedOmenByPlayer(player, origin, omen.maxDistance())) {
+            active.set(false);
+            lastDistantOmenResult = "vanished when noticed";
+            return;
+          }
+          spawnDistantOmenParticles(player, origin, omen);
+        });
+      }, i * 10L);
+    }
+  }
+
+  private boolean noticedOmenByPlayer(Player player, Location origin, int maxDistance) {
+    Location eye = player.getEyeLocation();
+    return HerobrineStalkerRules.directLook(
+        eye.toVector(),
+        eye.getDirection(),
+        origin.clone().add(0, 2.2, 0).toVector(),
+        Math.max(24.0, maxDistance + 12.0),
+        HerobrineStalkerRules.dotForViewDegrees(28.0)
+    );
+  }
+
+  private void spawnDistantOmenParticles(Player player, Location origin, HerobrineDistantOmenStructureConfig omen) {
+    Particle.DustOptions ash = new Particle.DustOptions(Color.fromRGB(12, 12, 12), 1.25f);
+    Particle.DustOptions red = new Particle.DustOptions(Color.fromRGB(96, 8, 8), 0.8f);
+    int height = switch (omen.type()) {
+      case "smoke_column" -> 5;
+      case "ash_silhouette" -> 4;
+      default -> 5;
+    };
+    for (int y = 0; y < height; y++) {
+      Location point = origin.clone().add(0, 0.35 + y * 0.65, 0);
+      player.spawnParticle(Particle.SMOKE, point, 5, 0.16, 0.22, 0.16, 0.004);
+      player.spawnParticle(Particle.DUST, point, 3, 0.13, 0.14, 0.13, 0.0, ash);
+    }
+    if ("void_monolith".equals(omen.type())) {
+      player.spawnParticle(Particle.DUST, origin.clone().add(0, 2.0, 0), 2, 0.22, 0.08, 0.22, 0.0, red);
+    }
   }
 
   private void spawnOrDryRun(SpawnRequest request, Location safe) {
@@ -619,6 +1114,7 @@ public final class HerobrineStalkerService {
         request.createdAt().plus(request.linger()),
         request.miningIntent(),
         request.silhouette(),
+        request.windowStalk(),
         handle.location()
     );
     HerobrineSighting previous = activeSightings.putIfAbsent(request.playerUuid(), sighting);
@@ -646,6 +1142,9 @@ public final class HerobrineStalkerService {
   }
 
   private String sightingMode(SpawnRequest request) {
+    if (request.windowStalk()) {
+      return "windowStalk";
+    }
     if (request.silhouette()) {
       return "distantSilhouette";
     }
@@ -756,11 +1255,15 @@ public final class HerobrineStalkerService {
     if (handleProximityEffect(player, sighting, playerLocation, herobrine, now, stalker.proximityEffect())) {
       return;
     }
-    if (stalker.vanishOnLook().enabled() && noticedByPlayer(player, herobrine, stalker.vanishOnLook().normalViewDegrees())) {
+    boolean canVanishWhenSeen = !sighting.windowStalk() || stalker.windowStalk().vanishOnSeen();
+    if (canVanishWhenSeen
+        && stalker.vanishOnLook().enabled()
+        && noticedByPlayer(player, herobrine, stalker.vanishOnLook().normalViewDegrees())) {
       vanish(sighting, true, "seen");
       return;
     }
-    if (!stalker.vanishOnLook().enabled()
+    if (canVanishWhenSeen
+        && !stalker.vanishOnLook().enabled()
         && stalker.vanishWhenSeen()
         && (playerLocation.distanceSquared(herobrine) <= CLOSE_DISTANCE_SQUARED || lookingAt(player, herobrine))) {
       retreatAndVanish(sighting, playerLocation);
@@ -1081,6 +1584,10 @@ public final class HerobrineStalkerService {
   }
 
   private boolean nearPlayerBaseOrPortalBlock(World world, int x, int y, int z, int radius) {
+    return nearPlayerBaseOrPortalBlock(world, x, y, z, radius, false);
+  }
+
+  private boolean nearPlayerBaseOrPortalBlock(World world, int x, int y, int z, int radius, boolean allowGlassForWindowStalk) {
     if (radius <= 0) {
       return false;
     }
@@ -1090,6 +1597,9 @@ public final class HerobrineStalkerService {
       for (int dz = -radius; dz <= radius; dz++) {
         for (int scanY = startY; scanY <= endY; scanY++) {
           Material type = world.getBlockAt(x + dx, scanY, z + dz).getType();
+          if (allowGlassForWindowStalk && HerobrineStalkerRules.glassLike(type)) {
+            continue;
+          }
           if (protectedOrBaseBlock(type)) {
             return true;
           }
@@ -1100,13 +1610,7 @@ public final class HerobrineStalkerService {
   }
 
   private boolean protectedOrBaseBlock(Material type) {
-    return switch (type) {
-      case CHEST, TRAPPED_CHEST, BARREL, FURNACE, BLAST_FURNACE, SMOKER,
-          CRAFTING_TABLE, ENCHANTING_TABLE, ANVIL, CHIPPED_ANVIL, DAMAGED_ANVIL,
-          BEDROCK, RESPAWN_ANCHOR, END_PORTAL_FRAME, NETHER_PORTAL, END_PORTAL,
-          BEACON, HOPPER, DROPPER, DISPENSER -> true;
-      default -> type.name().endsWith("_BED") || type.name().endsWith("_DOOR");
-    };
+    return HerobrineStalkerRules.baseLikeBlock(type);
   }
 
   private void cleanupNearbyLoadedStaleSightings(HerobrineStalkerConfig stalker) {
@@ -1468,6 +1972,7 @@ public final class HerobrineStalkerService {
       Duration linger,
       boolean miningIntent,
       boolean silhouette,
+      boolean windowStalk,
       List<Location> candidates
   ) {
   }

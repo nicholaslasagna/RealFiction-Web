@@ -16,6 +16,7 @@ public final class HerobrineSighting {
   private final Instant vanishAt;
   private final boolean miningIntent;
   private final boolean silhouette;
+  private final boolean windowStalk;
   private final AtomicReference<Location> location;
   private final AtomicBoolean vanishing = new AtomicBoolean(false);
   private final AtomicBoolean lightningOmenScheduled = new AtomicBoolean(false);
@@ -34,6 +35,21 @@ public final class HerobrineSighting {
       boolean silhouette,
       Location location
   ) {
+    this(sightingId, playerUuid, playerName, appearance, createdAt, vanishAt, miningIntent, silhouette, false, location);
+  }
+
+  public HerobrineSighting(
+      UUID sightingId,
+      UUID playerUuid,
+      String playerName,
+      HerobrineAppearanceHandle appearance,
+      Instant createdAt,
+      Instant vanishAt,
+      boolean miningIntent,
+      boolean silhouette,
+      boolean windowStalk,
+      Location location
+  ) {
     this.sightingId = sightingId;
     this.playerUuid = playerUuid;
     this.playerName = playerName == null ? "" : playerName;
@@ -42,6 +58,7 @@ public final class HerobrineSighting {
     this.vanishAt = vanishAt;
     this.miningIntent = miningIntent;
     this.silhouette = silhouette;
+    this.windowStalk = windowStalk;
     this.location = new AtomicReference<>(location == null ? null : location.clone());
   }
 
@@ -65,6 +82,7 @@ public final class HerobrineSighting {
         vanishAt,
         miningIntent,
         silhouette,
+        false,
         location
     );
   }
@@ -103,6 +121,10 @@ public final class HerobrineSighting {
 
   public boolean silhouette() {
     return silhouette;
+  }
+
+  public boolean windowStalk() {
+    return windowStalk;
   }
 
   public Location location() {

@@ -2,6 +2,7 @@ package com.realfiction.realcore.halloween;
 
 import java.time.Duration;
 import java.time.Instant;
+import org.bukkit.Material;
 import org.bukkit.util.Vector;
 
 public final class HerobrineStalkerRules {
@@ -85,5 +86,71 @@ public final class HerobrineStalkerRules {
     }
     Duration safeRequired = required == null ? Duration.ZERO : required;
     return !now.isBefore(startedAt.plus(safeRequired));
+  }
+
+  public static boolean windowStalkWeatherAllowed(
+      boolean darkOutside,
+      boolean rainOrSnow,
+      HerobrineWindowStalkConfig config
+  ) {
+    if (config == null || !config.enabled()) {
+      return false;
+    }
+    if (config.requireDarkOutside() && !darkOutside) {
+      return false;
+    }
+    return !config.requireRainOrSnow() || rainOrSnow;
+  }
+
+  public static boolean glassLike(Material type) {
+    if (type == null) {
+      return false;
+    }
+    String name = type.name();
+    return type == Material.GLASS
+        || type == Material.GLASS_PANE
+        || type == Material.TINTED_GLASS
+        || name.endsWith("_STAINED_GLASS")
+        || name.endsWith("_STAINED_GLASS_PANE");
+  }
+
+  public static boolean baseLikeBlock(Material type) {
+    if (type == null) {
+      return false;
+    }
+    String name = type.name();
+    return switch (type) {
+      case CHEST, TRAPPED_CHEST, BARREL, FURNACE, BLAST_FURNACE, SMOKER,
+          CRAFTING_TABLE, ENCHANTING_TABLE, ANVIL, CHIPPED_ANVIL, DAMAGED_ANVIL,
+          BEDROCK, RESPAWN_ANCHOR, END_PORTAL_FRAME, NETHER_PORTAL, END_PORTAL,
+          BEACON, HOPPER, DROPPER, DISPENSER, NOTE_BLOCK, JUKEBOX,
+          COMPARATOR, REPEATER, REDSTONE_WIRE, REDSTONE_TORCH,
+          REDSTONE_WALL_TORCH, LEVER, PISTON, STICKY_PISTON, OBSERVER,
+          FARMLAND, BEE_NEST, BEEHIVE, BREWING_STAND, CAULDRON,
+          LECTERN, LOOM, STONECUTTER, CARTOGRAPHY_TABLE, FLETCHING_TABLE,
+          GRINDSTONE, SMITHING_TABLE, BELL, WHEAT, CARROTS, POTATOES,
+          BEETROOTS, NETHER_WART, SUGAR_CANE, BAMBOO, COCOA,
+          MELON_STEM, ATTACHED_MELON_STEM, PUMPKIN_STEM,
+          ATTACHED_PUMPKIN_STEM, SWEET_BERRY_BUSH -> true;
+      default -> glassLike(type)
+          || name.endsWith("_BED")
+          || name.endsWith("_DOOR")
+          || name.endsWith("_TRAPDOOR")
+          || name.endsWith("_FENCE_GATE")
+          || name.endsWith("_BUTTON")
+          || name.endsWith("_PRESSURE_PLATE")
+          || name.endsWith("_SIGN")
+          || name.endsWith("_WALL_SIGN")
+          || name.endsWith("_HANGING_SIGN")
+          || name.endsWith("_WALL_HANGING_SIGN")
+          || name.endsWith("_BANNER")
+          || name.endsWith("_WALL_BANNER")
+          || name.endsWith("_SHULKER_BOX")
+          || name.endsWith("_SAPLING")
+          || name.endsWith("_CROP")
+          || name.endsWith("_STEM")
+          || name.endsWith("_FENCE")
+          || name.contains("POTTED_");
+    };
   }
 }

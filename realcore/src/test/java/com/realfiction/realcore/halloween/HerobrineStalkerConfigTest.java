@@ -119,6 +119,25 @@ final class HerobrineStalkerConfigTest {
     assertTrue(config.halloween().herobrineStalker().omenMarker().enabled());
     assertEquals("ash_ring", config.halloween().herobrineStalker().omenMarker().type());
     assertTrue(config.halloween().herobrineStalker().omenMarker().particlesOnly());
+    assertTrue(config.halloween().herobrineStalker().windowStalk().enabled());
+    assertEquals(0.02, config.halloween().herobrineStalker().windowStalk().chance(), 0.0001);
+    assertTrue(config.halloween().herobrineStalker().windowStalk().requireDarkOutside());
+    assertTrue(config.halloween().herobrineStalker().windowStalk().requireRainOrSnow());
+    assertTrue(config.halloween().herobrineStalker().windowStalk().requireGlassLineOfSight());
+    assertEquals(5, config.halloween().herobrineStalker().windowStalk().minOutsideDistance());
+    assertEquals(18, config.halloween().herobrineStalker().windowStalk().maxOutsideDistance());
+    assertEquals(8, config.halloween().herobrineStalker().windowStalk().maxLinger().toSeconds());
+    assertEquals(6, config.halloween().herobrineStalker().windowStalk().avoidPlayerBaseBlocksRadius());
+    assertEquals(2, config.halloween().herobrineStalker().windowStalk().minHeadroom());
+    assertEquals(32, config.halloween().herobrineStalker().windowStalk().maxCandidateChecks());
+    assertTrue(config.halloween().herobrineStalker().distantOmenStructure().enabled());
+    assertEquals(0.01, config.halloween().herobrineStalker().distantOmenStructure().chance(), 0.0001);
+    assertEquals("void_monolith", config.halloween().herobrineStalker().distantOmenStructure().type());
+    assertTrue(config.halloween().herobrineStalker().distantOmenStructure().particlesOnly());
+    assertFalse(config.halloween().herobrineStalker().distantOmenStructure().packetFakeBlocks());
+    assertFalse(config.halloween().herobrineStalker().distantOmenStructure().persistentBlocks());
+    assertFalse(config.halloween().herobrineStalker().distantOmenStructure().realBlockPlacementRequested());
+    assertEquals(0, config.halloween().herobrineStalker().distantOmenStructure().maxBlocksPlaced());
     assertTrue(config.halloween().herobrineStalker().lookAwayUnease().enabled());
     assertEquals(90, config.halloween().herobrineStalker().lookAwayUnease().cooldown().toSeconds());
   }
@@ -213,6 +232,29 @@ final class HerobrineStalkerConfigTest {
               type: "cross"
               lingerSeconds: 99
               particlesOnly: true
+            windowStalk:
+              chance: 5
+              minOutsideDistance: -1
+              maxOutsideDistance: -5
+              maxLingerSeconds: 99
+              avoidPlayerBaseBlocksRadius: 99
+              minHeadroom: 99
+              maxCandidateChecks: 999
+            distantOmenStructure:
+              chance: 5
+              minDistance: -1
+              maxDistance: -5
+              lingerSeconds: 99
+              type: "cross"
+              particlesOnly: false
+              packetFakeBlocks: true
+              persistentBlocks: true
+              minOpenRadius: 99
+              minHeightClearance: 99
+              avoidPlayerBaseBlocksRadius: 99
+              maxCandidateChecks: 999
+              minDistanceFromWorldSpawn: 9999
+              maxBlocksPlaced: 999
             lookAwayUnease:
               chance: 5
               cooldownSeconds: 1
@@ -256,6 +298,28 @@ final class HerobrineStalkerConfigTest {
     assertEquals("ash_ring", stalker.omenMarker().type());
     assertEquals(12, stalker.omenMarker().linger().toSeconds());
     assertTrue(stalker.omenMarker().particlesOnly());
+    assertEquals(1.0, stalker.windowStalk().chance(), 0.0001);
+    assertEquals(3, stalker.windowStalk().minOutsideDistance());
+    assertEquals(3, stalker.windowStalk().maxOutsideDistance());
+    assertEquals(15, stalker.windowStalk().maxLinger().toSeconds());
+    assertEquals(16, stalker.windowStalk().avoidPlayerBaseBlocksRadius());
+    assertEquals(5, stalker.windowStalk().minHeadroom());
+    assertEquals(64, stalker.windowStalk().maxCandidateChecks());
+    assertEquals(1.0, stalker.distantOmenStructure().chance(), 0.0001);
+    assertEquals(24, stalker.distantOmenStructure().minDistance());
+    assertEquals(24, stalker.distantOmenStructure().maxDistance());
+    assertEquals(12, stalker.distantOmenStructure().linger().toSeconds());
+    assertEquals("void_monolith", stalker.distantOmenStructure().type());
+    assertFalse(stalker.distantOmenStructure().particlesOnly());
+    assertTrue(stalker.distantOmenStructure().packetFakeBlocks());
+    assertTrue(stalker.distantOmenStructure().persistentBlocks());
+    assertTrue(stalker.distantOmenStructure().realBlockPlacementRequested());
+    assertEquals(8, stalker.distantOmenStructure().minOpenRadius());
+    assertEquals(12, stalker.distantOmenStructure().minHeightClearance());
+    assertEquals(32, stalker.distantOmenStructure().avoidPlayerBaseBlocksRadius());
+    assertEquals(64, stalker.distantOmenStructure().maxCandidateChecks());
+    assertEquals(512, stalker.distantOmenStructure().minDistanceFromWorldSpawn());
+    assertEquals(12, stalker.distantOmenStructure().maxBlocksPlaced());
     assertEquals(1.0, stalker.lookAwayUnease().chance(), 0.0001);
     assertEquals(30, stalker.lookAwayUnease().cooldown().toSeconds());
   }
