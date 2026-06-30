@@ -546,7 +546,7 @@ public final class HerobrineStalkerService {
         + " mode=" + sightingMode(request)
         + " conditions=" + request.conditions().summary() + ".");
     if (!request.miningIntent() && !request.silhouette()) {
-      maybePlaySound(request.playerUuid(), stalker.caveSoundChanceOnSpawn());
+      maybePlaySightingCaveSound(sighting, stalker.caveSoundChanceOnSpawn());
     }
     if (!request.silhouette()) {
       scheduleLightningOmen(sighting, safe);
@@ -729,7 +729,7 @@ public final class HerobrineStalkerService {
     if (!sighting.miningIntent() && ThreadLocalRandom.current().nextDouble() <= stalker.caveSoundChanceWhileStalking()) {
       long nowMillis = System.currentTimeMillis();
       if (sighting.soundCooldownElapsed(nowMillis, SOUND_COOLDOWN_MILLIS)) {
-        playCaveSound(player);
+        playCaveSound(player, null);
       }
     }
   }
@@ -882,11 +882,12 @@ public final class HerobrineStalkerService {
     }
     activeSightings.remove(sighting.playerUuid());
     vanished.incrementAndGet();
-    if (maybeSound) {
-      maybePlaySound(sighting.playerUuid(), config.halloween().herobrineStalker().caveSoundChanceOnVanish());
-      maybePlayLookAwayUnease(sighting.playerUuid());
-    }
     Location location = sighting.location();
+    UUID expectedWorldId = location == null || location.getWorld() == null ? null : location.getWorld().getUID();
+    if (maybeSound) {
+      maybePlayPlayerCaveSound(sighting.playerUuid(), config.halloween().herobrineStalker().caveSoundChanceOnVanish(), expectedWorldId);
+      maybePlayLookAwayUnease(sighting.playerUuid(), expectedWorldId);
+    }
     if (location != null) {
       scheduler.runAt(location, () -> removeEntity(sighting.entityUuid()));
     }
@@ -1095,7 +1096,7 @@ public final class HerobrineStalkerService {
   }
 
   private void triggerLightningOmen(HerobrineSighting sighting) {
-    if (activeSightings.get(sighting.playerUuid()) != sighting || sighting.vanishing()) {
+    if (!sightingActive(sighting)) {
       return;
     }
     Location current = sighting.location();
@@ -1106,7 +1107,7 @@ public final class HerobrineStalkerService {
   }
 
   private void triggerLightningOmenAtCurrentLocation(HerobrineSighting sighting) {
-    if (activeSightings.get(sighting.playerUuid()) != sighting || sighting.vanishing()) {
+    if (!sightingActive(sighting)) {
       return;
     }
     HerobrineLightningOmenConfig omen = config.halloween().herobrineStalker().lightningOmen();
@@ -1219,19 +1220,39 @@ public final class HerobrineStalkerService {
     }
   }
 
-  private void maybePlaySound(UUID playerUuid, double chance) {
+  private void maybePlaySightingCaveSound(HerobrineSighting sighting, double chance) {
+    if (chance <= 0.0 || ThreadLocalRandom.current().nextDouble() > chance || !sightingActive(sighting)) {
+      return;
+    }
+    scheduler.runGlobal(() -> {
+      if (!sightingActive(sighting)) {
+        return;
+      }
+      Player player = Bukkit.getPlayer(sighting.playerUuid());
+      if (player == null || !player.isOnline() || player.isDead()) {
+        return;
+      }
+      scheduler.runForPlayer(player, () -> {
+        if (sightingActive(sighting) && sameWorld(player, sighting.location())) {
+          playCaveSound(player, null);
+        }
+      });
+    });
+  }
+
+  private void maybePlayPlayerCaveSound(UUID playerUuid, double chance, UUID expectedWorldId) {
     if (chance <= 0.0 || ThreadLocalRandom.current().nextDouble() > chance) {
       return;
     }
     scheduler.runGlobal(() -> {
       Player player = Bukkit.getPlayer(playerUuid);
-      if (player != null && player.isOnline()) {
-        scheduler.runForPlayer(player, () -> playCaveSound(player));
+      if (player != null && player.isOnline() && !player.isDead()) {
+        scheduler.runForPlayer(player, () -> playCaveSound(player, expectedWorldId));
       }
     });
   }
 
-  private void maybePlayLookAwayUnease(UUID playerUuid) {
+  private void maybePlayLookAwayUnease(UUID playerUuid, UUID expectedWorldId) {
     HerobrineLookAwayUneaseConfig unease = config.halloween().herobrineStalker().lookAwayUnease();
     if (!unease.enabled()
         || unease.chance() <= 0.0
@@ -1245,7 +1266,7 @@ public final class HerobrineStalkerService {
         return;
       }
       scheduler.runForPlayer(player, () -> {
-        if (!player.isOnline() || player.isDead()) {
+        if (!player.isOnline() || player.isDead() || !sameWorld(player, expectedWorldId)) {
           return;
         }
         Location behind = offsetAroundPlayer(player, 7, 13, true);
@@ -1254,8 +1275,11 @@ public final class HerobrineStalkerService {
     });
   }
 
-  private void playCaveSound(Player player) {
+  private void playCaveSound(Player player, UUID expectedWorldId) {
     if (player == null || !player.isOnline()) {
+      return;
+    }
+    if (!sameWorld(player, expectedWorldId)) {
       return;
     }
     long nowMillis = System.currentTimeMillis();
@@ -1268,6 +1292,20 @@ public final class HerobrineStalkerService {
       return;
     }
     player.playSound(player.getLocation(), Sound.AMBIENT_CAVE, 0.35f, 0.72f);
+  }
+
+  private boolean sameWorld(Player player, Location location) {
+    if (location == null || location.getWorld() == null) {
+      return false;
+    }
+    return sameWorld(player, location.getWorld().getUID());
+  }
+
+  private boolean sameWorld(Player player, UUID expectedWorldId) {
+    if (expectedWorldId == null) {
+      return true;
+    }
+    return player != null && player.getWorld() != null && expectedWorldId.equals(player.getWorld().getUID());
   }
 
   private void debug(String message) {
