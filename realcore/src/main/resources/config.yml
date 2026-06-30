@@ -531,6 +531,44 @@ halloween:
       type: "ash_ring"
       lingerSeconds: 4
       particlesOnly: true
+    # Rare window/glass stalk. This only attempts during dark rain/snow and only
+    # when it can prove a glass line-of-sight to an outside safe location. It
+    # never opens doors, touches containers, modifies blocks, or pathfinds.
+    windowStalk:
+      enabled: true
+      chance: 0.02
+      requireDarkOutside: true
+      requireRainOrSnow: true
+      requireGlassLineOfSight: true
+      minOutsideDistance: 5
+      maxOutsideDistance: 18
+      maxLingerSeconds: 8
+      vanishOnSeen: true
+      avoidPlayerBaseBlocksRadius: 6
+      minHeadroom: 2
+      maxCandidateChecks: 32
+    # Distant omen structure. This build is intentionally particles-only: no
+    # real blocks and no fake block packet structures. Persistent block omens
+    # require separate placement tracking + restore commands before shipping.
+    distantOmenStructure:
+      enabled: true
+      chance: 0.01
+      minDistance: 36
+      maxDistance: 72
+      lingerSeconds: 5
+      type: "void_monolith"
+      particlesOnly: true
+      packetFakeBlocks: false
+      persistentBlocks: false
+      requireOpenSky: true
+      minOpenRadius: 5
+      minHeightClearance: 8
+      avoidPlayerBaseBlocksRadius: 8
+      maxCandidateChecks: 32
+      minDistanceFromWorldSpawn: 128
+      maxBlocksPlaced: 0
+      trackPlacements: true
+      allowRestoreCommand: false
     # After a sighting vanishes, rarely play unease behind the player. Sound-only.
     lookAwayUnease:
       enabled: true

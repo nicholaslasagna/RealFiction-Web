@@ -83,4 +83,22 @@ final class HerobrineSightingTest {
     sighting.clearProximityEnteredAt();
     assertTrue(sighting.proximityEnteredAt() == null);
   }
+
+  @Test
+  void windowStalkModeIsTrackedSeparatelyFromSilhouette() {
+    HerobrineSighting sighting = new HerobrineSighting(
+        UUID.randomUUID(),
+        UUID.randomUUID(),
+        "Player",
+        null,
+        Instant.now(),
+        Instant.now().plusSeconds(8),
+        false,
+        false,
+        true,
+        null);
+
+    assertTrue(sighting.windowStalk());
+    assertFalse(sighting.silhouette());
+  }
 }
