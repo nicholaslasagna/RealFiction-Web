@@ -282,13 +282,15 @@ public final class HerobrineStalkerService {
       return;
     }
     double random = ThreadLocalRandom.current().nextDouble();
-    if (!HerobrineStalkerRules.shouldAttempt(random, stalker.chancePerCheck())) {
+    double effectiveChance = HerobrineStalkerRules.effectiveChance(stalker.chancePerCheck(), conditions, stalker.miningIntent());
+    if (!HerobrineStalkerRules.shouldAttempt(random, effectiveChance)) {
       skippedChecks.incrementAndGet();
       return;
     }
 
     Location playerLocation = player.getLocation().clone();
     Location eyeLocation = player.getEyeLocation().clone();
+    boolean miningIntent = stalker.miningIntent().enabled() && HerobrineStalkerRules.miningIntentEligible(conditions);
     SpawnRequest request = new SpawnRequest(
         playerUuid,
         player.getName(),
@@ -297,7 +299,8 @@ public final class HerobrineStalkerService {
         conditions,
         now,
         lifecycleGeneration.get(),
-        randomLinger(stalker),
+        randomLinger(stalker, miningIntent),
+        miningIntent,
         buildCandidates(playerLocation, stalker)
     );
     if (request.candidates().isEmpty()) {
@@ -323,9 +326,12 @@ public final class HerobrineStalkerService {
     return new SpookyConditions(night, storm, underground, covered && dark);
   }
 
-  private Duration randomLinger(HerobrineStalkerConfig stalker) {
+  private Duration randomLinger(HerobrineStalkerConfig stalker, boolean miningIntent) {
     long min = Math.max(1L, stalker.minLinger().toSeconds());
     long max = Math.max(min, stalker.maxLinger().toSeconds());
+    if (miningIntent) {
+      max = Math.max(min, Math.min(max, stalker.miningIntent().maxLinger().toSeconds()));
+    }
     return Duration.ofSeconds(ThreadLocalRandom.current().nextLong(min, max + 1));
   }
 
@@ -514,6 +520,7 @@ public final class HerobrineStalkerService {
         stand.getUniqueId(),
         request.createdAt(),
         request.createdAt().plus(request.linger()),
+        request.miningIntent(),
         stand.getLocation()
     );
     activeSightings.put(request.playerUuid(), sighting);
@@ -523,8 +530,12 @@ public final class HerobrineStalkerService {
     debug("Spawned Herobrine sighting " + sighting.sightingId() + " for " + request.playerName()
         + " at " + formatLocation(safe)
         + " linger=" + request.linger().toSeconds() + "s"
+        + " mode=" + (request.miningIntent() ? "miningIntent" : "normal")
         + " conditions=" + request.conditions().summary() + ".");
-    maybePlaySound(request.playerUuid(), stalker.caveSoundChanceOnSpawn());
+    if (!request.miningIntent()) {
+      maybePlaySound(request.playerUuid(), stalker.caveSoundChanceOnSpawn());
+    }
+    scheduleLightningOmen(sighting, safe);
   }
 
   private void configureStand(ArmorStand stand, SpawnRequest request, Location safe, UUID sightingId) {
@@ -672,6 +683,10 @@ public final class HerobrineStalkerService {
       return;
     }
     HerobrineStalkerConfig stalker = config.halloween().herobrineStalker();
+    if (sighting.miningIntent() && roughLookingAt(player, herobrine)) {
+      vanish(sighting, false, "mining intent noticed");
+      return;
+    }
     if (stalker.vanishWhenSeen() && (playerLocation.distanceSquared(herobrine) <= CLOSE_DISTANCE_SQUARED || lookingAt(player, herobrine))) {
       retreatAndVanish(sighting, playerLocation);
       return;
@@ -680,7 +695,7 @@ public final class HerobrineStalkerService {
       vanish(sighting, true, "linger complete");
       return;
     }
-    if (ThreadLocalRandom.current().nextDouble() <= stalker.caveSoundChanceWhileStalking()) {
+    if (!sighting.miningIntent() && ThreadLocalRandom.current().nextDouble() <= stalker.caveSoundChanceWhileStalking()) {
       long nowMillis = System.currentTimeMillis();
       if (sighting.soundCooldownElapsed(nowMillis, SOUND_COOLDOWN_MILLIS)) {
         playCaveSound(player);
@@ -689,6 +704,15 @@ public final class HerobrineStalkerService {
   }
 
   private boolean lookingAt(Player player, Location target) {
+    return lookingAt(player, target, DIRECT_LOOK_DOT);
+  }
+
+  private boolean roughLookingAt(Player player, Location target) {
+    double dot = HerobrineStalkerRules.dotForViewDegrees(config.halloween().herobrineStalker().miningIntent().vanishViewDegrees());
+    return lookingAt(player, target, dot);
+  }
+
+  private boolean lookingAt(Player player, Location target, double minDot) {
     Location eye = player.getEyeLocation();
     Vector targetVector = target.clone().add(0, 1.55, 0).toVector();
     return HerobrineStalkerRules.directLook(
@@ -696,7 +720,7 @@ public final class HerobrineStalkerService {
         eye.getDirection(),
         targetVector,
         config.halloween().herobrineStalker().maxSpawnDistance() + 16.0,
-        DIRECT_LOOK_DOT
+        minDot
     );
   }
 
@@ -963,6 +987,78 @@ public final class HerobrineStalkerService {
             || entity.getPersistentDataContainer().has(sightingKey, PersistentDataType.STRING));
   }
 
+  private void scheduleLightningOmen(HerobrineSighting sighting, Location origin) {
+    HerobrineLightningOmenConfig omen = config.halloween().herobrineStalker().lightningOmen();
+    if (!omen.enabled()
+        || omen.chance() <= 0.0
+        || ThreadLocalRandom.current().nextDouble() > omen.chance()
+        || !sighting.markLightningOmenScheduled()) {
+      return;
+    }
+    long minDelay = Math.max(1L, omen.minDelay().toSeconds());
+    long maxDelay = Math.max(minDelay, omen.maxDelay().toSeconds());
+    long delaySeconds = ThreadLocalRandom.current().nextLong(minDelay, maxDelay + 1);
+    scheduler.runAtLater(origin, () -> triggerLightningOmen(sighting), secondsToTicks(delaySeconds));
+  }
+
+  private void triggerLightningOmen(HerobrineSighting sighting) {
+    if (activeSightings.get(sighting.playerUuid()) != sighting || sighting.vanishing()) {
+      return;
+    }
+    Location current = sighting.location();
+    if (current == null || current.getWorld() == null) {
+      return;
+    }
+    scheduler.runAt(current, () -> triggerLightningOmenAtCurrentLocation(sighting));
+  }
+
+  private void triggerLightningOmenAtCurrentLocation(HerobrineSighting sighting) {
+    if (activeSightings.get(sighting.playerUuid()) != sighting || sighting.vanishing()) {
+      return;
+    }
+    HerobrineLightningOmenConfig omen = config.halloween().herobrineStalker().lightningOmen();
+    if (!omen.enabled()) {
+      return;
+    }
+    Location strike = chooseLightningOmenLocation(sighting.location(), omen.radius());
+    if (strike == null) {
+      return;
+    }
+    if (omen.damage() && omen.fire()) {
+      strike.getWorld().strikeLightning(strike);
+    } else {
+      strike.getWorld().strikeLightningEffect(strike);
+    }
+    debug("Herobrine lightning omen at " + formatLocation(strike)
+        + " sighting=" + sighting.sightingId()
+        + " destructive=" + (omen.damage() && omen.fire()) + ".");
+  }
+
+  private Location chooseLightningOmenLocation(Location center, int radius) {
+    if (center == null || center.getWorld() == null) {
+      return null;
+    }
+    World world = center.getWorld();
+    ThreadLocalRandom random = ThreadLocalRandom.current();
+    double minDistance = Math.min(6.0, Math.max(2.0, radius * 0.35));
+    for (int attempt = 0; attempt < 8; attempt++) {
+      double distance = random.nextDouble(minDistance, Math.max(minDistance + 0.01, radius + 0.01));
+      double angle = random.nextDouble(0.0, Math.PI * 2.0);
+      int x = center.getBlockX() + (int) Math.round(Math.cos(angle) * distance);
+      int z = center.getBlockZ() + (int) Math.round(Math.sin(angle) * distance);
+      if (!world.isChunkLoaded(x >> 4, z >> 4)) {
+        continue;
+      }
+      int y = Math.max(world.getMinHeight() + 2, Math.min(world.getMaxHeight() - 2, center.getBlockY()));
+      Block block = world.getBlockAt(x, y, z);
+      if (block.isLiquid() || dangerous(block.getType())) {
+        continue;
+      }
+      return new Location(world, x + 0.5, y + 0.5, z + 0.5);
+    }
+    return null;
+  }
+
   private void maybePlaySound(UUID playerUuid, double chance) {
     if (chance <= 0.0 || ThreadLocalRandom.current().nextDouble() > chance) {
       return;
@@ -1022,6 +1118,7 @@ public final class HerobrineStalkerService {
       Instant createdAt,
       long generation,
       Duration linger,
+      boolean miningIntent,
       List<Location> candidates
   ) {
   }

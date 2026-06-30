@@ -1,6 +1,7 @@
 package com.realfiction.realcore.halloween;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.Duration;
@@ -49,5 +50,31 @@ final class HerobrineStalkerRulesTest {
     assertTrue(HerobrineStalkerRules.activeBelowLimit(1, 2));
     assertFalse(HerobrineStalkerRules.activeBelowLimit(2, 2));
     assertFalse(HerobrineStalkerRules.activeBelowLimit(1, 0));
+  }
+
+  @Test
+  void miningIntentOnlyBoostsMiningOrCaveConditions() {
+    HerobrineMiningIntentConfig miningIntent = HerobrineMiningIntentConfig.defaults();
+
+    assertFalse(HerobrineStalkerRules.miningIntentEligible(new SpookyConditions(true, false, false, false)));
+    assertTrue(HerobrineStalkerRules.miningIntentEligible(new SpookyConditions(false, false, true, false)));
+    assertTrue(HerobrineStalkerRules.miningIntentEligible(new SpookyConditions(false, false, false, true)));
+    assertEquals(0.015, HerobrineStalkerRules.effectiveChance(
+        0.015,
+        new SpookyConditions(true, false, false, false),
+        miningIntent
+    ), 0.0001);
+    assertEquals(0.0225, HerobrineStalkerRules.effectiveChance(
+        0.015,
+        new SpookyConditions(false, false, true, false),
+        miningIntent
+    ), 0.0001);
+  }
+
+  @Test
+  void viewDegreesConvertToDotThreshold() {
+    assertEquals(Math.cos(Math.toRadians(42.0)), HerobrineStalkerRules.dotForViewDegrees(42.0), 0.0001);
+    assertEquals(Math.cos(Math.toRadians(1.0)), HerobrineStalkerRules.dotForViewDegrees(-5.0), 0.0001);
+    assertEquals(Math.cos(Math.toRadians(179.0)), HerobrineStalkerRules.dotForViewDegrees(500.0), 0.0001);
   }
 }

@@ -35,6 +35,8 @@ public record HerobrineStalkerConfig(
     double caveSoundChanceOnSpawn,
     double caveSoundChanceWhileStalking,
     double caveSoundChanceOnVanish,
+    HerobrineLightningOmenConfig lightningOmen,
+    HerobrineMiningIntentConfig miningIntent,
     boolean requireNightRainMiningOrDarkness,
     boolean debug,
     String headOwner
@@ -83,6 +85,8 @@ public record HerobrineStalkerConfig(
         clampChance(section.getDouble("caveSoundChanceOnSpawn", 0.15)),
         clampChance(section.getDouble("caveSoundChanceWhileStalking", 0.08)),
         clampChance(section.getDouble("caveSoundChanceOnVanish", 0.25)),
+        HerobrineLightningOmenConfig.from(section.getConfigurationSection("lightningOmen")),
+        HerobrineMiningIntentConfig.from(section.getConfigurationSection("miningIntent")),
         section.getBoolean("requireNightRainMiningOrDarkness", true),
         section.getBoolean("debug", false),
         clean(section.getString("headOwner", "Herobrine"), "Herobrine")
@@ -117,6 +121,8 @@ public record HerobrineStalkerConfig(
         0.15,
         0.08,
         0.25,
+        HerobrineLightningOmenConfig.defaults(),
+        HerobrineMiningIntentConfig.defaults(),
         true,
         false,
         "Herobrine"

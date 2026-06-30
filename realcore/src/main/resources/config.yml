@@ -459,6 +459,23 @@ halloween:
     caveSoundChanceOnSpawn: 0.15
     caveSoundChanceWhileStalking: 0.08
     caveSoundChanceOnVanish: 0.25
+    # Rare atmospheric lightning while a sighting is active. Defaults use
+    # visual-only lightning, which does not damage, ignite, or grief builds.
+    lightningOmen:
+      enabled: true
+      chance: 0.03
+      radius: 18
+      minDelaySeconds: 2
+      maxDelaySeconds: 6
+      damage: false
+      fire: false
+    # Special quiet cave/mining sightings. These linger less, stay still, and
+    # vanish when the player roughly sweeps their camera across Herobrine.
+    miningIntent:
+      enabled: true
+      chanceMultiplier: 1.5
+      vanishViewDegrees: 42
+      maxLingerSeconds: 8
     requireNightRainMiningOrDarkness: true
     # Name used for the skull skin lookup. If the server cannot resolve it,
     # Minecraft falls back to a normal player head without breaking the event.

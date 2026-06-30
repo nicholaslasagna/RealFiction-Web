@@ -17,6 +17,7 @@ final class HerobrineSightingTest {
         UUID.randomUUID(),
         Instant.now(),
         Instant.now().plusSeconds(8),
+        false,
         null);
 
     assertFalse(sighting.vanishing());
@@ -34,6 +35,7 @@ final class HerobrineSightingTest {
         UUID.randomUUID(),
         Instant.now(),
         Instant.now().plusSeconds(8),
+        false,
         null);
 
     assertTrue(sighting.soundCooldownElapsed(10_000L, 10_000L));

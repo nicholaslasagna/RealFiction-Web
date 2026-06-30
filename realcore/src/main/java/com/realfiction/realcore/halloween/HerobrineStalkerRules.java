@@ -46,6 +46,23 @@ public final class HerobrineStalkerRules {
     return randomValue <= Math.min(1.0, chancePerCheck);
   }
 
+  public static boolean miningIntentEligible(SpookyConditions conditions) {
+    return conditions != null && (conditions.underground() || conditions.darkCave());
+  }
+
+  public static double effectiveChance(double baseChance, SpookyConditions conditions, HerobrineMiningIntentConfig miningIntent) {
+    double clampedBase = Math.max(0.0, Math.min(1.0, baseChance));
+    if (miningIntent == null || !miningIntent.enabled() || !miningIntentEligible(conditions)) {
+      return clampedBase;
+    }
+    return Math.min(1.0, clampedBase * Math.max(1.0, miningIntent.chanceMultiplier()));
+  }
+
+  public static double dotForViewDegrees(double degrees) {
+    double clamped = Math.max(1.0, Math.min(179.0, degrees));
+    return Math.cos(Math.toRadians(clamped));
+  }
+
   public static boolean activeBelowLimit(int activeSightings, int maxActiveSightings) {
     return activeSightings < Math.max(1, maxActiveSightings);
   }

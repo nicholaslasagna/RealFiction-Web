@@ -728,6 +728,8 @@ public final class RealCorePlugin extends JavaPlugin {
         || !getConfig().contains("halloween.herobrineStalker.cleanupStaleSightings")
         || !getConfig().contains("halloween.herobrineStalker.startupCleanupLoadedChunkRadius")
         || !getConfig().contains("halloween.herobrineStalker.startupCleanupMaxChunks")
+        || !getConfig().contains("halloween.herobrineStalker.lightningOmen.enabled")
+        || !getConfig().contains("halloween.herobrineStalker.miningIntent.enabled")
         || !getConfig().contains("economy.dbBalanceReadEnabled")
         || !getConfig().contains("economy.dbBalanceReadBackendAllowlist")
         || !getConfig().contains("economy.dbBalanceReadCacheSeconds")

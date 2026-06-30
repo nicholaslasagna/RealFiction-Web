@@ -88,6 +88,13 @@ final class HerobrineStalkerConfigTest {
     assertEquals(3, config.halloween().herobrineStalker().avoidPlayerBaseBlocksRadius());
     assertEquals(12, config.halloween().herobrineStalker().playerStateGrace().toSeconds());
     assertTrue(config.halloween().herobrineStalker().cleanupStaleSightings());
+    assertTrue(config.halloween().herobrineStalker().lightningOmen().enabled());
+    assertEquals(0.03, config.halloween().herobrineStalker().lightningOmen().chance(), 0.0001);
+    assertFalse(config.halloween().herobrineStalker().lightningOmen().damage());
+    assertFalse(config.halloween().herobrineStalker().lightningOmen().fire());
+    assertTrue(config.halloween().herobrineStalker().miningIntent().enabled());
+    assertEquals(1.5, config.halloween().herobrineStalker().miningIntent().chanceMultiplier(), 0.0001);
+    assertEquals(42.0, config.halloween().herobrineStalker().miningIntent().vanishViewDegrees(), 0.0001);
   }
 
   @Test
@@ -123,5 +130,37 @@ final class HerobrineStalkerConfigTest {
     HerobrineStalkerConfig stalker = HalloweenConfig.from(yaml.getConfigurationSection("halloween")).herobrineStalker();
 
     assertFalse(stalker.serverAllowed("anarchy-1", "anarchy"));
+  }
+
+  @Test
+  void phaseTwoConfigValuesClampSafely() throws InvalidConfigurationException {
+    YamlConfiguration yaml = new YamlConfiguration();
+    yaml.loadFromString("""
+        halloween:
+          herobrineStalker:
+            lightningOmen:
+              chance: 5
+              radius: 99
+              minDelaySeconds: 0
+              maxDelaySeconds: -1
+              damage: true
+              fire: true
+            miningIntent:
+              chanceMultiplier: 99
+              vanishViewDegrees: 180
+              maxLingerSeconds: 99
+        """);
+
+    HerobrineStalkerConfig stalker = HalloweenConfig.from(yaml.getConfigurationSection("halloween")).herobrineStalker();
+
+    assertEquals(1.0, stalker.lightningOmen().chance(), 0.0001);
+    assertEquals(48, stalker.lightningOmen().radius());
+    assertEquals(1, stalker.lightningOmen().minDelay().toSeconds());
+    assertEquals(1, stalker.lightningOmen().maxDelay().toSeconds());
+    assertTrue(stalker.lightningOmen().damage());
+    assertTrue(stalker.lightningOmen().fire());
+    assertEquals(5.0, stalker.miningIntent().chanceMultiplier(), 0.0001);
+    assertEquals(90.0, stalker.miningIntent().vanishViewDegrees(), 0.0001);
+    assertEquals(30, stalker.miningIntent().maxLinger().toSeconds());
   }
 }
