@@ -24,6 +24,7 @@ import org.bukkit.GameMode;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
+import org.bukkit.Particle;
 import org.bukkit.Sound;
 import org.bukkit.World;
 import org.bukkit.block.Block;
@@ -59,6 +60,9 @@ public final class HerobrineStalkerService {
   private final Map<UUID, Instant> playerCooldowns = new ConcurrentHashMap<>();
   private final Map<UUID, Instant> playerSuppressedUntil = new ConcurrentHashMap<>();
   private final Map<UUID, AtomicLong> playerSoundCooldowns = new ConcurrentHashMap<>();
+  private final Map<UUID, AtomicLong> playerFootstepCooldowns = new ConcurrentHashMap<>();
+  private final Map<UUID, AtomicLong> playerMiningFakeoutCooldowns = new ConcurrentHashMap<>();
+  private final Map<UUID, AtomicLong> playerLookAwayCooldowns = new ConcurrentHashMap<>();
   private final AtomicReference<Instant> globalCooldown = new AtomicReference<>();
   private final AtomicLong sightings = new AtomicLong();
   private final AtomicLong dryRunSightings = new AtomicLong();
@@ -291,6 +295,8 @@ public final class HerobrineStalkerService {
     Location playerLocation = player.getLocation().clone();
     Location eyeLocation = player.getEyeLocation().clone();
     boolean miningIntent = stalker.miningIntent().enabled() && HerobrineStalkerRules.miningIntentEligible(conditions);
+    boolean silhouette = stalker.distantSilhouette().enabled()
+        && ThreadLocalRandom.current().nextDouble() <= stalker.distantSilhouette().chance();
     SpawnRequest request = new SpawnRequest(
         playerUuid,
         player.getName(),
@@ -299,8 +305,9 @@ public final class HerobrineStalkerService {
         conditions,
         now,
         lifecycleGeneration.get(),
-        randomLinger(stalker, miningIntent),
+        randomLinger(stalker, miningIntent, silhouette),
         miningIntent,
+        silhouette,
         buildCandidates(playerLocation, stalker)
     );
     if (request.candidates().isEmpty()) {
@@ -326,7 +333,12 @@ public final class HerobrineStalkerService {
     return new SpookyConditions(night, storm, underground, covered && dark);
   }
 
-  private Duration randomLinger(HerobrineStalkerConfig stalker, boolean miningIntent) {
+  private Duration randomLinger(HerobrineStalkerConfig stalker, boolean miningIntent, boolean silhouette) {
+    if (silhouette) {
+      long min = Math.max(1L, stalker.distantSilhouette().minLinger().toSeconds());
+      long max = Math.max(min, stalker.distantSilhouette().maxLinger().toSeconds());
+      return Duration.ofSeconds(ThreadLocalRandom.current().nextLong(min, max + 1));
+    }
     long min = Math.max(1L, stalker.minLinger().toSeconds());
     long max = Math.max(min, stalker.maxLinger().toSeconds());
     if (miningIntent) {
@@ -521,6 +533,7 @@ public final class HerobrineStalkerService {
         request.createdAt(),
         request.createdAt().plus(request.linger()),
         request.miningIntent(),
+        request.silhouette(),
         stand.getLocation()
     );
     activeSightings.put(request.playerUuid(), sighting);
@@ -530,12 +543,22 @@ public final class HerobrineStalkerService {
     debug("Spawned Herobrine sighting " + sighting.sightingId() + " for " + request.playerName()
         + " at " + formatLocation(safe)
         + " linger=" + request.linger().toSeconds() + "s"
-        + " mode=" + (request.miningIntent() ? "miningIntent" : "normal")
+        + " mode=" + sightingMode(request)
         + " conditions=" + request.conditions().summary() + ".");
-    if (!request.miningIntent()) {
+    if (!request.miningIntent() && !request.silhouette()) {
       maybePlaySound(request.playerUuid(), stalker.caveSoundChanceOnSpawn());
     }
-    scheduleLightningOmen(sighting, safe);
+    if (!request.silhouette()) {
+      scheduleLightningOmen(sighting, safe);
+    }
+    scheduleOmenMarker(sighting, safe);
+  }
+
+  private String sightingMode(SpawnRequest request) {
+    if (request.silhouette()) {
+      return "distantSilhouette";
+    }
+    return request.miningIntent() ? "miningIntent" : "normal";
   }
 
   private void configureStand(ArmorStand stand, SpawnRequest request, Location safe, UUID sightingId) {
@@ -683,7 +706,13 @@ public final class HerobrineStalkerService {
       return;
     }
     HerobrineStalkerConfig stalker = config.halloween().herobrineStalker();
-    if (sighting.miningIntent() && roughLookingAt(player, herobrine)) {
+    if (sighting.silhouette()) {
+      if (roughLookingAt(player, herobrine) || !now.isBefore(sighting.vanishAt())) {
+        vanish(sighting, false, "distant silhouette faded");
+      }
+      return;
+    }
+    if (sighting.miningIntent() && (roughLookingAt(player, herobrine) || playerLocation.distanceSquared(herobrine) <= CLOSE_DISTANCE_SQUARED)) {
       vanish(sighting, false, "mining intent noticed");
       return;
     }
@@ -695,6 +724,8 @@ public final class HerobrineStalkerService {
       vanish(sighting, true, "linger complete");
       return;
     }
+    maybePlayDistantFootsteps(player, sighting);
+    maybePlayMiningFakeout(player, sighting);
     if (!sighting.miningIntent() && ThreadLocalRandom.current().nextDouble() <= stalker.caveSoundChanceWhileStalking()) {
       long nowMillis = System.currentTimeMillis();
       if (sighting.soundCooldownElapsed(nowMillis, SOUND_COOLDOWN_MILLIS)) {
@@ -705,6 +736,57 @@ public final class HerobrineStalkerService {
 
   private boolean lookingAt(Player player, Location target) {
     return lookingAt(player, target, DIRECT_LOOK_DOT);
+  }
+
+  private void maybePlayDistantFootsteps(Player player, HerobrineSighting sighting) {
+    HerobrineDistantFootstepsConfig footsteps = config.halloween().herobrineStalker().distantFootsteps();
+    if (!footsteps.enabled()
+        || ThreadLocalRandom.current().nextDouble() > footsteps.chance()
+        || !sightingActive(sighting)
+        || !cooldownReady(playerFootstepCooldowns, player.getUniqueId(), footsteps.cooldown())) {
+      return;
+    }
+    Location soundAt = offsetAroundPlayer(player, footsteps.minDistance(), footsteps.maxDistance(), true);
+    player.playSound(soundAt, Sound.BLOCK_STONE_STEP, 0.18f, 0.55f);
+  }
+
+  private void maybePlayMiningFakeout(Player player, HerobrineSighting sighting) {
+    HerobrineMiningFakeoutConfig fakeout = config.halloween().herobrineStalker().miningFakeout();
+    if (!fakeout.enabled()
+        || ThreadLocalRandom.current().nextDouble() > fakeout.chance()
+        || !sightingActive(sighting)
+        || !HerobrineStalkerRules.miningIntentEligible(conditionsFor(player))
+        || !cooldownReady(playerMiningFakeoutCooldowns, player.getUniqueId(), fakeout.cooldown())) {
+      return;
+    }
+    Location soundAt = offsetAroundPlayer(player, 6, fakeout.radius(), false);
+    soundAt.add(0.0, ThreadLocalRandom.current().nextDouble(-3.0, 1.5), 0.0);
+    player.playSound(soundAt, Sound.BLOCK_STONE_BREAK, 0.22f, 0.62f);
+  }
+
+  private Location offsetAroundPlayer(Player player, int minDistance, int maxDistance, boolean preferBehind) {
+    Location base = player.getLocation().clone();
+    ThreadLocalRandom random = ThreadLocalRandom.current();
+    double min = Math.max(1.0, minDistance);
+    double max = Math.max(min + 0.01, maxDistance);
+    double distance = random.nextDouble(min, max + 0.01);
+    double yaw = base.getYaw();
+    double offset = preferBehind
+        ? random.nextDouble(115.0, 245.0)
+        : random.nextDouble(0.0, 360.0);
+    double radians = Math.toRadians(yaw + offset);
+    return base.add(-Math.sin(radians) * distance, 0.0, Math.cos(radians) * distance);
+  }
+
+  private boolean cooldownReady(Map<UUID, AtomicLong> cooldowns, UUID playerUuid, Duration cooldown) {
+    long nowMillis = System.currentTimeMillis();
+    long cooldownMillis = Math.max(0L, cooldown == null ? 0L : cooldown.toMillis());
+    AtomicLong stored = cooldowns.computeIfAbsent(playerUuid, ignored -> new AtomicLong());
+    long last = stored.get();
+    if (last > 0 && nowMillis - last < cooldownMillis) {
+      return false;
+    }
+    return stored.compareAndSet(last, nowMillis);
   }
 
   private boolean roughLookingAt(Player player, Location target) {
@@ -802,6 +884,7 @@ public final class HerobrineStalkerService {
     vanished.incrementAndGet();
     if (maybeSound) {
       maybePlaySound(sighting.playerUuid(), config.halloween().herobrineStalker().caveSoundChanceOnVanish());
+      maybePlayLookAwayUnease(sighting.playerUuid());
     }
     Location location = sighting.location();
     if (location != null) {
@@ -827,6 +910,9 @@ public final class HerobrineStalkerService {
     }
     playerSuppressedUntil.clear();
     playerSoundCooldowns.clear();
+    playerFootstepCooldowns.clear();
+    playerMiningFakeoutCooldowns.clear();
+    playerLookAwayCooldowns.clear();
   }
 
   private boolean shouldSkipPlayerState(Player player, Instant now) {
@@ -980,6 +1066,13 @@ public final class HerobrineStalkerService {
     return acceptingSightings && request.generation() == lifecycleGeneration.get();
   }
 
+  private boolean sightingActive(HerobrineSighting sighting) {
+    return acceptingSightings
+        && sighting != null
+        && activeSightings.get(sighting.playerUuid()) == sighting
+        && !sighting.vanishing();
+  }
+
   private boolean isRealCoreHerobrineEntity(Entity entity) {
     return entity != null
         && entity.getScoreboardTags().contains(SCOREBOARD_TAG)
@@ -1059,6 +1152,73 @@ public final class HerobrineStalkerService {
     return null;
   }
 
+  private void scheduleOmenMarker(HerobrineSighting sighting, Location origin) {
+    HerobrineOmenMarkerConfig marker = config.halloween().herobrineStalker().omenMarker();
+    if (!marker.enabled()
+        || !marker.particlesOnly()
+        || marker.chance() <= 0.0
+        || ThreadLocalRandom.current().nextDouble() > marker.chance()
+        || !sighting.markOmenMarkerScheduled()) {
+      return;
+    }
+    int pulses = Math.max(1, (int) Math.min(24, marker.linger().toSeconds() * 2));
+    for (int i = 0; i < pulses; i++) {
+      scheduler.runAtLater(origin, () -> spawnOmenMarkerPulse(sighting, origin), i * 10L);
+    }
+  }
+
+  private void spawnOmenMarkerPulse(HerobrineSighting sighting, Location origin) {
+    if (!sightingActive(sighting) || origin == null || origin.getWorld() == null) {
+      return;
+    }
+    World world = origin.getWorld();
+    if (!world.isChunkLoaded(origin.getBlockX() >> 4, origin.getBlockZ() >> 4)) {
+      return;
+    }
+    spawnOmenMarkerParticles(origin, config.halloween().herobrineStalker().omenMarker());
+  }
+
+  private void spawnOmenMarkerParticles(Location center, HerobrineOmenMarkerConfig marker) {
+    World world = center.getWorld();
+    if (world == null) {
+      return;
+    }
+    Location base = center.clone();
+    switch (marker.type()) {
+      case "smoke_cluster" -> world.spawnParticle(Particle.SMOKE, base.clone().add(0, 1.2, 0), 8, 0.35, 0.45, 0.35, 0.01, null, true);
+      case "redstone_dust" -> world.spawnParticle(
+          Particle.DUST,
+          base.clone().add(0, 0.15, 0),
+          8,
+          0.7,
+          0.08,
+          0.7,
+          0.0,
+          new Particle.DustOptions(Color.fromRGB(124, 18, 18), 0.9f),
+          true
+      );
+      case "corrupted_footprints" -> {
+        Particle.DustOptions dust = new Particle.DustOptions(Color.fromRGB(15, 15, 15), 0.85f);
+        for (int i = 0; i < 5; i++) {
+          Location footprint = base.clone().add((i - 2) * 0.45, 0.05, (i % 2 == 0 ? 0.25 : -0.25));
+          world.spawnParticle(Particle.DUST, footprint, 2, 0.05, 0.02, 0.05, 0.0, dust, true);
+          world.spawnParticle(Particle.SMOKE, footprint.clone().add(0, 0.1, 0), 1, 0.04, 0.04, 0.04, 0.0, null, true);
+        }
+      }
+      default -> {
+        Particle.DustOptions ash = new Particle.DustOptions(Color.fromRGB(20, 20, 20), 0.8f);
+        for (int i = 0; i < 18; i++) {
+          double angle = (Math.PI * 2.0 * i) / 18.0;
+          Location point = base.clone().add(Math.cos(angle) * 1.35, 0.08, Math.sin(angle) * 1.35);
+          world.spawnParticle(Particle.SMOKE, point, 1, 0.04, 0.03, 0.04, 0.0, null, true);
+          if (i % 3 == 0) {
+            world.spawnParticle(Particle.DUST, point, 1, 0.02, 0.02, 0.02, 0.0, ash, true);
+          }
+        }
+      }
+    }
+  }
+
   private void maybePlaySound(UUID playerUuid, double chance) {
     if (chance <= 0.0 || ThreadLocalRandom.current().nextDouble() > chance) {
       return;
@@ -1068,6 +1228,29 @@ public final class HerobrineStalkerService {
       if (player != null && player.isOnline()) {
         scheduler.runForPlayer(player, () -> playCaveSound(player));
       }
+    });
+  }
+
+  private void maybePlayLookAwayUnease(UUID playerUuid) {
+    HerobrineLookAwayUneaseConfig unease = config.halloween().herobrineStalker().lookAwayUnease();
+    if (!unease.enabled()
+        || unease.chance() <= 0.0
+        || ThreadLocalRandom.current().nextDouble() > unease.chance()
+        || !cooldownReady(playerLookAwayCooldowns, playerUuid, unease.cooldown())) {
+      return;
+    }
+    scheduler.runGlobal(() -> {
+      Player player = Bukkit.getPlayer(playerUuid);
+      if (player == null || !player.isOnline() || player.isDead()) {
+        return;
+      }
+      scheduler.runForPlayer(player, () -> {
+        if (!player.isOnline() || player.isDead()) {
+          return;
+        }
+        Location behind = offsetAroundPlayer(player, 7, 13, true);
+        player.playSound(behind, Sound.AMBIENT_CAVE, 0.24f, 0.62f);
+      });
     });
   }
 
@@ -1119,6 +1302,7 @@ public final class HerobrineStalkerService {
       long generation,
       Duration linger,
       boolean miningIntent,
+      boolean silhouette,
       List<Location> candidates
   ) {
   }

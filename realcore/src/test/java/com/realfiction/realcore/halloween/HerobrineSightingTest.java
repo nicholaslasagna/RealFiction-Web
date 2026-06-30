@@ -18,6 +18,7 @@ final class HerobrineSightingTest {
         Instant.now(),
         Instant.now().plusSeconds(8),
         false,
+        false,
         null);
 
     assertFalse(sighting.vanishing());
@@ -36,10 +37,29 @@ final class HerobrineSightingTest {
         Instant.now(),
         Instant.now().plusSeconds(8),
         false,
+        false,
         null);
 
     assertTrue(sighting.soundCooldownElapsed(10_000L, 10_000L));
     assertFalse(sighting.soundCooldownElapsed(15_000L, 10_000L));
     assertTrue(sighting.soundCooldownElapsed(20_000L, 10_000L));
+  }
+
+  @Test
+  void silhouetteAndMarkerFlagsAreStable() {
+    HerobrineSighting sighting = new HerobrineSighting(
+        UUID.randomUUID(),
+        UUID.randomUUID(),
+        "Player",
+        UUID.randomUUID(),
+        Instant.now(),
+        Instant.now().plusSeconds(2),
+        false,
+        true,
+        null);
+
+    assertTrue(sighting.silhouette());
+    assertTrue(sighting.markOmenMarkerScheduled());
+    assertFalse(sighting.markOmenMarkerScheduled());
   }
 }

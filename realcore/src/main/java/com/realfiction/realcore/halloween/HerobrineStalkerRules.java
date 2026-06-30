@@ -46,6 +46,13 @@ public final class HerobrineStalkerRules {
     return randomValue <= Math.min(1.0, chancePerCheck);
   }
 
+  public static double clampChance(double value) {
+    if (Double.isNaN(value) || value < 0.0) {
+      return 0.0;
+    }
+    return Math.min(1.0, value);
+  }
+
   public static boolean miningIntentEligible(SpookyConditions conditions) {
     return conditions != null && (conditions.underground() || conditions.darkCave());
   }

@@ -42,6 +42,8 @@ final class HerobrineStalkerRulesTest {
     assertTrue(HerobrineStalkerRules.shouldAttempt(0.01, 0.015));
     assertFalse(HerobrineStalkerRules.shouldAttempt(0.02, 0.015));
     assertFalse(HerobrineStalkerRules.shouldAttempt(0.0, 0.0));
+    assertEquals(0.0, HerobrineStalkerRules.clampChance(-1.0), 0.0001);
+    assertEquals(1.0, HerobrineStalkerRules.clampChance(5.0), 0.0001);
   }
 
   @Test

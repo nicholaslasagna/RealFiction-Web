@@ -20,7 +20,7 @@ public record HerobrineLightningOmenConfig(
     long maxDelay = Math.max(minDelay, section.getLong("maxDelaySeconds", 6));
     return new HerobrineLightningOmenConfig(
         section.getBoolean("enabled", true),
-        clampChance(section.getDouble("chance", 0.03)),
+        HerobrineStalkerRules.clampChance(section.getDouble("chance", 0.02)),
         Math.max(4, Math.min(48, section.getInt("radius", 18))),
         Duration.ofSeconds(minDelay),
         Duration.ofSeconds(maxDelay),
@@ -32,7 +32,7 @@ public record HerobrineLightningOmenConfig(
   public static HerobrineLightningOmenConfig defaults() {
     return new HerobrineLightningOmenConfig(
         true,
-        0.03,
+        0.02,
         18,
         Duration.ofSeconds(2),
         Duration.ofSeconds(6),
@@ -41,10 +41,4 @@ public record HerobrineLightningOmenConfig(
     );
   }
 
-  private static double clampChance(double value) {
-    if (Double.isNaN(value) || value < 0.0) {
-      return 0.0;
-    }
-    return Math.min(1.0, value);
-  }
 }
