@@ -49,6 +49,16 @@ final class HerobrineAppearanceServiceTest {
   }
 
   @Test
+  void armorStandModeNeverUsesPacketBackend() {
+    HerobrineAppearanceConfig config = new HerobrineAppearanceConfig("armor_stand", true, "Herobrine", 20);
+
+    HerobrineAppearanceService.Selection selection = HerobrineAppearanceService.select(config, true, "");
+
+    assertEquals(HerobrineAppearanceService.Backend.ARMOR_STAND, selection.backend());
+    assertEquals("armor_stand requested", selection.reason());
+  }
+
+  @Test
   void packetSessionLifecycleIsIdempotentAndGenerationGuarded() {
     PacketNpcSession session = new PacketNpcSession(
         UUID.randomUUID(),
