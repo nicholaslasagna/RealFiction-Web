@@ -953,11 +953,20 @@ public final class HerobrineStalkerService {
       activeSightings.remove(sighting.playerUuid());
       return;
     }
+    long generation = lifecycleGeneration.get();
     for (int i = 1; i <= 4; i++) {
       int step = i;
-      scheduler.runAtLater(start, () -> stepBackward(sighting, playerLocation), step * 8L);
+      scheduler.runAtLater(start, () -> {
+        if (generationActive(generation)) {
+          stepBackward(sighting, playerLocation);
+        }
+      }, step * 8L);
     }
-    scheduler.runAtLater(start, () -> vanish(sighting, true, "seen"), 48L);
+    scheduler.runAtLater(start, () -> {
+      if (generationActive(generation)) {
+        vanish(sighting, true, "seen");
+      }
+    }, 48L);
   }
 
   private void stepBackward(HerobrineSighting sighting, Location playerLocation) {
@@ -1160,6 +1169,17 @@ public final class HerobrineStalkerService {
         && !sighting.vanishing();
   }
 
+  private boolean sightingActive(HerobrineSighting sighting, long generation) {
+    return generationActive(generation)
+        && sighting != null
+        && activeSightings.get(sighting.playerUuid()) == sighting
+        && !sighting.vanishing();
+  }
+
+  private boolean generationActive(long generation) {
+    return acceptingSightings && lifecycleGeneration.get() == generation;
+  }
+
   private boolean isRealCoreHerobrineEntity(Entity entity) {
     return entity != null
         && entity.getScoreboardTags().contains(SCOREBOARD_TAG)
@@ -1178,22 +1198,23 @@ public final class HerobrineStalkerService {
     long minDelay = Math.max(1L, omen.minDelay().toSeconds());
     long maxDelay = Math.max(minDelay, omen.maxDelay().toSeconds());
     long delaySeconds = ThreadLocalRandom.current().nextLong(minDelay, maxDelay + 1);
-    scheduler.runAtLater(origin, () -> triggerLightningOmen(sighting), secondsToTicks(delaySeconds));
+    long generation = lifecycleGeneration.get();
+    scheduler.runAtLater(origin, () -> triggerLightningOmen(sighting, generation), secondsToTicks(delaySeconds));
   }
 
-  private void triggerLightningOmen(HerobrineSighting sighting) {
-    if (!sightingActive(sighting)) {
+  private void triggerLightningOmen(HerobrineSighting sighting, long generation) {
+    if (!sightingActive(sighting, generation)) {
       return;
     }
     Location current = sighting.location();
     if (current == null || current.getWorld() == null) {
       return;
     }
-    scheduler.runAt(current, () -> triggerLightningOmenAtCurrentLocation(sighting));
+    scheduler.runAt(current, () -> triggerLightningOmenAtCurrentLocation(sighting, generation));
   }
 
-  private void triggerLightningOmenAtCurrentLocation(HerobrineSighting sighting) {
-    if (!sightingActive(sighting)) {
+  private void triggerLightningOmenAtCurrentLocation(HerobrineSighting sighting, long generation) {
+    if (!sightingActive(sighting, generation)) {
       return;
     }
     HerobrineLightningOmenConfig omen = config.halloween().herobrineStalker().lightningOmen();
@@ -1249,13 +1270,14 @@ public final class HerobrineStalkerService {
       return;
     }
     int pulses = Math.max(1, (int) Math.min(24, marker.linger().toSeconds() * 2));
+    long generation = lifecycleGeneration.get();
     for (int i = 0; i < pulses; i++) {
-      scheduler.runAtLater(origin, () -> spawnOmenMarkerPulse(sighting, origin), i * 10L);
+      scheduler.runAtLater(origin, () -> spawnOmenMarkerPulse(sighting, origin, generation), i * 10L);
     }
   }
 
-  private void spawnOmenMarkerPulse(HerobrineSighting sighting, Location origin) {
-    if (!sightingActive(sighting) || origin == null || origin.getWorld() == null) {
+  private void spawnOmenMarkerPulse(HerobrineSighting sighting, Location origin, long generation) {
+    if (!sightingActive(sighting, generation) || origin == null || origin.getWorld() == null) {
       return;
     }
     World world = origin.getWorld();
@@ -1310,8 +1332,9 @@ public final class HerobrineStalkerService {
     if (chance <= 0.0 || ThreadLocalRandom.current().nextDouble() > chance || !sightingActive(sighting)) {
       return;
     }
+    long generation = lifecycleGeneration.get();
     scheduler.runGlobal(() -> {
-      if (!sightingActive(sighting)) {
+      if (!sightingActive(sighting, generation)) {
         return;
       }
       Player player = Bukkit.getPlayer(sighting.playerUuid());
@@ -1319,7 +1342,7 @@ public final class HerobrineStalkerService {
         return;
       }
       scheduler.runForPlayer(player, () -> {
-        if (sightingActive(sighting) && sameWorld(player, sighting.location())) {
+        if (sightingActive(sighting, generation) && sameWorld(player, sighting.location())) {
           playCaveSound(player, null);
         }
       });
@@ -1330,10 +1353,18 @@ public final class HerobrineStalkerService {
     if (chance <= 0.0 || ThreadLocalRandom.current().nextDouble() > chance) {
       return false;
     }
+    long generation = lifecycleGeneration.get();
     scheduler.runGlobal(() -> {
+      if (!generationActive(generation)) {
+        return;
+      }
       Player player = Bukkit.getPlayer(playerUuid);
       if (player != null && player.isOnline() && !player.isDead()) {
-        scheduler.runForPlayer(player, () -> playCaveSound(player, expectedWorldId));
+        scheduler.runForPlayer(player, () -> {
+          if (generationActive(generation)) {
+            playCaveSound(player, expectedWorldId);
+          }
+        });
       }
     });
     return true;
@@ -1347,13 +1378,17 @@ public final class HerobrineStalkerService {
         || !cooldownReady(playerLookAwayCooldowns, playerUuid, unease.cooldown())) {
       return;
     }
+    long generation = lifecycleGeneration.get();
     scheduler.runGlobal(() -> {
+      if (!generationActive(generation)) {
+        return;
+      }
       Player player = Bukkit.getPlayer(playerUuid);
       if (player == null || !player.isOnline() || player.isDead()) {
         return;
       }
       scheduler.runForPlayer(player, () -> {
-        if (!player.isOnline() || player.isDead() || !sameWorld(player, expectedWorldId)) {
+        if (!generationActive(generation) || !player.isOnline() || player.isDead() || !sameWorld(player, expectedWorldId)) {
           return;
         }
         Location behind = offsetAroundPlayer(player, 7, 13, true);
