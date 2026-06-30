@@ -62,4 +62,25 @@ final class HerobrineSightingTest {
     assertTrue(sighting.markOmenMarkerScheduled());
     assertFalse(sighting.markOmenMarkerScheduled());
   }
+
+  @Test
+  void proximityTimerCanBeClearedAfterPlayerMovesAway() {
+    HerobrineSighting sighting = new HerobrineSighting(
+        UUID.randomUUID(),
+        UUID.randomUUID(),
+        "Player",
+        UUID.randomUUID(),
+        Instant.now(),
+        Instant.now().plusSeconds(8),
+        false,
+        false,
+        null);
+    Instant entered = Instant.parse("2026-10-20T05:00:00Z");
+
+    sighting.markProximityEnteredAt(entered);
+
+    assertTrue(entered.equals(sighting.proximityEnteredAt()));
+    sighting.clearProximityEnteredAt();
+    assertTrue(sighting.proximityEnteredAt() == null);
+  }
 }

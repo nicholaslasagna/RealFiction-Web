@@ -73,4 +73,17 @@ public final class HerobrineStalkerRules {
   public static boolean activeBelowLimit(int activeSightings, int maxActiveSightings) {
     return activeSightings < Math.max(1, maxActiveSightings);
   }
+
+  public static boolean insideRadius(double distanceSquared, double radius) {
+    double safeRadius = Math.max(0.0, radius);
+    return distanceSquared <= safeRadius * safeRadius;
+  }
+
+  public static boolean sustainedFor(Instant now, Instant startedAt, Duration required) {
+    if (now == null || startedAt == null) {
+      return false;
+    }
+    Duration safeRequired = required == null ? Duration.ZERO : required;
+    return !now.isBefore(startedAt.plus(safeRequired));
+  }
 }

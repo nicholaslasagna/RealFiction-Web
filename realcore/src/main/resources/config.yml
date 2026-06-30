@@ -459,6 +459,33 @@ halloween:
     caveSoundChanceOnSpawn: 0.15
     caveSoundChanceWhileStalking: 0.08
     caveSoundChanceOnVanish: 0.25
+    # RealCore-native appearance. packet_npc is reserved for a future stable
+    # packet implementation; without an NPC plugin or version-bound NMS,
+    # RealCore safely falls back to its built-in ArmorStand silhouette.
+    appearance:
+      mode: "armor_stand"
+      fallbackToArmorStand: true
+      skinOwner: "Herobrine"
+      hideFromTabAfterTicks: 20
+    # Frequent active-sighting view checks. Normal sightings vanish when clearly
+    # seen; mining-intent sightings use the wider cone below.
+    vanishOnLook:
+      enabled: true
+      normalViewDegrees: 32
+      miningIntentViewDegrees: 52
+      requireLineOfSight: true
+      checkIntervalTicks: 5
+    # If the target player stays too close briefly, apply only the configured
+    # player effect and remove the sighting. Defaults are no damage/no grief.
+    proximityEffect:
+      enabled: true
+      radius: 4.0
+      requiredSeconds: 1.0
+      effect: "DARKNESS"
+      durationSeconds: 10
+      amplifier: 0
+      cooldownSeconds: 120
+      vanishAfterApply: true
     # Rare atmospheric lightning while a sighting is active. Defaults use
     # visual-only lightning, which does not damage, ignite, or grief builds.
     lightningOmen:
@@ -510,8 +537,8 @@ halloween:
       chance: 0.05
       cooldownSeconds: 90
     requireNightRainMiningOrDarkness: true
-    # Name used for the skull skin lookup. If the server cannot resolve it,
-    # Minecraft falls back to a normal player head without breaking the event.
+    # Legacy skin owner key kept for existing configs. New configs should use
+    # appearance.skinOwner above.
     headOwner: "Herobrine"
     # Debug is off by default. Turn on only during a short staff test.
     debug: false

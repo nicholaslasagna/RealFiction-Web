@@ -21,6 +21,7 @@ public final class HerobrineSighting {
   private final AtomicBoolean lightningOmenScheduled = new AtomicBoolean(false);
   private final AtomicBoolean omenMarkerScheduled = new AtomicBoolean(false);
   private final AtomicLong lastSoundAtMillis = new AtomicLong(0);
+  private final AtomicReference<Instant> proximityEnteredAt = new AtomicReference<>();
 
   public HerobrineSighting(
       UUID sightingId,
@@ -109,5 +110,17 @@ public final class HerobrineSighting {
       return false;
     }
     return lastSoundAtMillis.compareAndSet(last, nowMillis);
+  }
+
+  public Instant proximityEnteredAt() {
+    return proximityEnteredAt.get();
+  }
+
+  public void markProximityEnteredAt(Instant now) {
+    proximityEnteredAt.compareAndSet(null, now);
+  }
+
+  public void clearProximityEnteredAt() {
+    proximityEnteredAt.set(null);
   }
 }

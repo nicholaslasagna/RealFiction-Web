@@ -88,6 +88,20 @@ final class HerobrineStalkerConfigTest {
     assertEquals(3, config.halloween().herobrineStalker().avoidPlayerBaseBlocksRadius());
     assertEquals(12, config.halloween().herobrineStalker().playerStateGrace().toSeconds());
     assertTrue(config.halloween().herobrineStalker().cleanupStaleSightings());
+    assertEquals("armor_stand", config.halloween().herobrineStalker().appearance().mode());
+    assertTrue(config.halloween().herobrineStalker().appearance().fallbackToArmorStand());
+    assertEquals("Herobrine", config.halloween().herobrineStalker().appearance().skinOwner());
+    assertTrue(config.halloween().herobrineStalker().vanishOnLook().enabled());
+    assertEquals(32.0, config.halloween().herobrineStalker().vanishOnLook().normalViewDegrees(), 0.0001);
+    assertEquals(52.0, config.halloween().herobrineStalker().vanishOnLook().miningIntentViewDegrees(), 0.0001);
+    assertTrue(config.halloween().herobrineStalker().vanishOnLook().requireLineOfSight());
+    assertEquals(5, config.halloween().herobrineStalker().vanishOnLook().checkIntervalTicks());
+    assertTrue(config.halloween().herobrineStalker().proximityEffect().enabled());
+    assertEquals(4.0, config.halloween().herobrineStalker().proximityEffect().radius(), 0.0001);
+    assertEquals(1, config.halloween().herobrineStalker().proximityEffect().required().toSeconds());
+    assertEquals("DARKNESS", config.halloween().herobrineStalker().proximityEffect().effect());
+    assertEquals(10, config.halloween().herobrineStalker().proximityEffect().duration().toSeconds());
+    assertEquals(120, config.halloween().herobrineStalker().proximityEffect().cooldown().toSeconds());
     assertTrue(config.halloween().herobrineStalker().lightningOmen().enabled());
     assertEquals(0.02, config.halloween().herobrineStalker().lightningOmen().chance(), 0.0001);
     assertFalse(config.halloween().herobrineStalker().lightningOmen().damage());
@@ -150,6 +164,26 @@ final class HerobrineStalkerConfigTest {
     yaml.loadFromString("""
         halloween:
           herobrineStalker:
+            appearance:
+              mode: "packet_npc"
+              fallbackToArmorStand: false
+              skinOwner: "Notch"
+              hideFromTabAfterTicks: 999
+            vanishOnLook:
+              enabled: true
+              normalViewDegrees: -2
+              miningIntentViewDegrees: 999
+              requireLineOfSight: true
+              checkIntervalTicks: 0
+            proximityEffect:
+              enabled: true
+              radius: -1
+              requiredSeconds: -5
+              effect: ""
+              durationSeconds: 999
+              amplifier: 99
+              cooldownSeconds: 1
+              vanishAfterApply: true
             lightningOmen:
               chance: 5
               radius: 99
@@ -186,6 +220,19 @@ final class HerobrineStalkerConfigTest {
 
     HerobrineStalkerConfig stalker = HalloweenConfig.from(yaml.getConfigurationSection("halloween")).herobrineStalker();
 
+    assertEquals("packet_npc", stalker.appearance().mode());
+    assertFalse(stalker.appearance().fallbackToArmorStand());
+    assertEquals("Notch", stalker.appearance().skinOwner());
+    assertEquals(200, stalker.appearance().hideFromTabAfterTicks());
+    assertEquals(5.0, stalker.vanishOnLook().normalViewDegrees(), 0.0001);
+    assertEquals(90.0, stalker.vanishOnLook().miningIntentViewDegrees(), 0.0001);
+    assertEquals(2, stalker.vanishOnLook().checkIntervalTicks());
+    assertEquals(1.0, stalker.proximityEffect().radius(), 0.0001);
+    assertEquals(250, stalker.proximityEffect().required().toMillis());
+    assertEquals("DARKNESS", stalker.proximityEffect().effect());
+    assertEquals(30, stalker.proximityEffect().duration().toSeconds());
+    assertEquals(4, stalker.proximityEffect().amplifier());
+    assertEquals(5, stalker.proximityEffect().cooldown().toSeconds());
     assertEquals(1.0, stalker.lightningOmen().chance(), 0.0001);
     assertEquals(48, stalker.lightningOmen().radius());
     assertEquals(1, stalker.lightningOmen().minDelay().toSeconds());
@@ -211,5 +258,22 @@ final class HerobrineStalkerConfigTest {
     assertTrue(stalker.omenMarker().particlesOnly());
     assertEquals(1.0, stalker.lookAwayUnease().chance(), 0.0001);
     assertEquals(30, stalker.lookAwayUnease().cooldown().toSeconds());
+  }
+
+  @Test
+  void invalidAppearanceModeFallsBackToArmorStand() throws InvalidConfigurationException {
+    YamlConfiguration yaml = new YamlConfiguration();
+    yaml.loadFromString("""
+        halloween:
+          herobrineStalker:
+            appearance:
+              mode: "citizens"
+              skinOwner: ""
+        """);
+
+    HerobrineStalkerConfig stalker = HalloweenConfig.from(yaml.getConfigurationSection("halloween")).herobrineStalker();
+
+    assertEquals("armor_stand", stalker.appearance().mode());
+    assertEquals("Herobrine", stalker.appearance().skinOwner());
   }
 }
