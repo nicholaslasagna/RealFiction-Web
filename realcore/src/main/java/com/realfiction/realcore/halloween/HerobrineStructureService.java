@@ -169,7 +169,13 @@ public final class HerobrineStructureService {
     }
     // Every target block must be trivially replaceable, and rubble must sit on solid ground.
     for (PlannedBlock planned : plan) {
-      Block target = world.getBlockAt(baseX + planned.dx(), baseY + planned.dy(), baseZ + planned.dz());
+      int targetX = baseX + planned.dx();
+      int targetZ = baseZ + planned.dz();
+      if (!world.isChunkLoaded(targetX >> 4, targetZ >> 4)) {
+        // The rubble ring can cross into a neighboring chunk; never sync-load for placement.
+        return recordSkip("structure footprint touches an unloaded chunk");
+      }
+      Block target = world.getBlockAt(targetX, baseY + planned.dy(), targetZ);
       if (!canOverwrite(target.getType())) {
         return recordSkip("target block not replaceable: " + target.getType()
             + " at " + target.getX() + "," + target.getY() + "," + target.getZ());
@@ -280,11 +286,12 @@ public final class HerobrineStructureService {
     }
     int restored = 0;
     int skipped = 0;
+    int unreachable = 0;
     BlockDataAccess access = worldAccess(world);
     for (int i = structure.blocks().size() - 1; i >= 0; i--) {
       TrackedBlock block = structure.blocks().get(i);
       if (!world.isChunkLoaded(block.x() >> 4, block.z() >> 4)) {
-        skipped++;
+        unreachable++;
         continue;
       }
       String current = access.read(block.x(), block.y(), block.z());
@@ -294,6 +301,15 @@ public final class HerobrineStructureService {
       }
       access.write(block.x(), block.y(), block.z(), block.originalData());
       restored++;
+    }
+    // Core invariant: never mark restored while blocks we could not even inspect may
+    // still be in the world (unloaded chunks). Marking restored here would let cleanup
+    // drop the record and orphan real placed blocks. Player-modified skips are fine —
+    // that is safe mode working as intended.
+    if (!mayMarkRestored(unreachable)) {
+      return new RestoreResult(false, restored, skipped,
+          "not marked restored: " + unreachable + " block(s) in unloaded chunks; "
+              + "load the area (stand nearby) and retry");
     }
     try {
       registry.markRestored(structure.id(), Instant.now().toEpochMilli());
@@ -307,6 +323,11 @@ public final class HerobrineStructureService {
     }
     return new RestoreResult(true, restored, skipped,
         "restored " + restored + " block(s), skipped " + skipped + (force ? " (force)" : ""));
+  }
+
+  /** A structure may only be marked restored when every tracked block was reachable. */
+  static boolean mayMarkRestored(int unreachableCount) {
+    return unreachableCount == 0;
   }
 
   /** Safe restore touches only blocks still matching what we placed; force restores all. */

@@ -199,6 +199,15 @@ final class HerobrineStructureServiceTest {
   }
 
   @Test
+  void structureIsNeverMarkedRestoredWhileBlocksAreUnreachable() {
+    // Grief-risk regression guard: marking a structure restored while some of its blocks
+    // sit in unloaded chunks would let cleanup orphan real placed blocks forever.
+    assertTrue(HerobrineStructureService.mayMarkRestored(0));
+    assertFalse(HerobrineStructureService.mayMarkRestored(1));
+    assertFalse(HerobrineStructureService.mayMarkRestored(7));
+  }
+
+  @Test
   void safeRestoreOnlyTouchesBlocksStillMatchingPlacedData() {
     assertTrue(HerobrineStructureService.shouldRestoreBlock("deepslate", "deepslate", false));
     assertFalse(HerobrineStructureService.shouldRestoreBlock("player_placed_chest", "deepslate", false),
