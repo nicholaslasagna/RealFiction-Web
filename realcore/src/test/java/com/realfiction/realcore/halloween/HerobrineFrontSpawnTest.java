@@ -56,13 +56,13 @@ final class HerobrineFrontSpawnTest {
     String before = session.traceSummary();
     assertTrue(before.contains("playerInfoAddSent=false"));
     assertTrue(before.contains("spawnPacketSent=false"));
+    assertTrue(before.contains("metadataSent=disabled"));
     assertTrue(before.contains("fakeEntityId=1450000123"));
     assertTrue(before.contains("fakeProfileUuid=00000000-0000-0000-0000-00000000abcd"));
     assertTrue(before.contains("spawnEntityType=PLAYER"));
 
     session.markPlayerInfoAddSent();
     session.markSpawnPacketSent();
-    session.markMetadataSent();
     session.markRotationSent();
     session.markTeamSent();
     session.markTabRemoveSent();
@@ -70,11 +70,29 @@ final class HerobrineFrontSpawnTest {
     String after = session.traceSummary();
     assertTrue(after.contains("playerInfoAddSent=true"));
     assertTrue(after.contains("spawnPacketSent=true"));
-    assertTrue(after.contains("metadataSent=true"));
+    assertTrue(after.contains("metadataSent=disabled"));
     assertTrue(after.contains("rotationSent=true"));
     assertTrue(after.contains("scoreboardTeamSent=true"));
     assertTrue(after.contains("tabRemoveSent=true"));
     assertTrue(after.contains("destroySent=true"));
+  }
+
+  @Test
+  void skinLayerMetadataWritePathIsRemoved() {
+    // Regression guard for the protocol-775 disconnect ("Invalid entity data item type for
+    // field 17"): the packets class must have no metadata send path and no way to mark a
+    // session's metadata as sent.
+    assertTrue(java.util.Arrays.stream(ProtocolLibHerobrinePackets.class.getDeclaredMethods())
+        .noneMatch(method -> method.getName().toLowerCase(java.util.Locale.ROOT).contains("skinlayer")));
+    assertTrue(java.util.Arrays.stream(PacketNpcSession.class.getDeclaredMethods())
+        .noneMatch(method -> method.getName().equals("markMetadataSent")));
+  }
+
+  @Test
+  void metadataProbeLineNeverReportsOk() {
+    assertTrue(ProtocolLibHerobrinePackets.METADATA_PROBE_LINE.startsWith("metadata packet: skipped"));
+    assertTrue(ProtocolLibHerobrinePackets.METADATA_PROBE_LINE.contains("unsafe metadata index/type"));
+    assertTrue(!ProtocolLibHerobrinePackets.METADATA_PROBE_LINE.contains("ok"));
   }
 
   @Test
@@ -97,10 +115,10 @@ final class HerobrineFrontSpawnTest {
 
   @Test
   void renderConfidenceIsHonestAboutWhatServerCanProve() {
-    assertTrue(ProtocolLibHerobrinePackets.renderConfidence(true, true, true).startsWith("high"));
-    assertTrue(ProtocolLibHerobrinePackets.renderConfidence(true, true, false).startsWith("medium"));
-    assertTrue(ProtocolLibHerobrinePackets.renderConfidence(true, false, true).startsWith("low"));
-    assertTrue(ProtocolLibHerobrinePackets.renderConfidence(false, true, true).startsWith("low"));
-    assertTrue(ProtocolLibHerobrinePackets.renderConfidence(true, true, true).contains("not directly verifiable"));
+    assertTrue(ProtocolLibHerobrinePackets.renderConfidence(true, true).startsWith("high"));
+    assertTrue(ProtocolLibHerobrinePackets.renderConfidence(true, false).startsWith("low"));
+    assertTrue(ProtocolLibHerobrinePackets.renderConfidence(false, true).startsWith("low"));
+    assertTrue(ProtocolLibHerobrinePackets.renderConfidence(true, true).contains("metadata overlays disabled"));
+    assertTrue(ProtocolLibHerobrinePackets.renderConfidence(true, true).contains("not directly verifiable"));
   }
 }
