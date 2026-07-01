@@ -21,8 +21,8 @@ public record HerobrineWindowStalkConfig(
     if (section == null) {
       return defaults();
     }
-    int minDistance = Math.max(3, Math.min(32, section.getInt("minOutsideDistance", 5)));
-    int maxDistance = Math.max(minDistance, Math.min(48, section.getInt("maxOutsideDistance", 18)));
+    int minDistance = Math.max(3, Math.min(32, section.getInt("minOutsideDistance", 8)));
+    int maxDistance = Math.max(minDistance, Math.min(48, section.getInt("maxOutsideDistance", 24)));
     return new HerobrineWindowStalkConfig(
         section.getBoolean("enabled", true),
         HerobrineStalkerRules.clampChance(section.getDouble("chance", 0.02)),
@@ -35,7 +35,7 @@ public record HerobrineWindowStalkConfig(
         section.getBoolean("vanishOnSeen", true),
         Math.max(0, Math.min(16, section.getInt("avoidPlayerBaseBlocksRadius", 6))),
         Math.max(2, Math.min(5, section.getInt("minHeadroom", 2))),
-        Math.max(1, Math.min(64, section.getInt("maxCandidateChecks", 32)))
+        Math.max(1, Math.min(64, section.getInt("maxCandidateChecks", 48)))
     );
   }
 
@@ -46,13 +46,13 @@ public record HerobrineWindowStalkConfig(
         true,
         true,
         true,
-        5,
-        18,
+        8,
+        24,
         Duration.ofSeconds(8),
         true,
         6,
         2,
-        32
+        48
     );
   }
 }
