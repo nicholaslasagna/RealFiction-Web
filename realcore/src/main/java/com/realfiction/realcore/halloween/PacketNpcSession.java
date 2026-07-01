@@ -17,6 +17,16 @@ public final class PacketNpcSession {
   private final AtomicBoolean tabListed = new AtomicBoolean(false);
   private volatile Location location;
 
+  // Debug packet-send trace: which clientbound phases were actually dispatched for this
+  // session. Server-side truth only — it cannot prove the client rendered anything.
+  private volatile boolean teamSent;
+  private volatile boolean playerInfoAddSent;
+  private volatile boolean spawnPacketSent;
+  private volatile boolean metadataSent;
+  private volatile boolean rotationSent;
+  private volatile boolean tabRemoveSent;
+  private volatile boolean destroySent;
+
   public PacketNpcSession(
       UUID sessionId,
       UUID viewerUuid,
@@ -106,5 +116,46 @@ public final class PacketNpcSession {
     return active()
         && this.serviceGeneration == serviceGeneration
         && this.sessionGeneration == sessionGeneration;
+  }
+
+  public void markTeamSent() {
+    teamSent = true;
+  }
+
+  public void markPlayerInfoAddSent() {
+    playerInfoAddSent = true;
+  }
+
+  public void markSpawnPacketSent() {
+    spawnPacketSent = true;
+  }
+
+  public void markMetadataSent() {
+    metadataSent = true;
+  }
+
+  public void markRotationSent() {
+    rotationSent = true;
+  }
+
+  public void markTabRemoveSent() {
+    tabRemoveSent = true;
+  }
+
+  public void markDestroySent() {
+    destroySent = true;
+  }
+
+  public String traceSummary() {
+    return "playerInfoAddSent=" + playerInfoAddSent
+        + " spawnPacketSent=" + spawnPacketSent
+        + " metadataSent=" + metadataSent
+        + " rotationSent=" + rotationSent
+        + " scoreboardTeamSent=" + teamSent
+        + " tabRemoveSent=" + tabRemoveSent
+        + " destroySent=" + destroySent
+        + " fakeEntityId=" + entityId
+        + " fakeProfileUuid=" + profileUuid
+        + " spawnEntityType=PLAYER";
   }
 }

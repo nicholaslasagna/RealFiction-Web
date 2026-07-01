@@ -7,6 +7,8 @@ import com.comphenix.protocol.events.PacketContainer;
 import com.comphenix.protocol.wrappers.EnumWrappers;
 import com.comphenix.protocol.wrappers.PlayerInfoData;
 import com.comphenix.protocol.wrappers.WrappedChatComponent;
+import com.comphenix.protocol.wrappers.WrappedDataValue;
+import com.comphenix.protocol.wrappers.WrappedDataWatcher;
 import com.comphenix.protocol.wrappers.WrappedGameProfile;
 import com.comphenix.protocol.wrappers.WrappedSignedProperty;
 import com.comphenix.protocol.wrappers.WrappedTeamParameters;
@@ -142,6 +144,9 @@ public final class ProtocolLibHerobrinePackets {
       require(spawn.getEntityTypeModifier().size() > 0, "SPAWN_ENTITY getEntityTypeModifier type unavailable");
       require(spawn.getDoubles().size() >= 3, "SPAWN_ENTITY getDoubles coordinates unavailable");
     }));
+    checks.add(check("metadata packet", () -> require(
+        manager.createPacket(PacketType.Play.Server.ENTITY_METADATA).getDataValueCollectionModifier().size() > 0,
+        "ENTITY_METADATA getDataValueCollectionModifier unavailable")));
     checks.add(check("destroy packet", () -> require(
         manager.createPacket(PacketType.Play.Server.ENTITY_DESTROY).getIntLists().size() > 0,
         "ENTITY_DESTROY getIntLists entity ids unavailable")));
@@ -245,10 +250,38 @@ public final class ProtocolLibHerobrinePackets {
   public void spawn(Player viewer, PacketNpcSession session, HerobrineSkinProfileService.SkinProfile skin, Location target, Location lookAt) {
     WrappedGameProfile profile = profile(session, skin);
     send(viewer, teamPacket(session, 0));
+    session.markTeamSent();
     send(viewer, playerInfoPacket(session, profile, true));
+    session.markPlayerInfoAddSent();
     session.markTabListed();
     send(viewer, spawnPacket(session, target, lookAt));
+    session.markSpawnPacketSent();
+    sendSkinLayerMetadata(viewer, session);
     sendRotation(viewer, session, lookAt);
+  }
+
+  /**
+   * Enables all skin overlay layers (hat/jacket/sleeves/pants) on the fake player. Cosmetic
+   * only — a missing metadata packet still renders the base skin — so failures are swallowed
+   * and simply leave the trace flag unset.
+   */
+  private void sendSkinLayerMetadata(Player viewer, PacketNpcSession session) {
+    try {
+      PacketContainer packet = manager.createPacket(PacketType.Play.Server.ENTITY_METADATA);
+      packet.getIntegers().writeSafely(0, session.entityId());
+      if (packet.getDataValueCollectionModifier().size() == 0) {
+        return;
+      }
+      WrappedDataValue skinParts = new WrappedDataValue(
+          17, WrappedDataWatcher.Registry.get(Byte.class), (byte) 0x7F);
+      packet.getDataValueCollectionModifier().writeSafely(0, List.of(skinParts));
+      send(viewer, packet);
+      session.markMetadataSent();
+    } catch (LinkageError | RuntimeException error) {
+      if (logger != null) {
+        logger.fine("Herobrine packet NPC skin layer metadata skipped: " + shortError(error));
+      }
+    }
   }
 
   public void removeFromTab(Player viewer, PacketNpcSession session) {
@@ -256,6 +289,7 @@ public final class ProtocolLibHerobrinePackets {
       return;
     }
     send(viewer, tabRemovePacket(session));
+    session.markTabRemoveSent();
   }
 
   public void rotate(Player viewer, PacketNpcSession session, Location lookAt) {
@@ -331,6 +365,7 @@ public final class ProtocolLibHerobrinePackets {
     PacketContainer destroy = manager.createPacket(PacketType.Play.Server.ENTITY_DESTROY);
     destroy.getIntLists().writeSafely(0, List.of(session.entityId()));
     send(viewer, destroy);
+    session.markDestroySent();
     send(viewer, teamPacket(session, 1));
   }
 
@@ -539,6 +574,7 @@ public final class ProtocolLibHerobrinePackets {
     head.getIntegers().writeSafely(0, session.entityId());
     head.getBytes().writeSafely(0, yaw);
     send(viewer, head);
+    session.markRotationSent();
   }
 
   private PacketContainer teamPacket(PacketNpcSession session, int mode) {
@@ -648,6 +684,22 @@ public final class ProtocolLibHerobrinePackets {
   private static String clean(String value, String fallback) {
     String cleaned = value == null ? "" : value.trim();
     return cleaned.isBlank() ? fallback : cleaned;
+  }
+
+  /**
+   * Honest server-side render confidence. The server can only prove packets were accepted
+   * for dispatch — never that the client drew pixels. On protocol 775 (1.20.2+) the required
+   * client sequence for a visible fake player is PLAYER_INFO_UPDATE(ADD_PLAYER, native
+   * entries) followed by generic SPAWN_ENTITY(type=PLAYER, matching UUID) on the same
+   * connection; metadata only affects skin overlay layers.
+   */
+  static String renderConfidence(boolean playerInfoOk, boolean spawnOk, boolean metadataOk) {
+    if (playerInfoOk && spawnOk) {
+      return metadataOk
+          ? "high (info+spawn+metadata constructible; client render not directly verifiable)"
+          : "medium (info+spawn ok; metadata unavailable so skin overlay layers may be missing)";
+    }
+    return "low (" + (playerInfoOk ? "spawn packet unavailable" : "player info unavailable") + ")";
   }
 
   static ProbeReport buildProbeReport(boolean detected, List<ProbeCheck> checks, MovementPlan movement) {

@@ -19,6 +19,8 @@ public final class HerobrineSighting {
   private final boolean windowStalk;
   private final AtomicReference<Location> location;
   private final AtomicBoolean vanishing = new AtomicBoolean(false);
+  // Admin debug: keep the sighting visible — skip vanish-on-look/proximity/seen vanishes.
+  private final AtomicBoolean debugStare = new AtomicBoolean(false);
   private final AtomicBoolean lightningOmenScheduled = new AtomicBoolean(false);
   private final AtomicBoolean omenMarkerScheduled = new AtomicBoolean(false);
   private final AtomicLong lastSoundAtMillis = new AtomicLong(0);
@@ -139,6 +141,14 @@ public final class HerobrineSighting {
         appearance.updateLocation(next);
       }
     }
+  }
+
+  public void markDebugStare() {
+    debugStare.set(true);
+  }
+
+  public boolean debugStare() {
+    return debugStare.get();
   }
 
   public boolean markVanishing() {

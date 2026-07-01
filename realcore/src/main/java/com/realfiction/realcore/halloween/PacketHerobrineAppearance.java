@@ -220,6 +220,11 @@ public final class PacketHerobrineAppearance {
     public boolean active() {
       return session.active();
     }
+
+    @Override
+    public java.util.Optional<String> packetDebug() {
+      return java.util.Optional.of(session.traceSummary());
+    }
   }
 
   private boolean sessionCurrent(PacketNpcSession session) {
