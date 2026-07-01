@@ -548,17 +548,13 @@ halloween:
       vanishOnSeen: true
       avoidPlayerBaseBlocksRadius: 6
       minHeadroom: 2
-      maxCandidateChecks: 32
+      maxCandidateChecks: 48
     # Distant omen structure. Particles-only by default: no real blocks and no
     # fake block packet structures. The guarded persistent mode below can place a
     # tiny tracked real-block monolith — it needs BOTH persistentBlocks: true AND
     # persistent.enabled: true, and every changed block is recorded in
     # plugins/RealCore/herobrine-structures.json so it can always be restored
     # (/rf herobrine structures ...). If tracking fails, nothing is placed.
-      maxCandidateChecks: 48
-    # Distant omen structure. This build is intentionally particles-only: no
-    # real blocks and no fake block packet structures. Persistent block omens
-    # require separate placement tracking + restore commands before shipping.
     distantOmenStructure:
       enabled: true
       chance: 0.01
