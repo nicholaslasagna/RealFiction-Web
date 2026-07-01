@@ -548,6 +548,13 @@ halloween:
       vanishOnSeen: true
       avoidPlayerBaseBlocksRadius: 6
       minHeadroom: 2
+      maxCandidateChecks: 32
+    # Distant omen structure. Particles-only by default: no real blocks and no
+    # fake block packet structures. The guarded persistent mode below can place a
+    # tiny tracked real-block monolith — it needs BOTH persistentBlocks: true AND
+    # persistent.enabled: true, and every changed block is recorded in
+    # plugins/RealCore/herobrine-structures.json so it can always be restored
+    # (/rf herobrine structures ...). If tracking fails, nothing is placed.
       maxCandidateChecks: 48
     # Distant omen structure. This build is intentionally particles-only: no
     # real blocks and no fake block packet structures. Persistent block omens
@@ -571,6 +578,21 @@ halloween:
       maxBlocksPlaced: 0
       trackPlacements: true
       allowRestoreCommand: false
+      # Persistent real-block omens. Keep disabled in production until staged.
+      # Suggested staging rollout: also lower chance (e.g. 0.003) and raise
+      # minDistance/maxDistance (e.g. 48/96) so structures stay rare and remote.
+      persistent:
+        enabled: false
+        maxPerWorld: 5
+        maxBlocksPerStructure: 16
+        minDistanceFromWorldSpawn: 256
+        minDistanceFromClaims: 32
+        minDistanceFromPlayerBeds: 48
+        minDistanceFromContainers: 32
+        requireNaturalTerrain: true
+        restoreOriginalBlocks: true
+        allowAdminCleanup: true
+        maxCandidateChecks: 64
     # After a sighting vanishes, rarely play unease behind the player. Sound-only.
     lookAwayUnease:
       enabled: true

@@ -58,6 +58,7 @@ public final class HerobrineStalkerService {
   private final NamespacedKey markerKey;
   private final NamespacedKey sightingKey;
   private final HerobrineAppearanceService appearanceService;
+  private final HerobrineStructureService structureService;
   private final Map<UUID, HerobrineSighting> activeSightings = new ConcurrentHashMap<>();
   private final Map<UUID, Instant> playerCooldowns = new ConcurrentHashMap<>();
   private final Map<UUID, Instant> playerSuppressedUntil = new ConcurrentHashMap<>();
@@ -92,6 +93,14 @@ public final class HerobrineStalkerService {
     this.markerKey = new NamespacedKey(plugin, "herobrine_stalker");
     this.sightingKey = new NamespacedKey(plugin, "herobrine_stalker_sighting");
     this.appearanceService = new HerobrineAppearanceService(plugin, scheduler, logger, markerKey, sightingKey, this::herobrineHead);
+    this.structureService = new HerobrineStructureService(
+        plugin,
+        plugin.getDataFolder().toPath().resolve("herobrine-structures.json"),
+        logger);
+  }
+
+  public HerobrineStructureService structures() {
+    return structureService;
   }
 
   public void start() {
@@ -101,6 +110,7 @@ public final class HerobrineStalkerService {
     cleanupActiveSightings();
     HerobrineStalkerConfig stalker = config.halloween().herobrineStalker();
     appearanceService.configure(stalker.appearance(), lifecycleGeneration.get());
+    structureService.loadRegistry();
     scheduler.runGlobal(() -> cleanupNearbyLoadedStaleSightings(stalker));
     if (!config.halloween().enabled() || !stalker.enabled()) {
       lastSkipReason = "disabled by config";
@@ -200,6 +210,14 @@ public final class HerobrineStalkerService {
     lines.add("windowStalk=" + stalker.windowStalk().enabled());
     lines.add("distantOmenStructure=" + stalker.distantOmenStructure().enabled());
     lines.add("adminForcedTests=dateWindowBypassed");
+    HerobrinePersistentStructureConfig persistent = stalker.distantOmenStructure().persistent();
+    lines.add("persistentStructuresEnabled=" + stalker.distantOmenStructure().persistentPlacementConfigured());
+    lines.add("persistentStructuresActive=" + structureService.registry().activeCountTotal()
+        + (structureService.registryLoaded() ? "" : " (registry NOT loaded)"));
+    lines.add("persistentStructuresMaxPerWorld=" + persistent.maxPerWorld());
+    lines.add("lastStructurePlacement=" + blankToNone(structureService.lastPlacement()));
+    lines.add("lastStructureSkip=" + blankToNone(structureService.lastSkip()));
+    lines.add("lastStructureFailure=" + blankToNone(structureService.lastFailure()));
     lines.add("dropChanceGuard=" + ARMOR_STAND_DROPS_FIX_MARKER);
     lines.add("failed=" + failedSpawnCount());
     lines.add("lastFailure=" + blankToNone(lastFailure));
@@ -333,6 +351,170 @@ public final class HerobrineStalkerService {
     vanish(sighting, false, "admin_test");
     return AdminCommandResult.success("vanished sighting=" + sighting.sightingId()
         + " reason=admin_test activePacketSessions=" + appearanceService.activePacketSessions());
+  }
+
+  // -- persistent structure admin API -----------------------------------------
+
+  public List<String> adminStructuresList() {
+    List<String> lines = new ArrayList<>();
+    List<HerobrineStructureRegistry.TrackedStructure> all = structureService.registry().all();
+    if (!structureService.registryLoaded()) {
+      lines.add("registry NOT loaded: " + blankToNone(structureService.lastFailure()));
+    }
+    if (all.isEmpty()) {
+      lines.add("no tracked structures");
+      return lines;
+    }
+    long now = System.currentTimeMillis();
+    for (HerobrineStructureRegistry.TrackedStructure structure : all) {
+      long ageMinutes = Math.max(0, (now - structure.createdAtMillis()) / 60_000L);
+      lines.add(structure.id()
+          + " world=" + structure.world()
+          + " center=" + structure.centerX() + "," + structure.centerY() + "," + structure.centerZ()
+          + " type=" + structure.type()
+          + " blocks=" + structure.blocks().size()
+          + " restored=" + (structure.restored() ? "yes" : "no")
+          + " ageMinutes=" + ageMinutes);
+    }
+    return lines;
+  }
+
+  public List<String> adminStructureInfo(UUID id) {
+    return structureService.registry().get(id)
+        .map(structure -> List.of(
+            "id=" + structure.id(),
+            "type=" + structure.type(),
+            "world=" + structure.world(),
+            "center=" + structure.centerX() + "," + structure.centerY() + "," + structure.centerZ(),
+            "blocks=" + structure.blocks().size(),
+            "reason=" + structure.reason(),
+            "createdAt=" + Instant.ofEpochMilli(structure.createdAtMillis()),
+            "restoredAt=" + (structure.restoredAtMillis() == null
+                ? "not restored"
+                : Instant.ofEpochMilli(structure.restoredAtMillis()).toString()),
+            "safety=tracked+restorable, palette-limited, placed only on vetted wilderness terrain"))
+        .orElse(List.of("structure not found: " + id));
+  }
+
+  /** Restores one structure on its region thread and reports the outcome. */
+  public void adminStructureRestore(UUID id, boolean force, Consumer<AdminCommandResult> callback) {
+    HerobrineStructureRegistry.TrackedStructure structure = structureService.registry().get(id).orElse(null);
+    if (structure == null) {
+      complete(callback, AdminCommandResult.failure("structure not found: " + id));
+      return;
+    }
+    World world = Bukkit.getWorld(structure.world());
+    if (world == null) {
+      complete(callback, AdminCommandResult.failure("world not loaded: " + structure.world()));
+      return;
+    }
+    if (force && logger != null) {
+      logger.warning("Herobrine structure FORCE restore requested for " + id);
+    }
+    Location center = new Location(world, structure.centerX(), structure.centerY(), structure.centerZ());
+    scheduler.runAt(center, () -> {
+      HerobrineStructureService.RestoreResult result = structureService.restoreNow(structure, force);
+      complete(callback, result.success()
+          ? AdminCommandResult.success("restore " + id + ": " + result.message())
+          : AdminCommandResult.failure("restore " + id + ": " + result.message()));
+    });
+  }
+
+  /** Safe-restores every active structure; reports per-structure results. */
+  public void adminStructureRestoreAll(Consumer<AdminCommandResult> callback) {
+    List<HerobrineStructureRegistry.TrackedStructure> active = structureService.registry().all().stream()
+        .filter(structure -> !structure.restored())
+        .toList();
+    if (active.isEmpty()) {
+      complete(callback, AdminCommandResult.success("no active structures to restore"));
+      return;
+    }
+    for (HerobrineStructureRegistry.TrackedStructure structure : active) {
+      adminStructureRestore(structure.id(), false, callback);
+    }
+  }
+
+  public AdminCommandResult adminStructureCleanup() {
+    if (!config.halloween().herobrineStalker().distantOmenStructure().persistent().allowAdminCleanup()) {
+      return AdminCommandResult.failure("cleanup disabled by config (persistent.allowAdminCleanup=false)");
+    }
+    try {
+      int removed = structureService.registry().cleanupRestored();
+      return AdminCommandResult.success("cleanup removed " + removed + " restored registry entr"
+          + (removed == 1 ? "y" : "ies"));
+    } catch (java.io.IOException | RuntimeException error) {
+      return AdminCommandResult.failure("cleanup failed: " + error.getMessage());
+    }
+  }
+
+  /**
+   * Staging-only guarded placement near the admin. Bypasses chance/date, never safety:
+   * flags must be enabled, and the candidate must pass the full omen + persistent safety
+   * pipeline or the command prints the exact skip reason.
+   */
+  public void adminStructurePlaceTest(Player player, Consumer<AdminCommandResult> callback) {
+    if (player == null) {
+      complete(callback, AdminCommandResult.failure("player target is required"));
+      return;
+    }
+    AdminCommandResult gate = adminBaseGate(player);
+    if (!gate.success()) {
+      complete(callback, gate);
+      return;
+    }
+    HerobrineDistantOmenStructureConfig omen = config.halloween().herobrineStalker().distantOmenStructure();
+    if (!omen.persistentPlacementConfigured()) {
+      complete(callback, AdminCommandResult.failure(
+          "place-test skipped: requires distantOmenStructure.persistentBlocks=true AND persistent.enabled=true"));
+      return;
+    }
+    List<Location> candidates = buildDistantOmenCandidates(player.getLocation().clone(), omen);
+    if (candidates.isEmpty()) {
+      complete(callback, AdminCommandResult.failure("place-test skipped: no open candidates"));
+      return;
+    }
+    adminTryStructureCandidate(player, candidates, 0, omen, lifecycleGeneration.get(), callback);
+  }
+
+  private void adminTryStructureCandidate(
+      Player player,
+      List<Location> candidates,
+      int index,
+      HerobrineDistantOmenStructureConfig omen,
+      long generation,
+      Consumer<AdminCommandResult> callback
+  ) {
+    if (!generationActive(generation)) {
+      complete(callback, AdminCommandResult.failure("place-test skipped: service generation changed"));
+      return;
+    }
+    if (index >= candidates.size()) {
+      complete(callback, AdminCommandResult.failure("place-test skipped: no safe candidate ("
+          + blankToNone(structureService.lastSkip()) + ")"));
+      return;
+    }
+    Location candidate = candidates.get(index);
+    scheduler.runAt(candidate, () -> {
+      if (!generationActive(generation)) {
+        complete(callback, AdminCommandResult.failure("place-test skipped: service generation changed"));
+        return;
+      }
+      Location safe = findDistantOmenLocation(candidate, omen);
+      if (safe == null) {
+        adminTryStructureCandidate(player, candidates, index + 1, omen, generation, callback);
+        return;
+      }
+      HerobrineStructureService.PlacementResult placed =
+          structureService.placePersistent(safe, omen, "admin_place_test", ThreadLocalRandom.current());
+      if (placed.placed()) {
+        complete(callback, AdminCommandResult.success("placed structure id=" + placed.structureId()
+            + " type=" + omen.type()
+            + " blocks=" + placed.blockCount()
+            + " location=" + formatLocation(safe)));
+      } else {
+        adminTryStructureCandidate(player, candidates, index + 1, omen, generation, callback);
+      }
+    });
   }
 
   public AdminCleanupResult adminCleanup() {
@@ -738,14 +920,10 @@ public final class HerobrineStalkerService {
     if (!omen.enabled()) {
       return false;
     }
-    if (omen.realBlockPlacementRequested() || omen.packetFakeBlocks()) {
-      lastDistantOmenResult = "real/fake block omen deferred";
+    if (!omen.omenPathAllowed()) {
+      lastDistantOmenResult = "particles-only baseline required";
       debug("Distant omen structure skipped for " + player.getName()
-          + ": this build only permits particles-only omen structures.");
-      return false;
-    }
-    if (!omen.particlesOnly()) {
-      lastDistantOmenResult = "particlesOnly required";
+          + ": particlesOnly must stay true and packetFakeBlocks false.");
       return false;
     }
     if (conditions.underground() || conditions.darkCave()) {
@@ -810,6 +988,20 @@ public final class HerobrineStalkerService {
         return;
       }
       recordCooldowns(playerUuid, now);
+      // Guarded persistent path: at most ONE structure per trigger; any skip falls back
+      // to the existing particles-only omen (never to unsafe placement).
+      if (omen.persistentPlacementConfigured()) {
+        HerobrineStructureService.PlacementResult placed =
+            structureService.placePersistent(safe, omen, "herobrine_omen", ThreadLocalRandom.current());
+        if (placed.placed()) {
+          lastDistantOmenResult = "persistent structure " + placed.structureId();
+          debug("Persistent omen structure placed for " + playerName
+              + " id=" + placed.structureId() + " at " + formatLocation(safe) + ".");
+          return;
+        }
+        debug("Persistent omen structure skipped for " + playerName
+            + " (" + placed.reason() + "); falling back to particles.");
+      }
       lastDistantOmenResult = "shown at " + formatLocation(safe);
       debug("Distant omen accepted for " + playerName + " at " + formatLocation(safe) + ".");
       showDistantOmenParticles(playerUuid, safe, omen, generation);
@@ -1071,7 +1263,7 @@ public final class HerobrineStalkerService {
   }
 
   private Location findDistantOmenLocation(Location candidate, HerobrineDistantOmenStructureConfig omen) {
-    if (candidate == null || candidate.getWorld() == null || omen == null || !omen.particlesOnly() || omen.realBlockPlacementRequested()) {
+    if (candidate == null || candidate.getWorld() == null || omen == null || !omen.omenPathAllowed()) {
       return null;
     }
     World world = candidate.getWorld();
@@ -1608,8 +1800,8 @@ public final class HerobrineStalkerService {
       complete(callback, AdminCommandResult.failure("distantOmen skipped: disabled by config"));
       return;
     }
-    if (!omen.particlesOnly() || omen.realBlockPlacementRequested() || omen.packetFakeBlocks()) {
-      complete(callback, AdminCommandResult.failure("distantOmen skipped: particles-only mode required"));
+    if (!omen.omenPathAllowed()) {
+      complete(callback, AdminCommandResult.failure("distantOmen skipped: particles-only baseline required"));
       return;
     }
     List<Location> candidates = buildDistantOmenCandidates(player.getLocation().clone(), omen);
