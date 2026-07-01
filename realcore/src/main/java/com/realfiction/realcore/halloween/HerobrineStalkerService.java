@@ -203,7 +203,8 @@ public final class HerobrineStalkerService {
     lines.add("packetMovement=" + appearance.packetMovementStatus());
     lines.add("activePacketSessions=" + appearance.activePacketSessions());
     lines.add("fallbackReason=" + blankToNone(appearance.fallbackReason()));
-    lines.add("skin=" + appearance.skinStatus());
+    lines.add("skin=" + appearance.skinStatus()
+        + " (configured skinOwner=" + stalker.appearance().skinOwner() + ")");
     lines.add("vanishOnLook=" + stalker.vanishOnLook().enabled());
     lines.add("proximityEffect=" + stalker.proximityEffect().enabled());
     lines.add("windowStalk=" + stalker.windowStalk().enabled());
@@ -785,13 +786,14 @@ public final class HerobrineStalkerService {
       if (candidates.size() >= window.maxCandidateChecks()) {
         break;
       }
-      Location candidate = windowCandidateFromDirection(player, eye, direction, window);
-      if (candidate == null) {
-        continue;
-      }
-      String key = candidate.getBlockX() + ":" + candidate.getBlockY() + ":" + candidate.getBlockZ();
-      if (seen.add(key)) {
-        candidates.add(candidate);
+      for (Location candidate : windowCandidatesFromDirection(player, eye, direction, window)) {
+        if (candidates.size() >= window.maxCandidateChecks()) {
+          break;
+        }
+        String key = candidate.getBlockX() + ":" + candidate.getBlockY() + ":" + candidate.getBlockZ();
+        if (seen.add(key)) {
+          candidates.add(candidate);
+        }
       }
     }
     return candidates;
@@ -811,43 +813,84 @@ public final class HerobrineStalkerService {
     return directions;
   }
 
-  private Location windowCandidateFromDirection(
+  private List<Location> windowCandidatesFromDirection(
       Player player,
       Location eye,
       Vector direction,
       HerobrineWindowStalkConfig window
   ) {
     if (eye.getWorld() == null || direction == null || direction.lengthSquared() <= 0.0001) {
-      return null;
+      return List.of();
     }
     World world = eye.getWorld();
     Vector normalized = direction.clone().normalize();
     int searchBlocks = Math.max(3, Math.min(12, window.maxOutsideDistance()));
     for (int step = 1; step <= searchBlocks; step++) {
       Location probe = eye.clone().add(normalized.clone().multiply(step));
-      if (!sameChunk(player.getLocation(), probe) || !world.isChunkLoaded(probe.getBlockX() >> 4, probe.getBlockZ() >> 4)) {
-        return null;
+      if (!nearPlayerChunk(player.getLocation(), probe) || !world.isChunkLoaded(probe.getBlockX() >> 4, probe.getBlockZ() >> 4)) {
+        return List.of();
       }
       Block block = world.getBlockAt(probe);
       Material type = block.getType();
       if (HerobrineStalkerRules.glassLike(type)) {
         if (!outsideAirBeyondGlass(world, block.getLocation(), normalized)) {
           lastWindowStalkResult = "blocked beyond glass";
-          return null;
+          return List.of();
         }
-        Location candidate = block.getLocation().add(0.5, 0.0, 0.5)
-            .add(normalized.clone().multiply(window.minOutsideDistance()));
-        if (!sameChunk(player.getLocation(), candidate)) {
-          lastWindowStalkResult = "candidate crosses chunk boundary";
-          return null;
+        Location glassCenter = block.getLocation().add(0.5, 0.0, 0.5);
+        List<Location> candidates = new ArrayList<>();
+        for (Vector offset : windowOutsideOffsets(
+            normalized, window.minOutsideDistance(), window.maxOutsideDistance(), ThreadLocalRandom.current())) {
+          Location candidate = glassCenter.clone().add(offset);
+          if (!nearPlayerChunk(player.getLocation(), candidate)) {
+            lastWindowStalkResult = "candidate beyond chunk neighborhood";
+            continue;
+          }
+          candidates.add(candidate);
         }
-        return candidate;
+        return candidates;
       }
       if (!type.isAir() && type.isSolid() && !block.isPassable()) {
-        return null;
+        return List.of();
       }
     }
-    return null;
+    return List.of();
+  }
+
+  /**
+   * Outside-the-window placement offsets, subtle-first: distances are biased toward the far
+   * half of [min, max] and each far candidate carries a small random lateral offset so he is
+   * not dead-centered in the window frame. The last entry is the legacy centered minimum
+   * distance as a deterministic fallback so tight builds still find a spot. Static and pure
+   * for tests.
+   */
+  static List<Vector> windowOutsideOffsets(Vector direction, int minDistance, int maxDistance, java.util.random.RandomGenerator random) {
+    Vector normalized = direction.clone().normalize();
+    Vector lateral = new Vector(-normalized.getZ(), 0.0, normalized.getX());
+    int min = Math.max(1, minDistance);
+    int max = Math.max(min, maxDistance);
+    List<Vector> offsets = new ArrayList<>(3);
+    // Two far-biased, laterally offset spots: [mid..max] then [min..mid].
+    double mid = min + (max - min) / 2.0;
+    double far = mid + random.nextDouble() * (max - mid);
+    double near = min + random.nextDouble() * (mid - min);
+    for (double distance : new double[] {far, near}) {
+      double side = (random.nextDouble() * 5.0) - 2.5;
+      offsets.add(normalized.clone().multiply(distance).add(lateral.clone().multiply(side)));
+    }
+    offsets.add(normalized.clone().multiply(min));
+    return offsets;
+  }
+
+  /** Chunk distance <= 1 from the player (3x3 neighborhood) — bounded window stalk reach. */
+  private boolean nearPlayerChunk(Location playerLocation, Location target) {
+    if (playerLocation == null || target == null
+        || playerLocation.getWorld() == null || !playerLocation.getWorld().equals(target.getWorld())) {
+      return false;
+    }
+    int chunkDx = Math.abs((playerLocation.getBlockX() >> 4) - (target.getBlockX() >> 4));
+    int chunkDz = Math.abs((playerLocation.getBlockZ() >> 4) - (target.getBlockZ() >> 4));
+    return chunkDx <= 1 && chunkDz <= 1;
   }
 
   private boolean outsideAirBeyondGlass(World world, Location glass, Vector direction) {
@@ -1162,15 +1205,6 @@ public final class HerobrineStalkerService {
 
   private boolean rainOrSnow(World world) {
     return world != null && (world.hasStorm() || world.isThundering());
-  }
-
-  private boolean sameChunk(Location first, Location second) {
-    return first != null
-        && second != null
-        && first.getWorld() != null
-        && first.getWorld().equals(second.getWorld())
-        && (first.getBlockX() >> 4) == (second.getBlockX() >> 4)
-        && (first.getBlockZ() >> 4) == (second.getBlockZ() >> 4);
   }
 
   private boolean openSkyAt(World world, int x, int y, int z) {

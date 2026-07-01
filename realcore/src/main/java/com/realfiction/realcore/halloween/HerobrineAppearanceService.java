@@ -50,7 +50,7 @@ public final class HerobrineAppearanceService {
   }
 
   public void configure(HerobrineAppearanceConfig appearance, long generation) {
-    HerobrineAppearanceConfig config = appearance == null ? HerobrineAppearanceConfig.defaults("Herobrine") : appearance;
+    HerobrineAppearanceConfig config = appearance == null ? HerobrineAppearanceConfig.defaults("Herobrineee") : appearance;
     this.requestedMode = config.mode();
     this.generation = generation;
     this.fallbackReason = "";
@@ -101,7 +101,7 @@ public final class HerobrineAppearanceService {
   }
 
   static Selection select(HerobrineAppearanceConfig appearance, boolean packetSupported, String fallbackReason) {
-    HerobrineAppearanceConfig config = appearance == null ? HerobrineAppearanceConfig.defaults("Herobrine") : appearance;
+    HerobrineAppearanceConfig config = appearance == null ? HerobrineAppearanceConfig.defaults("Herobrineee") : appearance;
     if (config.armorStandRequested()) {
       return new Selection(Backend.ARMOR_STAND, "armor_stand requested");
     }
@@ -142,7 +142,7 @@ public final class HerobrineAppearanceService {
   }
 
   public HerobrineAppearanceStatus status(HerobrineAppearanceConfig appearance) {
-    HerobrineAppearanceConfig config = appearance == null ? HerobrineAppearanceConfig.defaults("Herobrine") : appearance;
+    HerobrineAppearanceConfig config = appearance == null ? HerobrineAppearanceConfig.defaults("Herobrineee") : appearance;
     Selection selection = select(config);
     String activeBackend = switch (selection.backend()) {
       case PACKET_NPC -> HerobrineAppearanceConfig.MODE_PACKET_NPC;
