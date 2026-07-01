@@ -27,4 +27,9 @@ public interface HerobrineAppearanceHandle {
   default Optional<UUID> bukkitEntityUuid() {
     return Optional.empty();
   }
+
+  /** Packet backends return a one-line send trace (entity id, profile uuid, phases sent). */
+  default Optional<String> packetDebug() {
+    return Optional.empty();
+  }
 }

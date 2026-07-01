@@ -266,6 +266,17 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
         sendHerobrineResult(sender, stalker.adminVanish(target.getUniqueId()));
       }
       case "spawn" -> handleHerobrineSpawnTest(sender, args, stalker);
+      case "locate" -> {
+        Player target = resolveHerobrineTarget(sender, args, 3);
+        if (target == null) {
+          return true;
+        }
+        logHerobrineCommand(sender, "locate", target);
+        send(sender, ChatColor.GOLD + "Herobrine locate");
+        for (String line : stalker.adminLocate(target)) {
+          send(sender, ChatColor.YELLOW + line);
+        }
+      }
       case "window" -> {
         Player target = resolveHerobrineTarget(sender, args, 3);
         if (target == null) {
@@ -294,6 +305,18 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
     int targetIndex = 3;
     if (args.length >= 4) {
       String maybeMode = args[3].toLowerCase(Locale.ROOT);
+      if ("packet-front".equals(maybeMode) || "front".equals(maybeMode)) {
+        boolean particles = args.length >= 5 && "particles".equalsIgnoreCase(args[4]);
+        Player target = resolveHerobrineTarget(sender, args, particles ? 5 : 4);
+        if (target == null) {
+          return;
+        }
+        logHerobrineCommand(sender, "spawn packet-front" + (particles ? " particles" : ""), target);
+        send(sender, ChatColor.GRAY + "Spawning packet Herobrine directly in front of " + target.getName()
+            + " (packet-only, vanish-on-look bypassed, 30s linger)...");
+        stalker.adminTestSpawnFront(target, particles, result -> sendHerobrineResult(sender, result));
+        return;
+      }
       if ("packet".equals(maybeMode) || "packet_npc".equals(maybeMode)) {
         mode = HerobrineStalkerService.AdminSpawnMode.PACKET;
         targetIndex = 4;
@@ -353,6 +376,8 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
     send(sender, ChatColor.YELLOW + "Usage: /rf herobrine debug");
     send(sender, ChatColor.YELLOW + "Usage: /rf herobrine test packet-probe");
     send(sender, ChatColor.YELLOW + "Usage: /rf herobrine test spawn [packet|armorstand] [player]");
+    send(sender, ChatColor.YELLOW + "Usage: /rf herobrine test spawn packet-front [particles] [player]");
+    send(sender, ChatColor.YELLOW + "Usage: /rf herobrine test locate [player]");
     send(sender, ChatColor.YELLOW + "Usage: /rf herobrine test vanish [player]");
     send(sender, ChatColor.YELLOW + "Usage: /rf herobrine test cleanup");
     send(sender, ChatColor.YELLOW + "Usage: /rf herobrine test window [player]");
@@ -2187,13 +2212,20 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
     if (args.length == 3 && "herobrine".equalsIgnoreCase(args[0])
         && "test".equalsIgnoreCase(args[1])
         && hasHerobrineAdmin(sender)) {
-      return List.of("spawn", "vanish", "cleanup", "window", "omen", "packet-probe");
+      return List.of("spawn", "locate", "vanish", "cleanup", "window", "omen", "packet-probe");
     }
     if (args.length == 4 && "herobrine".equalsIgnoreCase(args[0])
         && "test".equalsIgnoreCase(args[1])
         && "spawn".equalsIgnoreCase(args[2])
         && hasHerobrineAdmin(sender)) {
-      return List.of("packet", "armorstand");
+      return List.of("packet", "packet-front", "armorstand");
+    }
+    if (args.length == 5 && "herobrine".equalsIgnoreCase(args[0])
+        && "test".equalsIgnoreCase(args[1])
+        && "spawn".equalsIgnoreCase(args[2])
+        && "packet-front".equalsIgnoreCase(args[3])
+        && hasHerobrineAdmin(sender)) {
+      return List.of("particles");
     }
     if (args.length == 2 && "doctor".equalsIgnoreCase(args[0]) && sender.hasPermission("realcore.admin")) {
       return List.of("rewards", "seasonal", "all");

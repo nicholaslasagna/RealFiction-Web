@@ -50,6 +50,7 @@ public final class HerobrineStalkerService {
   private static final double CLOSE_DISTANCE_SQUARED = 8.0 * 8.0;
   private static final double LOST_DISTANCE_SQUARED = 96.0 * 96.0;
   private static final long SOUND_COOLDOWN_MILLIS = 10_000L;
+  private static final Duration DEBUG_FRONT_LINGER = Duration.ofSeconds(30);
 
   private final Plugin plugin;
   private final RealCoreScheduler scheduler;
@@ -220,11 +221,26 @@ public final class HerobrineStalkerService {
       ProtocolLibHerobrinePackets.ProbeReport report = ProtocolLibHerobrinePackets.diagnose(logger);
       lines.set(0, "ProtocolLib detected: " + report.detected());
       lines.add("ProtocolLib supported: " + report.supported());
+      boolean playerInfoOk = false;
+      boolean spawnOk = false;
+      boolean metadataOk = false;
       for (ProtocolLibHerobrinePackets.ProbeCheck check : report.checks()) {
         lines.add(check.summary());
+        if ("player info add/update".equals(check.name())) {
+          playerInfoOk = check.ok();
+        } else if ("spawn packet".equals(check.name())) {
+          spawnOk = check.ok();
+        } else if ("metadata packet".equals(check.name())) {
+          metadataOk = check.ok();
+        }
       }
       lines.add("movement mode: " + report.movementMode());
+      lines.add("spawn entity type: PLAYER (generic SPAWN_ENTITY; 1.20.2+/protocol 775 fake player path)");
+      lines.add("native player-info entry proof: " + (playerInfoOk ? "yes" : "no"));
       lines.add("skin: " + status.skinStatus());
+      lines.add("client render confidence: " + ProtocolLibHerobrinePackets.renderConfidence(playerInfoOk, spawnOk, metadataOk));
+      lines.add("known limitations: server cannot verify client-side rendering;"
+          + " prove it visually with /rf herobrine test spawn packet-front");
       lines.add("fallback reason: " + blankToNone(report.reason()));
     } catch (LinkageError | RuntimeException error) {
       lines.add("ProtocolLib supported: false");
@@ -240,6 +256,58 @@ public final class HerobrineStalkerService {
       return;
     }
     scheduler.runForPlayer(player, () -> adminTestSpawnForPlayer(player, mode, callback));
+  }
+
+  /**
+   * Admin visual truth test: spawns packet Herobrine 6–10 blocks directly in front of the
+   * player, facing them, with vanish-on-look/proximity disabled for a fixed 30s linger.
+   * Packet-only — never falls back to ArmorStand. Bypasses date window and candidate logic.
+   */
+  public void adminTestSpawnFront(Player player, boolean particles, Consumer<AdminCommandResult> callback) {
+    if (player == null) {
+      complete(callback, AdminCommandResult.failure("player target is required"));
+      return;
+    }
+    scheduler.runForPlayer(player, () -> adminTestSpawnFrontForPlayer(player, particles, callback));
+  }
+
+  /** Diagnostic report for the target's active sighting: where he is relative to the player. */
+  public List<String> adminLocate(Player player) {
+    List<String> lines = new ArrayList<>();
+    HerobrineSighting sighting = player == null ? null : activeSightings.get(player.getUniqueId());
+    if (player == null || sighting == null) {
+      lines.add("no active sighting for target");
+      lines.add("activePacketSessions=" + appearanceService.activePacketSessions());
+      return lines;
+    }
+    Location herobrine = sighting.location();
+    Location eye = player.getEyeLocation();
+    lines.add("active sighting=" + sighting.sightingId());
+    lines.add("appearance=" + (sighting.appearance() == null ? "unknown" : sighting.appearance().backend()));
+    lines.add("debugStare=" + sighting.debugStare());
+    lines.add("location=" + formatLocation(herobrine));
+    if (herobrine != null && herobrine.getWorld() != null && herobrine.getWorld().equals(player.getWorld())) {
+      Vector toTarget = herobrine.clone().add(0, 1.55, 0).toVector().subtract(eye.toVector());
+      double viewDegrees = config.halloween().herobrineStalker().vanishOnLook().normalViewDegrees();
+      boolean approxInView = HerobrineStalkerRules.directLook(
+          eye.toVector(),
+          eye.getDirection(),
+          herobrine.clone().add(0, 1.55, 0).toVector(),
+          256.0,
+          HerobrineStalkerRules.dotForViewDegrees(viewDegrees));
+      lines.add(String.format(java.util.Locale.ROOT, "distanceFromPlayer=%.1f", herobrine.distance(player.getLocation())));
+      lines.add(String.format(java.util.Locale.ROOT, "playerYaw=%.1f playerPitch=%.1f", eye.getYaw(), eye.getPitch()));
+      lines.add(String.format(java.util.Locale.ROOT, "directionToHerobrine=%.2f,%.2f,%.2f",
+          toTarget.getX(), toTarget.getY(), toTarget.getZ()));
+      lines.add("approxInView=" + approxInView + " (view=" + viewDegrees + "deg)");
+      lines.add("lineOfSightApprox=" + hasLineOfSightTo(eye, herobrine.clone().add(0, 1.55, 0).toVector()));
+    } else {
+      lines.add("distanceFromPlayer=unavailable (different world)");
+    }
+    sighting.appearance().packetDebug().ifPresent(lines::add);
+    lines.add("activePacketSessions=" + appearanceService.activePacketSessions());
+    lines.add("vanishAt=" + sighting.vanishAt());
+    return lines;
   }
 
   public void adminTestWindow(Player player, Consumer<AdminCommandResult> callback) {
@@ -1287,6 +1355,176 @@ public final class HerobrineStalkerService {
     adminTrySpawnCandidate(request, 0, appearance, callback);
   }
 
+  private void adminTestSpawnFrontForPlayer(Player player, boolean particles, Consumer<AdminCommandResult> callback) {
+    AdminCommandResult gate = adminSpawnGate(player);
+    if (!gate.success()) {
+      complete(callback, gate);
+      return;
+    }
+    HerobrineStalkerConfig stalker = config.halloween().herobrineStalker();
+    HerobrineAppearanceConfig appearance = adminAppearanceFor(AdminSpawnMode.PACKET, stalker.appearance());
+    HerobrineAppearanceService.Selection selection = appearanceService.select(appearance);
+    if (selection.backend() != HerobrineAppearanceService.Backend.PACKET_NPC) {
+      complete(callback, AdminCommandResult.failure("packet-front skipped: packet backend unavailable ("
+          + blankToNone(selection.reason()) + "); this test never falls back to ArmorStand"));
+      return;
+    }
+    Location base = player.getLocation().clone();
+    Location eye = player.getEyeLocation().clone();
+    long generation = lifecycleGeneration.get();
+    // Block reads for a spot 6-10 blocks ahead happen on that location's region thread,
+    // mirroring the candidate flow used everywhere else in this service.
+    List<Vector> offsets = frontOffsets(eye.getDirection());
+    Location scanAnchor = base.clone().add(offsets.get(0));
+    scheduler.runAt(scanAnchor, () -> {
+      if (!generationActive(generation)) {
+        complete(callback, AdminCommandResult.failure("packet-front skipped: service generation changed"));
+        return;
+      }
+      Location safe = null;
+      for (Vector offset : offsets) {
+        Location candidate = base.clone().add(offset);
+        safe = findFrontSafeLocation(candidate);
+        if (safe != null) {
+          break;
+        }
+      }
+      if (safe == null) {
+        complete(callback, AdminCommandResult.failure(
+            "packet-front skipped: no safe ground with headroom 6-10 blocks ahead of view direction"));
+        return;
+      }
+      Location spawnAt = safe;
+      Player current = Bukkit.getPlayer(player.getUniqueId());
+      if (current == null || !current.isOnline()) {
+        complete(callback, AdminCommandResult.failure("packet-front skipped: viewer went offline"));
+        return;
+      }
+      scheduler.runForPlayer(current, () -> adminSpawnFrontSighting(current, spawnAt, appearance, particles, generation, callback));
+    });
+  }
+
+  private void adminSpawnFrontSighting(
+      Player player,
+      Location safe,
+      HerobrineAppearanceConfig appearance,
+      boolean particles,
+      long generation,
+      Consumer<AdminCommandResult> callback
+  ) {
+    if (!generationActive(generation) || activeSightings.containsKey(player.getUniqueId())) {
+      complete(callback, AdminCommandResult.failure("packet-front skipped: active sighting already changed"));
+      return;
+    }
+    Instant now = Instant.now();
+    UUID sightingId = UUID.randomUUID();
+    try {
+      HerobrineAppearanceHandle handle = appearanceService.spawnPacket(
+          sightingId,
+          player.getUniqueId(),
+          player.getName(),
+          safe,
+          player.getLocation(),
+          appearance
+      );
+      HerobrineSighting sighting = new HerobrineSighting(
+          handle.sightingId(),
+          player.getUniqueId(),
+          player.getName(),
+          handle,
+          now,
+          now.plus(DEBUG_FRONT_LINGER),
+          false,
+          false,
+          false,
+          handle.location()
+      );
+      sighting.markDebugStare();
+      HerobrineSighting previous = activeSightings.putIfAbsent(player.getUniqueId(), sighting);
+      if (previous != null) {
+        handle.despawn("duplicate active sighting");
+        complete(callback, AdminCommandResult.failure("packet-front skipped: player already has active sighting"));
+        return;
+      }
+      sightings.incrementAndGet();
+      lastFailure = "";
+      if (particles) {
+        scheduleFrontDebugParticles(player, safe, generation);
+      }
+      Location eye = player.getEyeLocation();
+      complete(callback, AdminCommandResult.success("spawned visible packet sighting=" + sighting.sightingId()
+          + " appearance=" + handle.backend()
+          + " activePacketSessions=" + appearanceService.activePacketSessions()
+          + " location=" + formatLocation(safe)
+          + String.format(java.util.Locale.ROOT, " distance=%.1f", safe.distance(player.getLocation()))
+          + String.format(java.util.Locale.ROOT, " playerYaw=%.1f playerPitch=%.1f", eye.getYaw(), eye.getPitch())
+          + " skin=" + appearanceService.status(appearance).skinStatus()
+          + " lingerSeconds=" + DEBUG_FRONT_LINGER.toSeconds()
+          + " vanishOnLookBypassed=true"
+          + " particles=" + particles
+          + " fallbackReason=none"
+          + handle.packetDebug().map(trace -> " " + trace).orElse("")));
+    } catch (RuntimeException error) {
+      failedSpawns.incrementAndGet();
+      lastFailure = "packet-front spawn failed: " + shortError(error);
+      complete(callback, AdminCommandResult.failure(lastFailure));
+    }
+  }
+
+  /** Harmless viewer-only debug particles marking the intended NPC spot (admin tests only). */
+  private void scheduleFrontDebugParticles(Player player, Location safe, long generation) {
+    for (int i = 0; i < 20; i++) {
+      scheduler.runForPlayerLater(player, () -> {
+        if (!generationActive(generation) || !player.isOnline() || !sameWorld(player, safe)) {
+          return;
+        }
+        player.spawnParticle(Particle.FLAME, safe.clone().add(0, 1.0, 0), 6, 0.25, 0.5, 0.25, 0.0);
+        player.spawnParticle(Particle.END_ROD, safe.clone().add(0, 2.4, 0), 3, 0.1, 0.2, 0.1, 0.0);
+      }, i * 10L + 1L);
+    }
+  }
+
+  /**
+   * Front spawn candidate offsets: view direction flattened to the horizon at 8, 6, then 10
+   * blocks. Static and pure for tests; falls back to +Z when looking straight up/down.
+   */
+  static List<Vector> frontOffsets(Vector direction) {
+    Vector flat = direction == null ? null : new Vector(direction.getX(), 0.0, direction.getZ());
+    if (flat == null || flat.lengthSquared() < 1.0E-4) {
+      flat = new Vector(0.0, 0.0, 1.0);
+    }
+    flat.normalize();
+    List<Vector> offsets = new ArrayList<>(3);
+    for (double distance : new double[] {8.0, 6.0, 10.0}) {
+      offsets.add(flat.clone().multiply(distance));
+    }
+    return offsets;
+  }
+
+  /** Like safeAt but without min-distance/world-spawn/base checks — admin front tests only. */
+  private Location findFrontSafeLocation(Location candidate) {
+    World world = candidate.getWorld();
+    if (world == null || !world.isChunkLoaded(candidate.getBlockX() >> 4, candidate.getBlockZ() >> 4)) {
+      return null;
+    }
+    int x = candidate.getBlockX();
+    int z = candidate.getBlockZ();
+    int baseY = candidate.getBlockY();
+    for (int dy = 2; dy >= -4; dy--) {
+      int y = baseY + dy;
+      if (y <= world.getMinHeight() + 1 || y >= world.getMaxHeight() - 2) {
+        continue;
+      }
+      Block ground = world.getBlockAt(x, y - 1, z);
+      Block feet = world.getBlockAt(x, y, z);
+      Block head = world.getBlockAt(x, y + 1, z);
+      if (solidGround(ground) && emptyForBody(feet) && emptyForBody(head)) {
+        return new Location(world, x + 0.5, y, z + 0.5);
+      }
+    }
+    return null;
+  }
+
   private void adminTestWindowForPlayer(Player player, Consumer<AdminCommandResult> callback) {
     AdminCommandResult gate = adminSpawnGate(player);
     if (!gate.success()) {
@@ -1689,6 +1927,14 @@ public final class HerobrineStalkerService {
     }
     sighting.appearance().face(playerLocation);
     HerobrineStalkerConfig stalker = config.halloween().herobrineStalker();
+    if (sighting.debugStare()) {
+      // Admin visual test: never vanish on look/proximity so the admin can actually stare
+      // at him. Linger timeout and the world/offline/distance checks above still apply.
+      if (!now.isBefore(sighting.vanishAt())) {
+        vanish(sighting, false, "debug linger complete");
+      }
+      return;
+    }
     if (sighting.silhouette()) {
       if (noticedByPlayer(player, herobrine, stalker.vanishOnLook().normalViewDegrees()) || !now.isBefore(sighting.vanishAt())) {
         vanish(sighting, false, "distant silhouette faded");

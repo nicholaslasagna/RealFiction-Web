@@ -70,6 +70,11 @@ final class FoliaScheduler implements RealCoreScheduler {
     Bukkit.getGlobalRegionScheduler().run(plugin, ignored -> task.run());
   }
 
+  /** Folia's runDelayed throws on delay <= 0; treat "now" as next tick like Bukkit does. */
+  static long delayedTicks(long delayTicks) {
+    return Math.max(1L, delayTicks);
+  }
+
   @Override
   public ScheduledTaskHandle runGlobalLater(Runnable task, long delayTicks) {
     AtomicReference<ScheduledTask> taskRef = new AtomicReference<>();
@@ -85,7 +90,7 @@ final class FoliaScheduler implements RealCoreScheduler {
             }
           }
         },
-        Math.max(0L, delayTicks)
+        delayedTicks(delayTicks)
     );
     taskRef.set(scheduledTask);
     tasks.add(scheduledTask);
