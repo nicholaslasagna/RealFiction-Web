@@ -22,7 +22,6 @@ public final class PacketNpcSession {
   private volatile boolean teamSent;
   private volatile boolean playerInfoAddSent;
   private volatile boolean spawnPacketSent;
-  private volatile boolean metadataSent;
   private volatile boolean rotationSent;
   private volatile boolean tabRemoveSent;
   private volatile boolean destroySent;
@@ -130,10 +129,6 @@ public final class PacketNpcSession {
     spawnPacketSent = true;
   }
 
-  public void markMetadataSent() {
-    metadataSent = true;
-  }
-
   public void markRotationSent() {
     rotationSent = true;
   }
@@ -149,7 +144,9 @@ public final class PacketNpcSession {
   public String traceSummary() {
     return "playerInfoAddSent=" + playerInfoAddSent
         + " spawnPacketSent=" + spawnPacketSent
-        + " metadataSent=" + metadataSent
+        // Entity metadata is never sent: a wrong index/type hard-disconnects the client
+        // (proven on protocol 775). Fail closed until the type can be proven per-protocol.
+        + " metadataSent=disabled"
         + " rotationSent=" + rotationSent
         + " scoreboardTeamSent=" + teamSent
         + " tabRemoveSent=" + tabRemoveSent

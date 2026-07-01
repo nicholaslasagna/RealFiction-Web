@@ -223,22 +223,20 @@ public final class HerobrineStalkerService {
       lines.add("ProtocolLib supported: " + report.supported());
       boolean playerInfoOk = false;
       boolean spawnOk = false;
-      boolean metadataOk = false;
       for (ProtocolLibHerobrinePackets.ProbeCheck check : report.checks()) {
         lines.add(check.summary());
         if ("player info add/update".equals(check.name())) {
           playerInfoOk = check.ok();
         } else if ("spawn packet".equals(check.name())) {
           spawnOk = check.ok();
-        } else if ("metadata packet".equals(check.name())) {
-          metadataOk = check.ok();
         }
       }
+      lines.add(ProtocolLibHerobrinePackets.METADATA_PROBE_LINE);
       lines.add("movement mode: " + report.movementMode());
       lines.add("spawn entity type: PLAYER (generic SPAWN_ENTITY; 1.20.2+/protocol 775 fake player path)");
       lines.add("native player-info entry proof: " + (playerInfoOk ? "yes" : "no"));
       lines.add("skin: " + status.skinStatus());
-      lines.add("client render confidence: " + ProtocolLibHerobrinePackets.renderConfidence(playerInfoOk, spawnOk, metadataOk));
+      lines.add("client render confidence: " + ProtocolLibHerobrinePackets.renderConfidence(playerInfoOk, spawnOk));
       lines.add("known limitations: server cannot verify client-side rendering;"
           + " prove it visually with /rf herobrine test spawn packet-front");
       lines.add("fallback reason: " + blankToNone(report.reason()));
