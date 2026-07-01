@@ -4,7 +4,12 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.List;
 import java.util.UUID;
+import java.util.stream.Stream;
 import org.bukkit.configuration.InvalidConfigurationException;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.junit.jupiter.api.Test;
@@ -188,6 +193,64 @@ final class HerobrineAppearanceServiceTest {
     assertFalse(report.supported());
     assertEquals("rotation_only", report.movementMode());
     assertTrue(report.reason().contains("SPAWN_ENTITY getDoubles coordinates unavailable"));
+  }
+
+  @Test
+  void packetProbeFailsWhenPlayerInfoAddUpdateConstructionFails() {
+    ProtocolLibHerobrinePackets.ProbeReport report = ProtocolLibHerobrinePackets.buildProbeReport(
+        true,
+        List.of(
+            new ProtocolLibHerobrinePackets.ProbeCheck(
+                "player info add/update",
+                false,
+                "PLAYER_INFO add/update unsupported: constructor=Unable to set final actions field"),
+            new ProtocolLibHerobrinePackets.ProbeCheck("player info remove", true, ""),
+            new ProtocolLibHerobrinePackets.ProbeCheck("spawn packet", true, "")),
+        new ProtocolLibHerobrinePackets.MovementPlan(
+            ProtocolLibHerobrinePackets.MovementMode.REL_ENTITY_MOVE_LOOK,
+            "rel_entity_move_look")
+    );
+
+    assertFalse(report.supported());
+    assertEquals("rel_entity_move_look", report.movementMode());
+    assertTrue(report.reason().contains("player info add/update"));
+    assertTrue(report.reason().contains("PLAYER_INFO add/update unsupported"));
+  }
+
+  @Test
+  void packetProbeOutputIncludesPlayerInfoAddUpdateAndRemoveResults() {
+    ProtocolLibHerobrinePackets.ProbeReport report = ProtocolLibHerobrinePackets.buildProbeReport(
+        true,
+        List.of(
+            new ProtocolLibHerobrinePackets.ProbeCheck("player info add/update", true, ""),
+            new ProtocolLibHerobrinePackets.ProbeCheck("player info remove", true, "")),
+        new ProtocolLibHerobrinePackets.MovementPlan(
+            ProtocolLibHerobrinePackets.MovementMode.REL_ENTITY_MOVE_LOOK,
+            "rel_entity_move_look")
+    );
+
+    assertTrue(report.supported());
+    assertEquals("player info add/update: ok", report.checks().get(0).summary());
+    assertEquals("player info remove: ok", report.checks().get(1).summary());
+  }
+
+  @Test
+  void productionSourceHasNoDropChanceCalls() throws IOException {
+    Path sourceRoot = Path.of("src/main/java/com/realfiction/realcore");
+    try (Stream<Path> files = Files.walk(sourceRoot)) {
+      List<Path> offenders = files
+          .filter(path -> path.toString().endsWith(".java"))
+          .filter(path -> {
+            try {
+              return Files.readString(path).contains("DropChance");
+            } catch (IOException error) {
+              throw new IllegalStateException(error);
+            }
+          })
+          .toList();
+
+      assertTrue(offenders.isEmpty(), "DropChance references found: " + offenders);
+    }
   }
 
   @Test
