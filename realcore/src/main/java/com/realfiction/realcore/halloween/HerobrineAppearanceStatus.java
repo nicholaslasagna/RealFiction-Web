@@ -7,7 +7,8 @@ public record HerobrineAppearanceStatus(
     boolean protocolLibSupported,
     String fallbackReason,
     int activePacketSessions,
-    String skinStatus
+    String skinStatus,
+    String packetMovementStatus
 ) {
   public static HerobrineAppearanceStatus unavailable(String requestedMode, String fallbackReason) {
     return new HerobrineAppearanceStatus(
@@ -17,7 +18,8 @@ public record HerobrineAppearanceStatus(
         false,
         clean(fallbackReason, "ProtocolLib not detected"),
         0,
-        "unresolved"
+        "unresolved",
+        "unavailable"
     );
   }
 
@@ -28,7 +30,8 @@ public record HerobrineAppearanceStatus(
         + ", protocolLibSupported=" + protocolLibSupported
         + ", activePacketSessions=" + activePacketSessions
         + ", fallbackReason=" + clean(fallbackReason, "none")
-        + ", skin=" + clean(skinStatus, "unresolved");
+        + ", skin=" + clean(skinStatus, "unresolved")
+        + ", packetMovement=" + clean(packetMovementStatus, "unavailable");
   }
 
   private static String clean(String value, String fallback) {

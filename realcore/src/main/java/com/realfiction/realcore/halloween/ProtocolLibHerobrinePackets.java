@@ -22,17 +22,32 @@ import org.bukkit.Location;
 import org.bukkit.entity.EntityType;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.Plugin;
+import org.bukkit.util.Vector;
 
 public final class ProtocolLibHerobrinePackets {
   public record InitResult(ProtocolLibHerobrinePackets packets, boolean detected, boolean supported, String reason) {
   }
 
+  enum MovementMode {
+    ENTITY_TELEPORT_DOUBLES,
+    ENTITY_TELEPORT_VECTOR,
+    REL_ENTITY_MOVE_LOOK,
+    ROTATION_ONLY
+  }
+
+  record MovementPlan(MovementMode mode, String status) {
+  }
+
   private final ProtocolManager manager;
   private final Logger logger;
+  private final MovementPlan movementPlan;
 
-  private ProtocolLibHerobrinePackets(ProtocolManager manager, Logger logger) {
+  private ProtocolLibHerobrinePackets(ProtocolManager manager, Logger logger, MovementPlan movementPlan) {
     this.manager = Objects.requireNonNull(manager, "manager");
     this.logger = logger;
+    this.movementPlan = movementPlan == null
+        ? new MovementPlan(MovementMode.ROTATION_ONLY, "rotation_only")
+        : movementPlan;
   }
 
   public static InitResult create(Plugin owner, Logger logger) {
@@ -49,38 +64,112 @@ public final class ProtocolLibHerobrinePackets {
       if (!WrappedTeamParameters.isSupported()) {
         return new InitResult(null, true, false, "ProtocolLib team parameters unsupported");
       }
-      ProtocolLibHerobrinePackets packets = new ProtocolLibHerobrinePackets(manager, logger);
-      packets.probe();
+      MovementPlan movementPlan = probe(manager);
+      ProtocolLibHerobrinePackets packets = new ProtocolLibHerobrinePackets(manager, logger, movementPlan);
       return new InitResult(packets, true, true, "");
     } catch (LinkageError | RuntimeException error) {
       return new InitResult(null, true, false, shortError(error));
     }
   }
 
-  private void probe() {
+  private static MovementPlan probe(ProtocolManager manager) {
     PacketContainer info = manager.createPacket(PacketType.Play.Server.PLAYER_INFO);
-    require(info.getPlayerInfoActions().size() > 0, "PLAYER_INFO actions unavailable");
-    require(info.getPlayerInfoDataLists().size() > 0, "PLAYER_INFO data unavailable");
+    require(info.getPlayerInfoActions().size() > 0, "PLAYER_INFO getPlayerInfoActions unavailable");
+    require(info.getPlayerInfoDataLists().size() > 0, "PLAYER_INFO getPlayerInfoDataLists unavailable");
     require(manager.createPacket(PacketType.Play.Server.PLAYER_INFO_REMOVE).getUUIDLists().size() > 0,
-        "PLAYER_INFO_REMOVE uuid list unavailable");
+        "PLAYER_INFO_REMOVE getUUIDLists unavailable");
     PacketContainer spawn = manager.createPacket(PacketType.Play.Server.SPAWN_ENTITY);
-    require(spawn.getIntegers().size() > 0, "SPAWN_ENTITY id unavailable");
-    require(spawn.getUUIDs().size() > 0, "SPAWN_ENTITY uuid unavailable");
-    require(spawn.getEntityTypeModifier().size() > 0, "SPAWN_ENTITY type unavailable");
-    require(spawn.getDoubles().size() >= 3, "SPAWN_ENTITY coordinates unavailable");
+    require(spawn.getIntegers().size() > 0, "SPAWN_ENTITY getIntegers entity id unavailable");
+    require(spawn.getUUIDs().size() > 0, "SPAWN_ENTITY getUUIDs profile uuid unavailable");
+    require(spawn.getEntityTypeModifier().size() > 0, "SPAWN_ENTITY getEntityTypeModifier type unavailable");
+    require(spawn.getDoubles().size() >= 3, "SPAWN_ENTITY getDoubles coordinates unavailable");
     require(manager.createPacket(PacketType.Play.Server.ENTITY_DESTROY).getIntLists().size() > 0,
-        "ENTITY_DESTROY ids unavailable");
+        "ENTITY_DESTROY getIntLists entity ids unavailable");
     require(manager.createPacket(PacketType.Play.Server.ENTITY_HEAD_ROTATION).getBytes().size() > 0,
-        "ENTITY_HEAD_ROTATION yaw unavailable");
+        "ENTITY_HEAD_ROTATION getBytes yaw unavailable");
     require(manager.createPacket(PacketType.Play.Server.ENTITY_LOOK).getBytes().size() >= 2,
-        "ENTITY_LOOK rotation unavailable");
-    require(manager.createPacket(PacketType.Play.Server.ENTITY_TELEPORT).getDoubles().size() >= 3,
-        "ENTITY_TELEPORT coordinates unavailable");
+        "ENTITY_LOOK getBytes rotation unavailable");
     PacketContainer team = manager.createPacket(PacketType.Play.Server.SCOREBOARD_TEAM);
-    require(team.getStrings().size() > 0, "SCOREBOARD_TEAM name unavailable");
-    require(team.getIntegers().size() > 0, "SCOREBOARD_TEAM mode unavailable");
-    require(team.getOptionalTeamParameters().size() > 0, "SCOREBOARD_TEAM parameters unavailable");
-    require(team.getSpecificModifier(Collection.class).size() > 0, "SCOREBOARD_TEAM players unavailable");
+    require(team.getStrings().size() > 0, "SCOREBOARD_TEAM getStrings team name unavailable");
+    require(team.getIntegers().size() > 0, "SCOREBOARD_TEAM getIntegers mode unavailable");
+    require(team.getOptionalTeamParameters().size() > 0, "SCOREBOARD_TEAM getOptionalTeamParameters unavailable");
+    require(team.getSpecificModifier(Collection.class).size() > 0, "SCOREBOARD_TEAM getSpecificModifier(Collection) players unavailable");
+
+    int teleportDoubles = 0;
+    int teleportVectors = 0;
+    String teleportFailure = "";
+    try {
+      PacketContainer teleport = manager.createPacket(PacketType.Play.Server.ENTITY_TELEPORT);
+      teleportDoubles = teleport.getDoubles().size();
+      teleportVectors = teleport.getVectors().size();
+    } catch (LinkageError | RuntimeException error) {
+      teleportFailure = "ENTITY_TELEPORT create/read failed: " + shortError(error);
+    }
+
+    int relativeShorts = 0;
+    int relativeBytes = 0;
+    String relativeFailure = "";
+    try {
+      PacketContainer relative = manager.createPacket(PacketType.Play.Server.REL_ENTITY_MOVE_LOOK);
+      relativeShorts = relative.getShorts().size();
+      relativeBytes = relative.getBytes().size();
+    } catch (LinkageError | RuntimeException error) {
+      relativeFailure = "REL_ENTITY_MOVE_LOOK create/read failed: " + shortError(error);
+    }
+
+    return chooseMovementPlan(
+        teleportDoubles,
+        teleportVectors,
+        relativeShorts,
+        relativeBytes,
+        teleportFailure,
+        relativeFailure
+    );
+  }
+
+  static MovementPlan chooseMovementPlan(
+      int teleportDoubleCount,
+      int teleportVectorCount,
+      int relativeShortCount,
+      int relativeByteCount
+  ) {
+    return chooseMovementPlan(teleportDoubleCount, teleportVectorCount, relativeShortCount, relativeByteCount, "", "");
+  }
+
+  static MovementPlan chooseMovementPlan(
+      int teleportDoubleCount,
+      int teleportVectorCount,
+      int relativeShortCount,
+      int relativeByteCount,
+      String teleportFailure,
+      String relativeFailure
+  ) {
+    if (teleportDoubleCount >= 3) {
+      return new MovementPlan(MovementMode.ENTITY_TELEPORT_DOUBLES, "entity_teleport_doubles");
+    }
+    if (teleportVectorCount >= 1) {
+      return new MovementPlan(MovementMode.ENTITY_TELEPORT_VECTOR, "entity_teleport_vector");
+    }
+    if (relativeShortCount >= 3 && relativeByteCount >= 2) {
+      return new MovementPlan(
+          MovementMode.REL_ENTITY_MOVE_LOOK,
+          "rel_entity_move_look; " + movementMissing("ENTITY_TELEPORT missing getDoubles/getVectors coordinates", teleportFailure)
+      );
+    }
+    return new MovementPlan(
+        MovementMode.ROTATION_ONLY,
+        "rotation_only; " + movementMissing("ENTITY_TELEPORT missing getDoubles/getVectors coordinates", teleportFailure)
+            + "; " + movementMissing("REL_ENTITY_MOVE_LOOK missing getShorts/getBytes movement", relativeFailure)
+    );
+  }
+
+  private static String movementMissing(String missing, String failure) {
+    String cleanFailure = failure == null ? "" : failure.trim();
+    return cleanFailure.isBlank() ? missing : missing + " (" + cleanFailure + ")";
+  }
+
+  public String movementStatus() {
+    return movementPlan.status();
   }
 
   public void spawn(Player viewer, PacketNpcSession session, HerobrineSkinProfileService.SkinProfile skin, Location target, Location lookAt) {
@@ -107,7 +196,29 @@ public final class ProtocolLibHerobrinePackets {
     if (next == null) {
       return;
     }
+    try {
+      sendMovement(viewer, session, next, lookAt);
+    } catch (RuntimeException error) {
+      if (logger != null) {
+        logger.fine("Herobrine packet NPC movement fell back to rotation only: " + shortError(error));
+      }
+    }
+    sendRotation(viewer, session, lookAt);
+  }
+
+  private void sendMovement(Player viewer, PacketNpcSession session, Location next, Location lookAt) {
+    switch (movementPlan.mode()) {
+      case ENTITY_TELEPORT_DOUBLES -> sendTeleportDoubles(viewer, session, next, lookAt);
+      case ENTITY_TELEPORT_VECTOR -> sendTeleportVector(viewer, session, next, lookAt);
+      case REL_ENTITY_MOVE_LOOK -> sendRelativeMoveLook(viewer, session, next, lookAt);
+      case ROTATION_ONLY -> {
+        return;
+      }
+    }
     session.updateLocation(next);
+  }
+
+  private void sendTeleportDoubles(Player viewer, PacketNpcSession session, Location next, Location lookAt) {
     PacketContainer packet = manager.createPacket(PacketType.Play.Server.ENTITY_TELEPORT);
     packet.getIntegers().writeSafely(0, session.entityId());
     packet.getDoubles().writeSafely(0, next.getX());
@@ -117,7 +228,32 @@ public final class ProtocolLibHerobrinePackets {
     packet.getBytes().writeSafely(1, angleByte(pitchToward(next, lookAt)));
     packet.getBooleans().writeSafely(0, true);
     send(viewer, packet);
-    sendRotation(viewer, session, lookAt);
+  }
+
+  private void sendTeleportVector(Player viewer, PacketNpcSession session, Location next, Location lookAt) {
+    PacketContainer packet = manager.createPacket(PacketType.Play.Server.ENTITY_TELEPORT);
+    packet.getIntegers().writeSafely(0, session.entityId());
+    packet.getVectors().writeSafely(0, new Vector(next.getX(), next.getY(), next.getZ()));
+    packet.getBytes().writeSafely(0, angleByte(yawToward(next, lookAt)));
+    packet.getBytes().writeSafely(1, angleByte(pitchToward(next, lookAt)));
+    packet.getBooleans().writeSafely(0, true);
+    send(viewer, packet);
+  }
+
+  private void sendRelativeMoveLook(Player viewer, PacketNpcSession session, Location next, Location lookAt) {
+    Location current = session.location();
+    if (current == null) {
+      return;
+    }
+    PacketContainer packet = manager.createPacket(PacketType.Play.Server.REL_ENTITY_MOVE_LOOK);
+    packet.getIntegers().writeSafely(0, session.entityId());
+    packet.getShorts().writeSafely(0, relativeDelta(current.getX(), next.getX()));
+    packet.getShorts().writeSafely(1, relativeDelta(current.getY(), next.getY()));
+    packet.getShorts().writeSafely(2, relativeDelta(current.getZ(), next.getZ()));
+    packet.getBytes().writeSafely(0, angleByte(yawToward(next, lookAt)));
+    packet.getBytes().writeSafely(1, angleByte(pitchToward(next, lookAt)));
+    packet.getBooleans().writeSafely(0, true);
+    send(viewer, packet);
   }
 
   public void despawn(Player viewer, PacketNpcSession session) {
@@ -248,6 +384,17 @@ public final class ProtocolLibHerobrinePackets {
 
   private static byte angleByte(float angle) {
     return (byte) Math.floorMod((int) (angle * 256.0f / 360.0f), 256);
+  }
+
+  private static short relativeDelta(double from, double to) {
+    long encoded = Math.round((to - from) * 4096.0d);
+    if (encoded > Short.MAX_VALUE) {
+      return Short.MAX_VALUE;
+    }
+    if (encoded < Short.MIN_VALUE) {
+      return Short.MIN_VALUE;
+    }
+    return (short) encoded;
   }
 
   private static float yawToward(Location from, Location target) {

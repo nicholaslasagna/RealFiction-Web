@@ -94,7 +94,8 @@ final class HerobrineAppearanceServiceTest {
         true,
         "",
         1,
-        "resolved:Herobrine"
+        "resolved:Herobrine",
+        "rel_entity_move_look; ENTITY_TELEPORT missing getDoubles/getVectors coordinates"
     );
 
     String summary = status.summary();
@@ -106,6 +107,57 @@ final class HerobrineAppearanceServiceTest {
     assertTrue(summary.contains("activePacketSessions=1"));
     assertTrue(summary.contains("fallbackReason=none"));
     assertTrue(summary.contains("skin=resolved:Herobrine"));
+    assertTrue(summary.contains("packetMovement=rel_entity_move_look"));
+  }
+
+  @Test
+  void entityTeleportDoubleCoordinatesUseTeleportMovement() {
+    ProtocolLibHerobrinePackets.MovementPlan plan = ProtocolLibHerobrinePackets.chooseMovementPlan(3, 0, 0, 0);
+
+    assertEquals(ProtocolLibHerobrinePackets.MovementMode.ENTITY_TELEPORT_DOUBLES, plan.mode());
+    assertEquals("entity_teleport_doubles", plan.status());
+  }
+
+  @Test
+  void entityTeleportVectorCoordinatesUseTeleportMovement() {
+    ProtocolLibHerobrinePackets.MovementPlan plan = ProtocolLibHerobrinePackets.chooseMovementPlan(0, 1, 0, 0);
+
+    assertEquals(ProtocolLibHerobrinePackets.MovementMode.ENTITY_TELEPORT_VECTOR, plan.mode());
+    assertEquals("entity_teleport_vector", plan.status());
+  }
+
+  @Test
+  void missingEntityTeleportCoordinatesFallsBackToRelativeMoveLook() {
+    ProtocolLibHerobrinePackets.MovementPlan plan = ProtocolLibHerobrinePackets.chooseMovementPlan(0, 0, 3, 2);
+
+    assertEquals(ProtocolLibHerobrinePackets.MovementMode.REL_ENTITY_MOVE_LOOK, plan.mode());
+    assertTrue(plan.status().contains("rel_entity_move_look"));
+    assertTrue(plan.status().contains("ENTITY_TELEPORT missing getDoubles/getVectors coordinates"));
+  }
+
+  @Test
+  void missingTeleportAndRelativeMovementKeepsPacketBackendRotationOnly() {
+    ProtocolLibHerobrinePackets.MovementPlan plan = ProtocolLibHerobrinePackets.chooseMovementPlan(0, 0, 0, 0);
+
+    assertEquals(ProtocolLibHerobrinePackets.MovementMode.ROTATION_ONLY, plan.mode());
+    assertTrue(plan.status().contains("ENTITY_TELEPORT missing getDoubles/getVectors coordinates"));
+    assertTrue(plan.status().contains("REL_ENTITY_MOVE_LOOK missing getShorts/getBytes movement"));
+  }
+
+  @Test
+  void movementProbeStatusIncludesExactOptionalPacketAccessorFailure() {
+    ProtocolLibHerobrinePackets.MovementPlan plan = ProtocolLibHerobrinePackets.chooseMovementPlan(
+        0,
+        0,
+        0,
+        0,
+        "ENTITY_TELEPORT create/read failed: coordinates unavailable",
+        "REL_ENTITY_MOVE_LOOK create/read failed: getShorts unavailable"
+    );
+
+    assertEquals(ProtocolLibHerobrinePackets.MovementMode.ROTATION_ONLY, plan.mode());
+    assertTrue(plan.status().contains("ENTITY_TELEPORT create/read failed: coordinates unavailable"));
+    assertTrue(plan.status().contains("REL_ENTITY_MOVE_LOOK create/read failed: getShorts unavailable"));
   }
 
   private static String parseMode(String mode) throws InvalidConfigurationException {
