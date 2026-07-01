@@ -17,6 +17,7 @@ import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Consumer;
 import java.util.logging.Logger;
 import org.bukkit.Bukkit;
 import org.bukkit.Chunk;
@@ -174,6 +175,112 @@ public final class HerobrineStalkerService {
 
   public String lastFailure() {
     return lastFailure;
+  }
+
+  public List<String> adminStatusLines() {
+    HerobrineStalkerConfig stalker = config.halloween().herobrineStalker();
+    HerobrineAppearanceStatus appearance = appearanceService.status(stalker.appearance());
+    List<String> lines = new ArrayList<>();
+    lines.add("enabled=" + (config.halloween().enabled() && stalker.enabled()));
+    lines.add("dateActive=" + calendarActive(LocalDate.now()));
+    lines.add("dryRunMode=" + stalker.dryRun());
+    lines.add("active=" + activeCount() + "/" + stalker.maxActiveSightings());
+    lines.add("requestedAppearance=" + appearance.requestedMode());
+    lines.add("activeAppearance=" + appearance.activeBackend());
+    lines.add("protocolLibDetected=" + appearance.protocolLibDetected());
+    lines.add("protocolLibSupported=" + appearance.protocolLibSupported());
+    lines.add("packetMovement=" + appearance.packetMovementStatus());
+    lines.add("activePacketSessions=" + appearance.activePacketSessions());
+    lines.add("fallbackReason=" + blankToNone(appearance.fallbackReason()));
+    lines.add("skin=" + appearance.skinStatus());
+    lines.add("vanishOnLook=" + stalker.vanishOnLook().enabled());
+    lines.add("proximityEffect=" + stalker.proximityEffect().enabled());
+    lines.add("windowStalk=" + stalker.windowStalk().enabled());
+    lines.add("distantOmenStructure=" + stalker.distantOmenStructure().enabled());
+    lines.add("dropChanceGuard=" + ARMOR_STAND_DROPS_FIX_MARKER);
+    lines.add("failed=" + failedSpawnCount());
+    lines.add("lastFailure=" + blankToNone(lastFailure));
+    lines.add("lastSkip=" + blankToNone(lastSkipReason));
+    return lines;
+  }
+
+  public List<String> adminPacketProbeLines() {
+    HerobrineStalkerConfig stalker = config.halloween().herobrineStalker();
+    List<String> lines = new ArrayList<>();
+    HerobrineAppearanceStatus status = appearanceService.status(stalker.appearance());
+    lines.add("ProtocolLib detected: " + status.protocolLibDetected());
+    if (!status.protocolLibDetected()) {
+      lines.add("ProtocolLib supported: false");
+      lines.add("fallback reason: ProtocolLib not detected");
+      lines.add("skin: " + status.skinStatus());
+      return lines;
+    }
+    try {
+      ProtocolLibHerobrinePackets.ProbeReport report = ProtocolLibHerobrinePackets.diagnose(logger);
+      lines.set(0, "ProtocolLib detected: " + report.detected());
+      lines.add("ProtocolLib supported: " + report.supported());
+      for (ProtocolLibHerobrinePackets.ProbeCheck check : report.checks()) {
+        lines.add(check.summary());
+      }
+      lines.add("movement mode: " + report.movementMode());
+      lines.add("skin: " + status.skinStatus());
+      lines.add("fallback reason: " + blankToNone(report.reason()));
+    } catch (LinkageError | RuntimeException error) {
+      lines.add("ProtocolLib supported: false");
+      lines.add("skin: " + status.skinStatus());
+      lines.add("fallback reason: " + shortError(error));
+    }
+    return lines;
+  }
+
+  public void adminTestSpawn(Player player, AdminSpawnMode mode, Consumer<AdminCommandResult> callback) {
+    if (player == null) {
+      complete(callback, AdminCommandResult.failure("player target is required"));
+      return;
+    }
+    scheduler.runForPlayer(player, () -> adminTestSpawnForPlayer(player, mode, callback));
+  }
+
+  public void adminTestWindow(Player player, Consumer<AdminCommandResult> callback) {
+    if (player == null) {
+      complete(callback, AdminCommandResult.failure("player target is required"));
+      return;
+    }
+    scheduler.runForPlayer(player, () -> adminTestWindowForPlayer(player, callback));
+  }
+
+  public void adminTestOmen(Player player, Consumer<AdminCommandResult> callback) {
+    if (player == null) {
+      complete(callback, AdminCommandResult.failure("player target is required"));
+      return;
+    }
+    scheduler.runForPlayer(player, () -> adminTestOmenForPlayer(player, callback));
+  }
+
+  public AdminCommandResult adminVanish(UUID playerUuid) {
+    HerobrineSighting sighting = playerUuid == null ? null : activeSightings.get(playerUuid);
+    if (sighting == null) {
+      return AdminCommandResult.failure("no active Herobrine sighting for target");
+    }
+    vanish(sighting, false, "admin_test");
+    return AdminCommandResult.success("vanished sighting=" + sighting.sightingId()
+        + " reason=admin_test activePacketSessions=" + appearanceService.activePacketSessions());
+  }
+
+  public AdminCleanupResult adminCleanup() {
+    int sightingsBefore = activeSightings.size();
+    int packetBefore = appearanceService.activePacketSessions();
+    int fallbackBefore = (int) activeSightings.values().stream()
+        .filter(sighting -> sighting.appearance() != null
+            && HerobrineAppearanceConfig.MODE_ARMOR_STAND.equals(sighting.appearance().backend()))
+        .count();
+    cleanupActiveSightings();
+    return new AdminCleanupResult(
+        sightingsBefore,
+        packetBefore,
+        fallbackBefore,
+        appearanceService.activePacketSessions()
+    );
   }
 
   public boolean calendarActive(LocalDate date) {
@@ -1151,6 +1258,345 @@ public final class HerobrineStalkerService {
     return request.miningIntent() ? "miningIntent" : "normal";
   }
 
+  private void adminTestSpawnForPlayer(Player player, AdminSpawnMode mode, Consumer<AdminCommandResult> callback) {
+    AdminCommandResult gate = adminSpawnGate(player);
+    if (!gate.success()) {
+      complete(callback, gate);
+      return;
+    }
+    HerobrineStalkerConfig stalker = config.halloween().herobrineStalker();
+    SpookyConditions conditions = conditionsFor(player);
+    Instant now = Instant.now();
+    List<Location> candidates = buildCandidates(player.getLocation().clone(), stalker);
+    SpawnRequest request = new SpawnRequest(
+        player.getUniqueId(),
+        player.getName(),
+        player.getLocation().clone(),
+        player.getEyeLocation().clone(),
+        conditions,
+        now,
+        lifecycleGeneration.get(),
+        randomLinger(stalker, false, false),
+        false,
+        false,
+        false,
+        candidates
+    );
+    HerobrineAppearanceConfig appearance = adminAppearanceFor(mode, stalker.appearance());
+    adminTrySpawnCandidate(request, 0, appearance, callback);
+  }
+
+  private void adminTestWindowForPlayer(Player player, Consumer<AdminCommandResult> callback) {
+    AdminCommandResult gate = adminSpawnGate(player);
+    if (!gate.success()) {
+      complete(callback, gate);
+      return;
+    }
+    HerobrineStalkerConfig stalker = config.halloween().herobrineStalker();
+    HerobrineWindowStalkConfig window = stalker.windowStalk();
+    if (!window.enabled()) {
+      complete(callback, AdminCommandResult.failure("windowStalk skipped: disabled by config"));
+      return;
+    }
+    if (!HerobrineStalkerRules.windowStalkWeatherAllowed(darkOutside(player.getWorld()), rainOrSnow(player.getWorld()), window)) {
+      complete(callback, AdminCommandResult.failure("windowStalk skipped: not dark/raining"));
+      return;
+    }
+    List<Location> candidates = buildWindowStalkCandidates(player, window);
+    if (candidates.isEmpty()) {
+      lastWindowStalkResult = "no glass line of sight";
+      complete(callback, AdminCommandResult.failure("windowStalk skipped: no glass line of sight"));
+      return;
+    }
+    Instant now = Instant.now();
+    SpawnRequest request = new SpawnRequest(
+        player.getUniqueId(),
+        player.getName(),
+        player.getLocation().clone(),
+        player.getEyeLocation().clone(),
+        conditionsFor(player),
+        now,
+        lifecycleGeneration.get(),
+        window.maxLinger(),
+        false,
+        false,
+        true,
+        candidates
+    );
+    adminTrySpawnCandidate(request, 0, stalker.appearance(), callback);
+  }
+
+  private void adminTestOmenForPlayer(Player player, Consumer<AdminCommandResult> callback) {
+    AdminCommandResult gate = adminBaseGate(player);
+    if (!gate.success()) {
+      complete(callback, gate);
+      return;
+    }
+    HerobrineDistantOmenStructureConfig omen = config.halloween().herobrineStalker().distantOmenStructure();
+    if (!omen.enabled()) {
+      complete(callback, AdminCommandResult.failure("distantOmen skipped: disabled by config"));
+      return;
+    }
+    if (!omen.particlesOnly() || omen.realBlockPlacementRequested() || omen.packetFakeBlocks()) {
+      complete(callback, AdminCommandResult.failure("distantOmen skipped: particles-only mode required"));
+      return;
+    }
+    List<Location> candidates = buildDistantOmenCandidates(player.getLocation().clone(), omen);
+    if (candidates.isEmpty()) {
+      complete(callback, AdminCommandResult.failure("distantOmen skipped: no open candidates"));
+      return;
+    }
+    adminTryOmenCandidate(player, candidates, 0, omen, lifecycleGeneration.get(), callback);
+  }
+
+  private void adminTrySpawnCandidate(
+      SpawnRequest request,
+      int index,
+      HerobrineAppearanceConfig appearance,
+      Consumer<AdminCommandResult> callback
+  ) {
+    if (!requestActive(request)) {
+      complete(callback, AdminCommandResult.failure("spawn skipped: service generation changed"));
+      return;
+    }
+    if (index >= request.candidates().size()) {
+      failedSpawns.incrementAndGet();
+      lastFailure = request.windowStalk() ? blankToNone(lastWindowStalkResult) : "no safe spawn found";
+      complete(callback, AdminCommandResult.failure((request.windowStalk() ? "windowStalk" : "spawn")
+          + " skipped: " + lastFailure));
+      return;
+    }
+    Location candidate = request.candidates().get(index);
+    scheduler.runAt(candidate, () -> {
+      if (!requestActive(request)) {
+        complete(callback, AdminCommandResult.failure("spawn skipped: service generation changed"));
+        return;
+      }
+      Location safe = findSafeSpawnLocation(candidate, request);
+      if (safe == null) {
+        adminTrySpawnCandidate(request, index + 1, appearance, callback);
+        return;
+      }
+      adminSpawnOrDryRun(request, safe, appearance, callback);
+    });
+  }
+
+  private void adminSpawnOrDryRun(
+      SpawnRequest request,
+      Location safe,
+      HerobrineAppearanceConfig appearance,
+      Consumer<AdminCommandResult> callback
+  ) {
+    if (!requestActive(request)) {
+      complete(callback, AdminCommandResult.failure("spawn skipped: service generation changed"));
+      return;
+    }
+    if (activeSightings.containsKey(request.playerUuid())) {
+      complete(callback, AdminCommandResult.failure("spawn skipped: player already has active sighting"));
+      return;
+    }
+    HerobrineStalkerConfig stalker = config.halloween().herobrineStalker();
+    if (!HerobrineStalkerRules.activeBelowLimit(activeSightings.size(), stalker.maxActiveSightings())) {
+      skippedChecks.incrementAndGet();
+      lastSkipReason = "max active sightings";
+      complete(callback, AdminCommandResult.failure("spawn skipped: max active sightings"));
+      return;
+    }
+    Instant now = Instant.now();
+    if (stalker.dryRun()) {
+      dryRunSightings.incrementAndGet();
+      recordCooldowns(request.playerUuid(), now);
+      complete(callback, AdminCommandResult.success("dry-run sighting=" + UUID.randomUUID()
+          + " appearance=none location=" + formatLocation(safe)
+          + " note=no packet/entity mutation"));
+      return;
+    }
+    HerobrineAppearanceService.Selection selection = appearanceService.select(appearance);
+    if (selection.backend() == HerobrineAppearanceService.Backend.SKIP) {
+      failedSpawns.incrementAndGet();
+      lastFailure = selection.reason();
+      complete(callback, AdminCommandResult.failure("spawn skipped: " + selection.reason()));
+      return;
+    }
+    UUID sightingId = UUID.randomUUID();
+    if (selection.backend() == HerobrineAppearanceService.Backend.PACKET_NPC) {
+      Player player = Bukkit.getPlayer(request.playerUuid());
+      if (player == null || !player.isOnline()) {
+        failedSpawns.incrementAndGet();
+        lastFailure = "viewer offline before packet spawn";
+        complete(callback, AdminCommandResult.failure("packet spawn failed: viewer offline"));
+        return;
+      }
+      scheduler.runForPlayer(player, () -> adminSpawnPacketSighting(request, safe, appearance, sightingId, now, callback));
+      return;
+    }
+    try {
+      HerobrineAppearanceHandle handle = appearanceService.spawnArmorStand(
+          sightingId,
+          request.playerUuid(),
+          request.playerLocation(),
+          safe
+      );
+      HerobrineSighting sighting = registerAdminSighting(request, handle, now, selection.reason());
+      complete(callback, AdminCommandResult.success("spawned sighting=" + sighting.sightingId()
+          + " appearance=" + handle.backend()
+          + " fallbackReason=" + blankToNone(selection.reason())
+          + " location=" + formatLocation(sighting.location())));
+    } catch (RuntimeException error) {
+      failedSpawns.incrementAndGet();
+      lastFailure = "armor stand spawn failed: " + shortError(error);
+      complete(callback, AdminCommandResult.failure(lastFailure));
+    }
+  }
+
+  private void adminSpawnPacketSighting(
+      SpawnRequest request,
+      Location safe,
+      HerobrineAppearanceConfig appearance,
+      UUID sightingId,
+      Instant now,
+      Consumer<AdminCommandResult> callback
+  ) {
+    if (!requestActive(request) || activeSightings.containsKey(request.playerUuid())) {
+      complete(callback, AdminCommandResult.failure("packet spawn skipped: active sighting already changed"));
+      return;
+    }
+    try {
+      HerobrineAppearanceHandle handle = appearanceService.spawnPacket(
+          sightingId,
+          request.playerUuid(),
+          request.playerName(),
+          safe,
+          request.playerLocation(),
+          appearance
+      );
+      HerobrineSighting sighting = registerAdminSighting(request, handle, now, "");
+      complete(callback, AdminCommandResult.success("spawned sighting=" + sighting.sightingId()
+          + " appearance=" + handle.backend()
+          + " activePacketSessions=" + appearanceService.activePacketSessions()
+          + " skin=" + appearanceService.status(appearance).skinStatus()
+          + " fallbackReason=none"
+          + " location=" + formatLocation(sighting.location())));
+    } catch (RuntimeException error) {
+      failedSpawns.incrementAndGet();
+      lastFailure = "packet spawn failed: " + shortError(error);
+      if (appearance.fallbackToArmorStand()) {
+        scheduler.runAt(safe, () -> adminSpawnOrDryRun(request, safe,
+            new HerobrineAppearanceConfig(
+                HerobrineAppearanceConfig.MODE_ARMOR_STAND,
+                true,
+                appearance.skinOwner(),
+                appearance.hideFromTabAfterTicks()),
+            callback));
+      } else {
+        complete(callback, AdminCommandResult.failure(lastFailure));
+      }
+    }
+  }
+
+  private HerobrineSighting registerAdminSighting(
+      SpawnRequest request,
+      HerobrineAppearanceHandle handle,
+      Instant now,
+      String fallbackReason
+  ) {
+    registerSighting(request, handle, now, fallbackReason);
+    HerobrineSighting sighting = activeSightings.get(request.playerUuid());
+    if (sighting == null) {
+      throw new IllegalStateException("sighting registration failed");
+    }
+    return sighting;
+  }
+
+  private void adminTryOmenCandidate(
+      Player player,
+      List<Location> candidates,
+      int index,
+      HerobrineDistantOmenStructureConfig omen,
+      long generation,
+      Consumer<AdminCommandResult> callback
+  ) {
+    if (!generationActive(generation)) {
+      complete(callback, AdminCommandResult.failure("distantOmen skipped: service generation changed"));
+      return;
+    }
+    if (index >= candidates.size()) {
+      complete(callback, AdminCommandResult.failure("distantOmen skipped: "
+          + blankToNone(lastDistantOmenResult)));
+      return;
+    }
+    Location candidate = candidates.get(index);
+    scheduler.runAt(candidate, () -> {
+      if (!generationActive(generation)) {
+        complete(callback, AdminCommandResult.failure("distantOmen skipped: service generation changed"));
+        return;
+      }
+      Location safe = findDistantOmenLocation(candidate, omen);
+      if (safe == null) {
+        adminTryOmenCandidate(player, candidates, index + 1, omen, generation, callback);
+        return;
+      }
+      lastDistantOmenResult = "shown at " + formatLocation(safe);
+      showDistantOmenParticles(player.getUniqueId(), safe, omen, generation);
+      complete(callback, AdminCommandResult.success("distantOmen shown location=" + formatLocation(safe)
+          + " particlesOnly=true realBlocks=false"));
+    });
+  }
+
+  private AdminCommandResult adminSpawnGate(Player player) {
+    AdminCommandResult base = adminBaseGate(player);
+    if (!base.success()) {
+      return base;
+    }
+    if (!HerobrineStalkerRules.activeBelowLimit(activeSightings.size(), config.halloween().herobrineStalker().maxActiveSightings())) {
+      return AdminCommandResult.failure("spawn skipped: max active sightings");
+    }
+    if (activeSightings.containsKey(player.getUniqueId())) {
+      return AdminCommandResult.failure("spawn skipped: player already has active sighting");
+    }
+    return AdminCommandResult.success("ok");
+  }
+
+  private AdminCommandResult adminBaseGate(Player player) {
+    if (player == null || !player.isOnline() || player.isDead() || player.getWorld() == null) {
+      return AdminCommandResult.failure("target player is not safely available");
+    }
+    HerobrineStalkerConfig stalker = config.halloween().herobrineStalker();
+    if (!config.halloween().enabled() || !stalker.enabled()) {
+      return AdminCommandResult.failure("Herobrine is disabled by config");
+    }
+    if (!stalker.serverAllowed(config.serverId(), config.serverGroup())) {
+      return AdminCommandResult.failure("server denied by Herobrine config");
+    }
+    if (!stalker.worldAllowed(player.getWorld().getName())) {
+      return AdminCommandResult.failure("world denied by Herobrine config");
+    }
+    return AdminCommandResult.success("ok");
+  }
+
+  private HerobrineAppearanceConfig adminAppearanceFor(AdminSpawnMode mode, HerobrineAppearanceConfig configured) {
+    HerobrineAppearanceConfig base = configured == null ? HerobrineAppearanceConfig.defaults("Herobrine") : configured;
+    return switch (mode == null ? AdminSpawnMode.CONFIGURED : mode) {
+      case PACKET -> new HerobrineAppearanceConfig(
+          HerobrineAppearanceConfig.MODE_PACKET_NPC,
+          false,
+          base.skinOwner(),
+          base.hideFromTabAfterTicks());
+      case ARMOR_STAND -> new HerobrineAppearanceConfig(
+          HerobrineAppearanceConfig.MODE_ARMOR_STAND,
+          true,
+          base.skinOwner(),
+          base.hideFromTabAfterTicks());
+      case CONFIGURED -> base;
+    };
+  }
+
+  private void complete(Consumer<AdminCommandResult> callback, AdminCommandResult result) {
+    if (callback != null) {
+      callback.accept(result);
+    }
+  }
+
   public void suppressPlayer(Player player, String reason) {
     if (player == null) {
       return;
@@ -1959,6 +2405,38 @@ public final class HerobrineStalkerService {
   private String shortError(Throwable error) {
     String message = error.getMessage();
     return message == null || message.isBlank() ? error.getClass().getSimpleName() : message;
+  }
+
+  public enum AdminSpawnMode {
+    CONFIGURED,
+    PACKET,
+    ARMOR_STAND
+  }
+
+  public record AdminCommandResult(boolean success, String message) {
+    public static AdminCommandResult success(String message) {
+      return new AdminCommandResult(true, message);
+    }
+
+    public static AdminCommandResult failure(String message) {
+      return new AdminCommandResult(false, message);
+    }
+  }
+
+  public record AdminCleanupResult(
+      int cleanedSightings,
+      int cleanedPacketSessions,
+      int cleanedFallbackEntities,
+      int activePacketSessions
+  ) {
+    public List<String> lines() {
+      return List.of(
+          "cleanedSightings=" + cleanedSightings,
+          "cleanedPacketSessions=" + cleanedPacketSessions,
+          "cleanedFallbackEntities=" + cleanedFallbackEntities,
+          "activePacketSessions=" + activePacketSessions
+      );
+    }
   }
 
   private record SpawnRequest(

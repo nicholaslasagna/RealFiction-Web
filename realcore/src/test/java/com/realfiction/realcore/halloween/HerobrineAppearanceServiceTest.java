@@ -160,6 +160,47 @@ final class HerobrineAppearanceServiceTest {
     assertTrue(plan.status().contains("REL_ENTITY_MOVE_LOOK create/read failed: getShorts unavailable"));
   }
 
+  @Test
+  void packetProbeCheckSummariesExposeExactFailureReason() {
+    ProtocolLibHerobrinePackets.ProbeCheck ok =
+        new ProtocolLibHerobrinePackets.ProbeCheck("spawn packet", true, "");
+    ProtocolLibHerobrinePackets.ProbeCheck fail =
+        new ProtocolLibHerobrinePackets.ProbeCheck("destroy packet", false, "ENTITY_DESTROY getIntLists unavailable");
+
+    assertEquals("spawn packet: ok", ok.summary());
+    assertTrue(fail.summary().contains("destroy packet: fail ENTITY_DESTROY getIntLists unavailable"));
+  }
+
+  @Test
+  void packetProbeReportCarriesMovementAndFallbackReasonForCommandOutput() {
+    ProtocolLibHerobrinePackets.ProbeReport report = new ProtocolLibHerobrinePackets.ProbeReport(
+        true,
+        false,
+        java.util.List.of(new ProtocolLibHerobrinePackets.ProbeCheck(
+            "spawn packet",
+            false,
+            "SPAWN_ENTITY getDoubles coordinates unavailable")),
+        "rotation_only",
+        "spawn packet SPAWN_ENTITY getDoubles coordinates unavailable"
+    );
+
+    assertTrue(report.detected());
+    assertFalse(report.supported());
+    assertEquals("rotation_only", report.movementMode());
+    assertTrue(report.reason().contains("SPAWN_ENTITY getDoubles coordinates unavailable"));
+  }
+
+  @Test
+  void adminCleanupResultFormatsPacketAndFallbackCounts() {
+    HerobrineStalkerService.AdminCleanupResult result =
+        new HerobrineStalkerService.AdminCleanupResult(2, 1, 2, 0);
+
+    assertTrue(result.lines().contains("cleanedSightings=2"));
+    assertTrue(result.lines().contains("cleanedPacketSessions=1"));
+    assertTrue(result.lines().contains("cleanedFallbackEntities=2"));
+    assertTrue(result.lines().contains("activePacketSessions=0"));
+  }
+
   private static String parseMode(String mode) throws InvalidConfigurationException {
     YamlConfiguration yaml = new YamlConfiguration();
     yaml.loadFromString("""

@@ -28,6 +28,21 @@ public final class ProtocolLibHerobrinePackets {
   public record InitResult(ProtocolLibHerobrinePackets packets, boolean detected, boolean supported, String reason) {
   }
 
+  public record ProbeCheck(String name, boolean ok, String reason) {
+    public String summary() {
+      return name + ": " + (ok ? "ok" : "fail " + clean(reason, "unsupported"));
+    }
+  }
+
+  public record ProbeReport(
+      boolean detected,
+      boolean supported,
+      List<ProbeCheck> checks,
+      String movementMode,
+      String reason
+  ) {
+  }
+
   enum MovementMode {
     ENTITY_TELEPORT_DOUBLES,
     ENTITY_TELEPORT_VECTOR,
@@ -72,6 +87,69 @@ public final class ProtocolLibHerobrinePackets {
     }
   }
 
+  public static ProbeReport diagnose(Logger logger) {
+    Plugin protocolPlugin = Bukkit.getPluginManager().getPlugin("ProtocolLib");
+    boolean detected = protocolPlugin != null && protocolPlugin.isEnabled();
+    if (!detected) {
+      return new ProbeReport(false, false, List.of(), "unavailable", "ProtocolLib not detected");
+    }
+    try {
+      ProtocolManager manager = ProtocolLibrary.getProtocolManager();
+      if (manager == null) {
+        return new ProbeReport(true, false, List.of(), "unavailable", "ProtocolLib manager unavailable");
+      }
+      List<ProbeCheck> checks = new java.util.ArrayList<>();
+      checks.add(check("player info add/remove", () -> {
+        PacketContainer info = manager.createPacket(PacketType.Play.Server.PLAYER_INFO);
+        require(info.getPlayerInfoActions().size() > 0, "PLAYER_INFO getPlayerInfoActions unavailable");
+        require(info.getPlayerInfoDataLists().size() > 0, "PLAYER_INFO getPlayerInfoDataLists unavailable");
+        require(manager.createPacket(PacketType.Play.Server.PLAYER_INFO_REMOVE).getUUIDLists().size() > 0,
+            "PLAYER_INFO_REMOVE getUUIDLists unavailable");
+      }));
+      checks.add(check("spawn packet", () -> {
+        PacketContainer spawn = manager.createPacket(PacketType.Play.Server.SPAWN_ENTITY);
+        require(spawn.getIntegers().size() > 0, "SPAWN_ENTITY getIntegers entity id unavailable");
+        require(spawn.getUUIDs().size() > 0, "SPAWN_ENTITY getUUIDs profile uuid unavailable");
+        require(spawn.getEntityTypeModifier().size() > 0, "SPAWN_ENTITY getEntityTypeModifier type unavailable");
+        require(spawn.getDoubles().size() >= 3, "SPAWN_ENTITY getDoubles coordinates unavailable");
+      }));
+      checks.add(check("destroy packet", () -> require(
+          manager.createPacket(PacketType.Play.Server.ENTITY_DESTROY).getIntLists().size() > 0,
+          "ENTITY_DESTROY getIntLists entity ids unavailable")));
+      checks.add(check("rotation packet", () -> {
+        require(manager.createPacket(PacketType.Play.Server.ENTITY_HEAD_ROTATION).getBytes().size() > 0,
+            "ENTITY_HEAD_ROTATION getBytes yaw unavailable");
+        require(manager.createPacket(PacketType.Play.Server.ENTITY_LOOK).getBytes().size() >= 2,
+            "ENTITY_LOOK getBytes rotation unavailable");
+      }));
+      checks.add(check("scoreboard team/nameplate", () -> {
+        require(WrappedTeamParameters.isSupported(), "ProtocolLib team parameters unsupported");
+        PacketContainer team = manager.createPacket(PacketType.Play.Server.SCOREBOARD_TEAM);
+        require(team.getStrings().size() > 0, "SCOREBOARD_TEAM getStrings team name unavailable");
+        require(team.getIntegers().size() > 0, "SCOREBOARD_TEAM getIntegers mode unavailable");
+        require(team.getOptionalTeamParameters().size() > 0, "SCOREBOARD_TEAM getOptionalTeamParameters unavailable");
+        require(team.getSpecificModifier(Collection.class).size() > 0,
+            "SCOREBOARD_TEAM getSpecificModifier(Collection) players unavailable");
+      }));
+
+      MovementPlan movement = diagnoseMovement(manager);
+      boolean supported = checks.stream().allMatch(ProbeCheck::ok);
+      String reason = supported
+          ? ""
+          : checks.stream()
+              .filter(probe -> !probe.ok())
+              .map(probe -> probe.name() + " " + clean(probe.reason(), "unsupported"))
+              .findFirst()
+              .orElse("packet backend unsupported");
+      return new ProbeReport(true, supported, List.copyOf(checks), movement.status(), reason);
+    } catch (LinkageError | RuntimeException error) {
+      if (logger != null) {
+        logger.fine("Herobrine packet probe failed: " + shortError(error));
+      }
+      return new ProbeReport(true, false, List.of(), "unavailable", shortError(error));
+    }
+  }
+
   private static MovementPlan probe(ProtocolManager manager) {
     PacketContainer info = manager.createPacket(PacketType.Play.Server.PLAYER_INFO);
     require(info.getPlayerInfoActions().size() > 0, "PLAYER_INFO getPlayerInfoActions unavailable");
@@ -95,6 +173,10 @@ public final class ProtocolLibHerobrinePackets {
     require(team.getOptionalTeamParameters().size() > 0, "SCOREBOARD_TEAM getOptionalTeamParameters unavailable");
     require(team.getSpecificModifier(Collection.class).size() > 0, "SCOREBOARD_TEAM getSpecificModifier(Collection) players unavailable");
 
+    return diagnoseMovement(manager);
+  }
+
+  private static MovementPlan diagnoseMovement(ProtocolManager manager) {
     int teleportDoubles = 0;
     int teleportVectors = 0;
     String teleportFailure = "";
@@ -420,5 +502,19 @@ public final class ProtocolLibHerobrinePackets {
   private static String shortError(Throwable error) {
     String message = error.getMessage();
     return message == null || message.isBlank() ? error.getClass().getSimpleName() : message;
+  }
+
+  private static ProbeCheck check(String name, Runnable probe) {
+    try {
+      probe.run();
+      return new ProbeCheck(name, true, "");
+    } catch (LinkageError | RuntimeException error) {
+      return new ProbeCheck(name, false, shortError(error));
+    }
+  }
+
+  private static String clean(String value, String fallback) {
+    String cleaned = value == null ? "" : value.trim();
+    return cleaned.isBlank() ? fallback : cleaned;
   }
 }
