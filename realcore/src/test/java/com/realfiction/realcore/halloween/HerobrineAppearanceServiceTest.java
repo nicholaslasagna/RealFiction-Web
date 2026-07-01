@@ -203,7 +203,7 @@ final class HerobrineAppearanceServiceTest {
             new ProtocolLibHerobrinePackets.ProbeCheck(
                 "player info add/update",
                 false,
-                "PLAYER_INFO add/update unsupported: constructor=Unable to set final actions field"),
+                "PLAYER_INFO_UPDATE native entry payload unsupported: entries contain ProtocolLib PlayerInfoData wrappers"),
             new ProtocolLibHerobrinePackets.ProbeCheck("player info remove", true, ""),
             new ProtocolLibHerobrinePackets.ProbeCheck("spawn packet", true, "")),
         new ProtocolLibHerobrinePackets.MovementPlan(
@@ -213,8 +213,8 @@ final class HerobrineAppearanceServiceTest {
 
     assertFalse(report.supported());
     assertEquals("rel_entity_move_look", report.movementMode());
-    assertTrue(report.reason().contains("player info add/update"));
-    assertTrue(report.reason().contains("PLAYER_INFO add/update unsupported"));
+    assertTrue(report.reason().startsWith("PLAYER_INFO_UPDATE native entry payload unsupported"));
+    assertTrue(report.reason().contains("PlayerInfoData wrappers"));
   }
 
   @Test
@@ -232,6 +232,53 @@ final class HerobrineAppearanceServiceTest {
     assertTrue(report.supported());
     assertEquals("player info add/update: ok", report.checks().get(0).summary());
     assertEquals("player info remove: ok", report.checks().get(1).summary());
+  }
+
+  @Test
+  void playerInfoEntryInspectionRejectsProtocolLibWrappers() {
+    ProtocolLibHerobrinePackets.PlayerInfoPayloadInspection inspection =
+        ProtocolLibHerobrinePackets.inspectPlayerInfoEntryClassNames(List.of(
+            "com.comphenix.protocol.wrappers.PlayerInfoData"));
+
+    assertFalse(inspection.nativeCompatible());
+    assertTrue(inspection.reason().contains("PLAYER_INFO_UPDATE native entry payload unsupported"));
+    assertTrue(inspection.reason().contains("PlayerInfoData wrappers"));
+  }
+
+  @Test
+  void playerInfoEntryInspectionAcceptsNativeEntryShape() {
+    ProtocolLibHerobrinePackets.PlayerInfoPayloadInspection inspection =
+        ProtocolLibHerobrinePackets.inspectPlayerInfoEntryClassNames(List.of(
+            "net.minecraft.network.protocol.game.ClientboundPlayerInfoUpdatePacket$Entry"));
+
+    assertTrue(inspection.nativeCompatible());
+    assertEquals("native entries ok", inspection.reason());
+  }
+
+  @Test
+  void packetModeFallsBackForUnsafeNativePlayerInfoPayload() {
+    HerobrineAppearanceConfig config = new HerobrineAppearanceConfig("packet_npc", true, "Herobrine", 20);
+
+    HerobrineAppearanceService.Selection selection = HerobrineAppearanceService.select(
+        config,
+        false,
+        "PLAYER_INFO_UPDATE native entry payload unsupported");
+
+    assertEquals(HerobrineAppearanceService.Backend.ARMOR_STAND, selection.backend());
+    assertEquals("PLAYER_INFO_UPDATE native entry payload unsupported", selection.reason());
+  }
+
+  @Test
+  void forcedPacketModeSkipsForUnsafeNativePlayerInfoPayloadWhenFallbackDisabled() {
+    HerobrineAppearanceConfig config = new HerobrineAppearanceConfig("packet_npc", false, "Herobrine", 20);
+
+    HerobrineAppearanceService.Selection selection = HerobrineAppearanceService.select(
+        config,
+        false,
+        "PLAYER_INFO_UPDATE native entry payload unsupported");
+
+    assertEquals(HerobrineAppearanceService.Backend.SKIP, selection.backend());
+    assertEquals("PLAYER_INFO_UPDATE native entry payload unsupported", selection.reason());
   }
 
   @Test

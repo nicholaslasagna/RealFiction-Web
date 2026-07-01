@@ -11,7 +11,9 @@ import com.comphenix.protocol.wrappers.WrappedGameProfile;
 import com.comphenix.protocol.wrappers.WrappedSignedProperty;
 import com.comphenix.protocol.wrappers.WrappedTeamParameters;
 import java.lang.reflect.Constructor;
+import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
@@ -30,6 +32,9 @@ import org.bukkit.plugin.Plugin;
 import org.bukkit.util.Vector;
 
 public final class ProtocolLibHerobrinePackets {
+  static final String PLAYER_INFO_NATIVE_ENTRY_UNSUPPORTED =
+      "PLAYER_INFO_UPDATE native entry payload unsupported";
+
   public record InitResult(ProtocolLibHerobrinePackets packets, boolean detected, boolean supported, String reason) {
   }
 
@@ -56,6 +61,9 @@ public final class ProtocolLibHerobrinePackets {
   }
 
   record MovementPlan(MovementMode mode, String status) {
+  }
+
+  record PlayerInfoPayloadInspection(boolean nativeCompatible, String reason) {
   }
 
   private record ProbeOutcome(ProbeReport report, MovementPlan movementPlan) {
@@ -355,18 +363,18 @@ public final class ProtocolLibHerobrinePackets {
 
   private PacketContainer playerInfoPacket(Set<EnumWrappers.PlayerInfoAction> actions, List<PlayerInfoData> data) {
     try {
-      return manager.createPacketConstructor(PacketType.Play.Server.PLAYER_INFO, actions, data)
-          .createPacket(actions, data);
-    } catch (LinkageError | RuntimeException constructorError) {
-      try {
-        return playerInfoPacketViaNativeConstructor(actions, data);
-      } catch (LinkageError | RuntimeException reflectionError) {
-        String reason = "PLAYER_INFO add/update unsupported: constructor="
-            + shortError(constructorError)
-            + "; reflectiveConstructor="
-            + shortError(reflectionError);
-        throw new IllegalStateException(reason, reflectionError);
+      PacketContainer packet = playerInfoPacketViaNativeConstructor(actions, data);
+      PlayerInfoPayloadInspection inspection = inspectPlayerInfoPayload(packet.getHandle());
+      if (!inspection.nativeCompatible()) {
+        throw new IllegalStateException(inspection.reason());
       }
+      return packet;
+    } catch (LinkageError | RuntimeException error) {
+      String detail = shortError(error);
+      if (detail.startsWith(PLAYER_INFO_NATIVE_ENTRY_UNSUPPORTED)) {
+        throw new IllegalStateException(detail, error);
+      }
+      throw new IllegalStateException(PLAYER_INFO_NATIVE_ENTRY_UNSUPPORTED + ": " + detail, error);
     }
   }
 
@@ -419,6 +427,73 @@ public final class ProtocolLibHerobrinePackets {
       }
     }
     throw new IllegalStateException("no usable PLAYER_INFO constructor for actions+entries: " + failures);
+  }
+
+  private static PlayerInfoPayloadInspection inspectPlayerInfoPayload(Object handle) {
+    if (handle == null) {
+      return unsupportedPlayerInfoPayload("packet handle is null");
+    }
+    boolean foundNativeEntry = false;
+    Class<?> type = handle.getClass();
+    while (type != null && type != Object.class) {
+      for (Field field : type.getDeclaredFields()) {
+        if (Modifier.isStatic(field.getModifiers())) {
+          continue;
+        }
+        Object value;
+        try {
+          field.setAccessible(true);
+          value = field.get(handle);
+        } catch (IllegalAccessException | RuntimeException error) {
+          return unsupportedPlayerInfoPayload("cannot inspect " + field.getName() + ": " + shortError(error));
+        }
+        if (!(value instanceof Collection<?> collection)) {
+          continue;
+        }
+        PlayerInfoPayloadInspection inspection = inspectPlayerInfoEntryCollection(collection);
+        if (!inspection.nativeCompatible()) {
+          return inspection;
+        }
+        if ("native entries ok".equals(inspection.reason())) {
+          foundNativeEntry = true;
+        }
+      }
+      type = type.getSuperclass();
+    }
+    return foundNativeEntry
+        ? new PlayerInfoPayloadInspection(true, "native entries ok")
+        : unsupportedPlayerInfoPayload("no native Entry collection found");
+  }
+
+  static PlayerInfoPayloadInspection inspectPlayerInfoEntryCollection(Collection<?> collection) {
+    if (collection == null || collection.isEmpty()) {
+      return new PlayerInfoPayloadInspection(true, "empty collection ignored");
+    }
+    List<String> classNames = new ArrayList<>();
+    for (Object entry : collection) {
+      if (entry != null) {
+        classNames.add(entry.getClass().getName());
+      }
+    }
+    return inspectPlayerInfoEntryClassNames(classNames);
+  }
+
+  static PlayerInfoPayloadInspection inspectPlayerInfoEntryClassNames(Collection<String> classNames) {
+    if (classNames == null || classNames.isEmpty()) {
+      return new PlayerInfoPayloadInspection(true, "empty collection ignored");
+    }
+    boolean sawNativeEntry = false;
+    for (String className : classNames) {
+      if (PlayerInfoData.class.getName().equals(className)) {
+        return unsupportedPlayerInfoPayload("entries contain ProtocolLib PlayerInfoData wrappers");
+      }
+      if (isNativePlayerInfoEntryClassName(className)) {
+        sawNativeEntry = true;
+      }
+    }
+    return sawNativeEntry
+        ? new PlayerInfoPayloadInspection(true, "native entries ok")
+        : new PlayerInfoPayloadInspection(true, "non-entry collection ignored");
   }
 
   private PacketContainer tabRemovePacket(PacketNpcSession session) {
@@ -582,7 +657,7 @@ public final class ProtocolLibHerobrinePackets {
         ? ""
         : safeChecks.stream()
             .filter(probe -> !probe.ok())
-            .map(probe -> probe.name() + " " + clean(probe.reason(), "unsupported"))
+            .map(ProtocolLibHerobrinePackets::probeFailureReason)
             .findFirst()
             .orElse(detected ? "packet backend unsupported" : "ProtocolLib not detected");
     return new ProbeReport(
@@ -603,6 +678,23 @@ public final class ProtocolLibHerobrinePackets {
       return 1;
     }
     return 2;
+  }
+
+  private static String probeFailureReason(ProbeCheck probe) {
+    String reason = clean(probe.reason(), "unsupported");
+    if (reason.startsWith(PLAYER_INFO_NATIVE_ENTRY_UNSUPPORTED)) {
+      return reason;
+    }
+    return probe.name() + " " + reason;
+  }
+
+  private static PlayerInfoPayloadInspection unsupportedPlayerInfoPayload(String reason) {
+    String detail = clean(reason, "unknown payload shape");
+    return new PlayerInfoPayloadInspection(false, PLAYER_INFO_NATIVE_ENTRY_UNSUPPORTED + ": " + detail);
+  }
+
+  private static boolean isNativePlayerInfoEntryClassName(String className) {
+    return className != null && className.contains("ClientboundPlayerInfoUpdatePacket$Entry");
   }
 
   private static PacketNpcSession probeSession() {
