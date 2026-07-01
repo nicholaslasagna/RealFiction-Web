@@ -309,6 +309,8 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
     logHerobrineCommand(sender, "spawn " + mode.name().toLowerCase(Locale.ROOT), target);
     send(sender, ChatColor.GRAY + "Running Herobrine spawn test for " + target.getName()
         + " mode=" + mode.name().toLowerCase(Locale.ROOT) + "...");
+    send(sender, ChatColor.GRAY
+        + "Admin forced spawn tests bypass the Halloween date window; random sightings remain date-gated.");
     stalker.adminTestSpawn(target, mode, result -> sendHerobrineResult(sender, result));
   }
 

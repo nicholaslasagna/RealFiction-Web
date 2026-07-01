@@ -197,6 +197,7 @@ public final class HerobrineStalkerService {
     lines.add("proximityEffect=" + stalker.proximityEffect().enabled());
     lines.add("windowStalk=" + stalker.windowStalk().enabled());
     lines.add("distantOmenStructure=" + stalker.distantOmenStructure().enabled());
+    lines.add("adminForcedTests=dateWindowBypassed");
     lines.add("dropChanceGuard=" + ARMOR_STAND_DROPS_FIX_MARKER);
     lines.add("failed=" + failedSpawnCount());
     lines.add("lastFailure=" + blankToNone(lastFailure));
