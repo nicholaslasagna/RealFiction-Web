@@ -239,6 +239,9 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
       sendHerobrinePacketProbe(sender, stalker);
       return true;
     }
+    if ("structures".equals(action)) {
+      return handleHerobrineStructures(sender, args, stalker);
+    }
     if (!"test".equals(action)) {
       sendHerobrineUsage(sender);
       return true;
@@ -298,6 +301,81 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
       default -> sendHerobrineUsage(sender);
     }
     return true;
+  }
+
+  private boolean handleHerobrineStructures(CommandSender sender, String[] args, HerobrineStalkerService stalker) {
+    String sub = args.length >= 3 ? args[2].toLowerCase(Locale.ROOT) : "list";
+    switch (sub) {
+      case "list" -> {
+        logHerobrineCommand(sender, "structures list", null);
+        send(sender, ChatColor.GOLD + "Herobrine structures");
+        for (String line : stalker.adminStructuresList()) {
+          send(sender, ChatColor.YELLOW + line);
+        }
+      }
+      case "info" -> {
+        UUID id = parseStructureId(sender, args);
+        if (id == null) {
+          return true;
+        }
+        logHerobrineCommand(sender, "structures info " + id, null);
+        send(sender, ChatColor.GOLD + "Herobrine structure info");
+        for (String line : stalker.adminStructureInfo(id)) {
+          send(sender, ChatColor.YELLOW + line);
+        }
+      }
+      case "restore" -> {
+        UUID id = parseStructureId(sender, args);
+        if (id == null) {
+          return true;
+        }
+        boolean force = args.length >= 5 && "force".equalsIgnoreCase(args[4]);
+        logHerobrineCommand(sender, "structures restore " + id + (force ? " FORCE" : ""), null);
+        send(sender, ChatColor.GRAY + "Restoring structure " + id + (force ? " (force)" : " (safe mode)") + "...");
+        stalker.adminStructureRestore(id, force, result -> sendHerobrineResult(sender, result));
+      }
+      case "restore-all" -> {
+        logHerobrineCommand(sender, "structures restore-all", null);
+        send(sender, ChatColor.GRAY + "Restoring all active structures (safe mode)...");
+        stalker.adminStructureRestoreAll(result -> sendHerobrineResult(sender, result));
+      }
+      case "cleanup" -> {
+        logHerobrineCommand(sender, "structures cleanup", null);
+        sendHerobrineResult(sender, stalker.adminStructureCleanup());
+      }
+      case "place-test" -> {
+        Player target = resolveHerobrineTarget(sender, args, 3);
+        if (target == null) {
+          return true;
+        }
+        logHerobrineCommand(sender, "structures place-test", target);
+        send(sender, ChatColor.GRAY + "Attempting guarded persistent structure placement near "
+            + target.getName() + " (bypasses chance/date, never safety checks)...");
+        stalker.adminStructurePlaceTest(target, result -> sendHerobrineResult(sender, result));
+      }
+      default -> {
+        send(sender, ChatColor.YELLOW + "Usage: /rf herobrine structures list");
+        send(sender, ChatColor.YELLOW + "Usage: /rf herobrine structures info <id>");
+        send(sender, ChatColor.YELLOW + "Usage: /rf herobrine structures restore <id> [force]");
+        send(sender, ChatColor.YELLOW + "Usage: /rf herobrine structures restore-all");
+        send(sender, ChatColor.YELLOW + "Usage: /rf herobrine structures cleanup");
+        send(sender, ChatColor.YELLOW + "Usage: /rf herobrine structures place-test [player]");
+      }
+    }
+    return true;
+  }
+
+  private UUID parseStructureId(CommandSender sender, String[] args) {
+    if (args.length < 4) {
+      send(sender, ChatColor.RED + "Structure id is required.");
+      return null;
+    }
+    try {
+      return UUID.fromString(args[3]);
+    } catch (IllegalArgumentException error) {
+      send(sender, ChatColor.RED + "Invalid structure id: " + args[3]);
+      return null;
+    }
   }
 
   private void handleHerobrineSpawnTest(CommandSender sender, String[] args, HerobrineStalkerService stalker) {
@@ -382,6 +460,7 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
     send(sender, ChatColor.YELLOW + "Usage: /rf herobrine test cleanup");
     send(sender, ChatColor.YELLOW + "Usage: /rf herobrine test window [player]");
     send(sender, ChatColor.YELLOW + "Usage: /rf herobrine test omen [player]");
+    send(sender, ChatColor.YELLOW + "Usage: /rf herobrine structures list|info|restore|restore-all|cleanup|place-test");
   }
 
   private boolean hasHerobrineAdmin(CommandSender sender) {
@@ -2207,7 +2286,12 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
       return List.of("status", "pending", "last", "retry");
     }
     if (args.length == 2 && "herobrine".equalsIgnoreCase(args[0]) && hasHerobrineAdmin(sender)) {
-      return List.of("status", "debug", "test");
+      return List.of("status", "debug", "test", "structures");
+    }
+    if (args.length == 3 && "herobrine".equalsIgnoreCase(args[0])
+        && "structures".equalsIgnoreCase(args[1])
+        && hasHerobrineAdmin(sender)) {
+      return List.of("list", "info", "restore", "restore-all", "cleanup", "place-test");
     }
     if (args.length == 3 && "herobrine".equalsIgnoreCase(args[0])
         && "test".equalsIgnoreCase(args[1])

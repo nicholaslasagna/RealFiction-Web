@@ -22,7 +22,8 @@ public record HerobrineDistantOmenStructureConfig(
     int minDistanceFromWorldSpawn,
     int maxBlocksPlaced,
     boolean trackPlacements,
-    boolean allowRestoreCommand
+    boolean allowRestoreCommand,
+    HerobrinePersistentStructureConfig persistent
 ) {
   public static HerobrineDistantOmenStructureConfig from(ConfigurationSection section) {
     if (section == null) {
@@ -48,7 +49,8 @@ public record HerobrineDistantOmenStructureConfig(
         Math.max(0, Math.min(512, section.getInt("minDistanceFromWorldSpawn", 128))),
         Math.max(0, Math.min(12, section.getInt("maxBlocksPlaced", 0))),
         section.getBoolean("trackPlacements", true),
-        section.getBoolean("allowRestoreCommand", false)
+        section.getBoolean("allowRestoreCommand", false),
+        HerobrinePersistentStructureConfig.from(section.getConfigurationSection("persistent"))
     );
   }
 
@@ -71,12 +73,30 @@ public record HerobrineDistantOmenStructureConfig(
         128,
         0,
         true,
-        false
+        false,
+        HerobrinePersistentStructureConfig.defaults()
     );
   }
 
   public boolean realBlockPlacementRequested() {
     return persistentBlocks || !particlesOnly;
+  }
+
+  /**
+   * True only when the guarded persistent path is fully opted in: particles stay on,
+   * no fake-block mode, and BOTH persistentBlocks and persistent.enabled are true.
+   */
+  public boolean persistentPlacementConfigured() {
+    return particlesOnly && !packetFakeBlocks && persistentBlocks && persistent.enabled();
+  }
+
+  /**
+   * Whether the omen feature may run at all. Particles-only remains the baseline;
+   * persistentBlocks=true without persistent.enabled=true keeps particles-only
+   * behavior rather than dying (fail-open to the SAFE mode, never to real blocks).
+   */
+  public boolean omenPathAllowed() {
+    return particlesOnly && !packetFakeBlocks;
   }
 
   private static String cleanType(String value) {
