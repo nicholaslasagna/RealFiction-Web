@@ -31,6 +31,7 @@ public final class HerobrineAppearanceService {
   private volatile boolean protocolLibSupported;
   private volatile String fallbackReason = "";
   private volatile String requestedMode = HerobrineAppearanceConfig.MODE_ARMOR_STAND;
+  private volatile String packetMovementStatus = "unavailable";
   private volatile long generation;
 
   public HerobrineAppearanceService(
@@ -60,6 +61,7 @@ public final class HerobrineAppearanceService {
       protocolLibSupported = false;
       packetAppearance = null;
       fallbackReason = "armor_stand requested";
+      packetMovementStatus = "unavailable";
       return;
     }
 
@@ -68,6 +70,7 @@ public final class HerobrineAppearanceService {
       protocolLibSupported = false;
       packetAppearance = null;
       fallbackReason = "ProtocolLib not detected";
+      packetMovementStatus = "unavailable";
       return;
     }
 
@@ -78,15 +81,18 @@ public final class HerobrineAppearanceService {
       if (init.supported()) {
         packetAppearance = new PacketHerobrineAppearance(scheduler, init.packets(), skinProfiles, logger, () -> this.generation);
         fallbackReason = "";
+        packetMovementStatus = init.packets().movementStatus();
         return;
       }
       packetAppearance = null;
       fallbackReason = init.reason();
+      packetMovementStatus = "unavailable";
     } catch (LinkageError | RuntimeException error) {
       protocolLibDetected = true;
       protocolLibSupported = false;
       packetAppearance = null;
       fallbackReason = shortError(error);
+      packetMovementStatus = "unavailable";
     }
   }
 
@@ -154,7 +160,8 @@ public final class HerobrineAppearanceService {
         protocolLibSupported,
         reason,
         sessions,
-        skin
+        skin,
+        packetMovementStatus
     );
   }
 
