@@ -17,19 +17,25 @@ softdepend:
 commands:
   realfiction:
     description: RealFiction linking, rewards, and lobby commands.
-    usage: /realfiction <link|menu|lobbies|cosmetics|spawn|status|stats|economy|rewards|reload|setspawn>
+    usage: /realfiction <link|menu|lobbies|cosmetics|spawn|status|stats|economy|herobrine|rewards|reload|setspawn>
   rf:
     description: RealFiction linking, rewards, and lobby commands.
-    usage: /rf <link|menu|lobbies|cosmetics|spawn|status|stats|economy|rewards|reload|setspawn>
+    usage: /rf <link|menu|lobbies|cosmetics|spawn|status|stats|economy|herobrine|rewards|reload|setspawn>
   realcore:
     description: RealFiction linking, rewards, and lobby commands.
-    usage: /realcore <link|menu|lobbies|cosmetics|spawn|status|stats|economy|rewards|reload|setspawn>
+    usage: /realcore <link|menu|lobbies|cosmetics|spawn|status|stats|economy|herobrine|rewards|reload|setspawn>
   cosmetics:
     description: Open your RealFiction cosmetics.
     usage: /cosmetics
 permissions:
   realcore.admin:
     description: Allows RealCore admin commands (status, reload, setspawn).
+    default: op
+  realcore.herobrine.admin:
+    description: Allows Herobrine admin status and test commands.
+    default: op
+  realcore.herobrine.test:
+    description: Allows Herobrine live validation test commands.
     default: op
   realcore.lobby.bypass:
     description: Bypass lobby build, interact, drop, and pickup protections.

@@ -89,6 +89,8 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
         return handleStats(sender, args);
       case "economy":
         return handleEconomy(sender, args);
+      case "herobrine":
+        return handleHerobrine(sender, args);
       case "rewards":
         return handleRewards(sender, args);
       case "doctor":
@@ -215,6 +217,160 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
     }
     sendStatus(sender);
     return true;
+  }
+
+  private boolean handleHerobrine(CommandSender sender, String[] args) {
+    if (!hasHerobrineAdmin(sender)) {
+      send(sender, ChatColor.RED + "You do not have permission to do that.");
+      return true;
+    }
+    HerobrineStalkerService stalker = plugin.herobrineStalkerService();
+    if (stalker == null) {
+      send(sender, ChatColor.RED + "Halloween Herobrine is not loaded.");
+      return true;
+    }
+    String action = args.length >= 2 ? args[1].toLowerCase(Locale.ROOT) : "status";
+    if ("status".equals(action)) {
+      sendHerobrineStatus(sender, stalker);
+      return true;
+    }
+    if ("debug".equals(action)) {
+      sendHerobrineStatus(sender, stalker);
+      sendHerobrinePacketProbe(sender, stalker);
+      return true;
+    }
+    if (!"test".equals(action)) {
+      sendHerobrineUsage(sender);
+      return true;
+    }
+    String test = args.length >= 3 ? args[2].toLowerCase(Locale.ROOT) : "";
+    switch (test) {
+      case "packet-probe" -> {
+        logHerobrineCommand(sender, "packet-probe", null);
+        sendHerobrinePacketProbe(sender, stalker);
+      }
+      case "cleanup" -> {
+        logHerobrineCommand(sender, "cleanup", null);
+        HerobrineStalkerService.AdminCleanupResult result = stalker.adminCleanup();
+        send(sender, ChatColor.GOLD + "Herobrine cleanup");
+        for (String line : result.lines()) {
+          send(sender, ChatColor.YELLOW + line);
+        }
+      }
+      case "vanish" -> {
+        Player target = resolveHerobrineTarget(sender, args, 3);
+        if (target == null) {
+          return true;
+        }
+        logHerobrineCommand(sender, "vanish", target);
+        sendHerobrineResult(sender, stalker.adminVanish(target.getUniqueId()));
+      }
+      case "spawn" -> handleHerobrineSpawnTest(sender, args, stalker);
+      case "window" -> {
+        Player target = resolveHerobrineTarget(sender, args, 3);
+        if (target == null) {
+          return true;
+        }
+        logHerobrineCommand(sender, "window", target);
+        send(sender, ChatColor.GRAY + "Running Herobrine window stalk candidate test for " + target.getName() + "...");
+        stalker.adminTestWindow(target, result -> sendHerobrineResult(sender, result));
+      }
+      case "omen" -> {
+        Player target = resolveHerobrineTarget(sender, args, 3);
+        if (target == null) {
+          return true;
+        }
+        logHerobrineCommand(sender, "omen", target);
+        send(sender, ChatColor.GRAY + "Running Herobrine distant omen particle test for " + target.getName() + "...");
+        stalker.adminTestOmen(target, result -> sendHerobrineResult(sender, result));
+      }
+      default -> sendHerobrineUsage(sender);
+    }
+    return true;
+  }
+
+  private void handleHerobrineSpawnTest(CommandSender sender, String[] args, HerobrineStalkerService stalker) {
+    HerobrineStalkerService.AdminSpawnMode mode = HerobrineStalkerService.AdminSpawnMode.CONFIGURED;
+    int targetIndex = 3;
+    if (args.length >= 4) {
+      String maybeMode = args[3].toLowerCase(Locale.ROOT);
+      if ("packet".equals(maybeMode) || "packet_npc".equals(maybeMode)) {
+        mode = HerobrineStalkerService.AdminSpawnMode.PACKET;
+        targetIndex = 4;
+      } else if ("armorstand".equals(maybeMode) || "armor_stand".equals(maybeMode)) {
+        mode = HerobrineStalkerService.AdminSpawnMode.ARMOR_STAND;
+        targetIndex = 4;
+      }
+    }
+    Player target = resolveHerobrineTarget(sender, args, targetIndex);
+    if (target == null) {
+      return;
+    }
+    logHerobrineCommand(sender, "spawn " + mode.name().toLowerCase(Locale.ROOT), target);
+    send(sender, ChatColor.GRAY + "Running Herobrine spawn test for " + target.getName()
+        + " mode=" + mode.name().toLowerCase(Locale.ROOT) + "...");
+    stalker.adminTestSpawn(target, mode, result -> sendHerobrineResult(sender, result));
+  }
+
+  private void sendHerobrineStatus(CommandSender sender, HerobrineStalkerService stalker) {
+    send(sender, ChatColor.GOLD + "RealCore Herobrine");
+    for (String line : stalker.adminStatusLines()) {
+      send(sender, ChatColor.YELLOW + line);
+    }
+  }
+
+  private void sendHerobrinePacketProbe(CommandSender sender, HerobrineStalkerService stalker) {
+    send(sender, ChatColor.GOLD + "Herobrine packet probe");
+    for (String line : stalker.adminPacketProbeLines()) {
+      send(sender, ChatColor.YELLOW + line);
+    }
+  }
+
+  private void sendHerobrineResult(CommandSender sender, HerobrineStalkerService.AdminCommandResult result) {
+    ChatColor color = result.success() ? ChatColor.GREEN : ChatColor.RED;
+    send(sender, color + result.message());
+  }
+
+  private Player resolveHerobrineTarget(CommandSender sender, String[] args, int targetIndex) {
+    if (args.length > targetIndex) {
+      Player target = Bukkit.getPlayerExact(args[targetIndex]);
+      if (target == null) {
+        send(sender, ChatColor.RED + "Target player is not online: " + args[targetIndex]);
+      }
+      return target;
+    }
+    if (sender instanceof Player player) {
+      return player;
+    }
+    send(sender, ChatColor.RED + "Console must specify an online player target.");
+    return null;
+  }
+
+  private void sendHerobrineUsage(CommandSender sender) {
+    send(sender, ChatColor.YELLOW + "Usage: /rf herobrine status");
+    send(sender, ChatColor.YELLOW + "Usage: /rf herobrine debug");
+    send(sender, ChatColor.YELLOW + "Usage: /rf herobrine test packet-probe");
+    send(sender, ChatColor.YELLOW + "Usage: /rf herobrine test spawn [packet|armorstand] [player]");
+    send(sender, ChatColor.YELLOW + "Usage: /rf herobrine test vanish [player]");
+    send(sender, ChatColor.YELLOW + "Usage: /rf herobrine test cleanup");
+    send(sender, ChatColor.YELLOW + "Usage: /rf herobrine test window [player]");
+    send(sender, ChatColor.YELLOW + "Usage: /rf herobrine test omen [player]");
+  }
+
+  private boolean hasHerobrineAdmin(CommandSender sender) {
+    return sender.hasPermission("realcore.admin")
+        || sender.hasPermission("realcore.herobrine.admin")
+        || sender.hasPermission("realcore.herobrine.test");
+  }
+
+  private void logHerobrineCommand(CommandSender sender, String action, @Nullable Player target) {
+    RealCoreConfig config = plugin.realCoreConfig();
+    if (config == null || !(config.debug() || config.halloween().herobrineStalker().debug())) {
+      return;
+    }
+    plugin.getLogger().info("[Halloween] Herobrine admin command issuer=" + sender.getName()
+        + " action=" + action
+        + (target == null ? "" : " target=" + target.getName() + "(" + target.getUniqueId() + ")"));
   }
 
   private boolean handleRewards(CommandSender sender, String[] args) {
@@ -565,7 +721,11 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
     }
     if (sender.hasPermission("realcore.admin")) {
       send(sender, ChatColor.YELLOW + "Admin: " + ChatColor.WHITE + "/" + label
-          + " status|stats|stats flush|economy|economy audit|economy balance|economy shadow|economy syncfromdb|economy flush|economy test|rewards|reload|setspawn");
+          + " status|stats|stats flush|economy|economy audit|economy balance|economy shadow|economy syncfromdb|economy flush|economy test|herobrine|rewards|reload|setspawn");
+    }
+    if (!sender.hasPermission("realcore.admin") && hasHerobrineAdmin(sender)) {
+      send(sender, ChatColor.YELLOW + "Herobrine: " + ChatColor.WHITE + "/" + label
+          + " herobrine status|debug|test");
     }
     return true;
   }
@@ -2008,6 +2168,9 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
         options.add("reload");
         options.add("setspawn");
       }
+      if (hasHerobrineAdmin(sender)) {
+        options.add("herobrine");
+      }
       return options;
     }
     if (args.length == 2 && "stats".equalsIgnoreCase(args[0]) && sender.hasPermission("realcore.admin")) {
@@ -2015,6 +2178,20 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
     }
     if (args.length == 2 && "rewards".equalsIgnoreCase(args[0]) && sender.hasPermission("realcore.admin")) {
       return List.of("status", "pending", "last", "retry");
+    }
+    if (args.length == 2 && "herobrine".equalsIgnoreCase(args[0]) && hasHerobrineAdmin(sender)) {
+      return List.of("status", "debug", "test");
+    }
+    if (args.length == 3 && "herobrine".equalsIgnoreCase(args[0])
+        && "test".equalsIgnoreCase(args[1])
+        && hasHerobrineAdmin(sender)) {
+      return List.of("spawn", "vanish", "cleanup", "window", "omen", "packet-probe");
+    }
+    if (args.length == 4 && "herobrine".equalsIgnoreCase(args[0])
+        && "test".equalsIgnoreCase(args[1])
+        && "spawn".equalsIgnoreCase(args[2])
+        && hasHerobrineAdmin(sender)) {
+      return List.of("packet", "armorstand");
     }
     if (args.length == 2 && "doctor".equalsIgnoreCase(args[0]) && sender.hasPermission("realcore.admin")) {
       return List.of("rewards", "seasonal", "all");
