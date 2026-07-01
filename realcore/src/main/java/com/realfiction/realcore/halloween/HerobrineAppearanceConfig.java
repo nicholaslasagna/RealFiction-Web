@@ -20,7 +20,7 @@ public record HerobrineAppearanceConfig(
     return new HerobrineAppearanceConfig(
         normalizeMode(section.getString("mode", MODE_ARMOR_STAND)),
         section.getBoolean("fallbackToArmorStand", true),
-        clean(section.getString("skinOwner", legacyHeadOwner), clean(legacyHeadOwner, "Herobrine")),
+        clean(section.getString("skinOwner", legacyHeadOwner), clean(legacyHeadOwner, "Herobrineee")),
         Math.max(1, Math.min(200, section.getInt("hideFromTabAfterTicks", 20)))
     );
   }
@@ -29,7 +29,7 @@ public record HerobrineAppearanceConfig(
     return new HerobrineAppearanceConfig(
         MODE_PACKET_NPC,
         true,
-        clean(legacyHeadOwner, "Herobrine"),
+        clean(legacyHeadOwner, "Herobrineee"),
         20
     );
   }

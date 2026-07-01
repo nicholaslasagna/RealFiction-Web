@@ -68,7 +68,7 @@ public record HerobrineStalkerConfig(
     int maxDistance = Math.max(minDistance, section.getInt("maxSpawnDistance", 48));
     long minLinger = Math.max(1L, section.getLong("minLingerSeconds", 5));
     long maxLinger = Math.max(minLinger, section.getLong("maxLingerSeconds", 12));
-    String headOwner = clean(section.getString("headOwner", "Herobrine"), "Herobrine");
+    String headOwner = clean(section.getString("headOwner", "Herobrineee"), "Herobrineee");
     return new HerobrineStalkerConfig(
         section.getBoolean("enabled", true),
         section.getBoolean("dryRun", false),
@@ -142,7 +142,7 @@ public record HerobrineStalkerConfig(
         0.15,
         0.08,
         0.25,
-        HerobrineAppearanceConfig.defaults("Herobrine"),
+        HerobrineAppearanceConfig.defaults("Herobrineee"),
         HerobrineVanishOnLookConfig.defaults(),
         HerobrineProximityEffectConfig.defaults(),
         HerobrineLightningOmenConfig.defaults(),
@@ -156,7 +156,7 @@ public record HerobrineStalkerConfig(
         HerobrineLookAwayUneaseConfig.defaults(),
         true,
         false,
-        "Herobrine"
+        "Herobrineee"
     );
   }
 

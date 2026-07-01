@@ -90,7 +90,7 @@ final class HerobrineStalkerConfigTest {
     assertTrue(config.halloween().herobrineStalker().cleanupStaleSightings());
     assertEquals("packet_npc", config.halloween().herobrineStalker().appearance().mode());
     assertTrue(config.halloween().herobrineStalker().appearance().fallbackToArmorStand());
-    assertEquals("Herobrine", config.halloween().herobrineStalker().appearance().skinOwner());
+    assertEquals("Herobrineee", config.halloween().herobrineStalker().appearance().skinOwner());
     assertTrue(config.halloween().herobrineStalker().vanishOnLook().enabled());
     assertEquals(32.0, config.halloween().herobrineStalker().vanishOnLook().normalViewDegrees(), 0.0001);
     assertEquals(52.0, config.halloween().herobrineStalker().vanishOnLook().miningIntentViewDegrees(), 0.0001);
@@ -124,12 +124,12 @@ final class HerobrineStalkerConfigTest {
     assertTrue(config.halloween().herobrineStalker().windowStalk().requireDarkOutside());
     assertTrue(config.halloween().herobrineStalker().windowStalk().requireRainOrSnow());
     assertTrue(config.halloween().herobrineStalker().windowStalk().requireGlassLineOfSight());
-    assertEquals(5, config.halloween().herobrineStalker().windowStalk().minOutsideDistance());
-    assertEquals(18, config.halloween().herobrineStalker().windowStalk().maxOutsideDistance());
+    assertEquals(8, config.halloween().herobrineStalker().windowStalk().minOutsideDistance());
+    assertEquals(24, config.halloween().herobrineStalker().windowStalk().maxOutsideDistance());
     assertEquals(8, config.halloween().herobrineStalker().windowStalk().maxLinger().toSeconds());
     assertEquals(6, config.halloween().herobrineStalker().windowStalk().avoidPlayerBaseBlocksRadius());
     assertEquals(2, config.halloween().herobrineStalker().windowStalk().minHeadroom());
-    assertEquals(32, config.halloween().herobrineStalker().windowStalk().maxCandidateChecks());
+    assertEquals(48, config.halloween().herobrineStalker().windowStalk().maxCandidateChecks());
     assertTrue(config.halloween().herobrineStalker().distantOmenStructure().enabled());
     assertEquals(0.01, config.halloween().herobrineStalker().distantOmenStructure().chance(), 0.0001);
     assertEquals("void_monolith", config.halloween().herobrineStalker().distantOmenStructure().type());
@@ -338,6 +338,6 @@ final class HerobrineStalkerConfigTest {
     HerobrineStalkerConfig stalker = HalloweenConfig.from(yaml.getConfigurationSection("halloween")).herobrineStalker();
 
     assertEquals("armor_stand", stalker.appearance().mode());
-    assertEquals("Herobrine", stalker.appearance().skinOwner());
+    assertEquals("Herobrineee", stalker.appearance().skinOwner());
   }
 }

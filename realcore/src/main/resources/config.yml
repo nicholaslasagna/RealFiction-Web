@@ -465,7 +465,7 @@ halloween:
     appearance:
       mode: "packet_npc"
       fallbackToArmorStand: true
-      skinOwner: "Herobrine"
+      skinOwner: "Herobrineee"
       hideFromTabAfterTicks: 20
     # Frequent active-sighting view checks. Normal sightings vanish when clearly
     # seen; mining-intent sightings use the wider cone below.
@@ -540,13 +540,15 @@ halloween:
       requireDarkOutside: true
       requireRainOrSnow: true
       requireGlassLineOfSight: true
-      minOutsideDistance: 5
-      maxOutsideDistance: 18
+      # Farther back and laterally offset from the window so he reads as a subtle
+      # silhouette in the dark instead of a face pressed against the glass.
+      minOutsideDistance: 8
+      maxOutsideDistance: 24
       maxLingerSeconds: 8
       vanishOnSeen: true
       avoidPlayerBaseBlocksRadius: 6
       minHeadroom: 2
-      maxCandidateChecks: 32
+      maxCandidateChecks: 48
     # Distant omen structure. This build is intentionally particles-only: no
     # real blocks and no fake block packet structures. Persistent block omens
     # require separate placement tracking + restore commands before shipping.
@@ -577,7 +579,7 @@ halloween:
     requireNightRainMiningOrDarkness: true
     # Legacy skin owner key kept for existing configs. New configs should use
     # appearance.skinOwner above.
-    headOwner: "Herobrine"
+    headOwner: "Herobrineee"
     # Debug is off by default. Turn on only during a short staff test.
     debug: false
 
