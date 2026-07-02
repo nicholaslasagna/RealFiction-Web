@@ -55,3 +55,8 @@ permissions:
   realfiction.cosmetics.atelier:
     description: Allows RealFiction premium cosmetic previews.
     default: false
+  realcore.economy.gameplay_credit:
+    description: >-
+      Allows /rf economy gameplay-credit for player senders (high trust —
+      credits gameplay money into the ledger). Console is always allowed.
+    default: false
