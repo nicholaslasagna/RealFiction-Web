@@ -160,6 +160,28 @@ It also shows which scheduler mode RealCore detected: `Paper/Purpur` or `Folia`.
 
 `reload` reloads `config.yml`, restarts the HTTP client and reward poller, and reports failure if the config cannot be loaded safely.
 
+## Gameplay Credit Bridge
+
+```text
+/rf economy gameplay-credit <player> <amountMinor> <source> <reason> [eventId]
+```
+
+Console-first bridge so trusted plugins (RealParkour milestone rewards) can
+award gameplay money through the canonical gameplay sync ledger — never a
+direct Vault/DB write. Player senders need `realcore.economy.gameplay_credit`
+(default false). The credit flows through the generic gameplay producer as
+`gameplay_earn`, so every policy applies: `economy.gameplaySync` + `generic`
+enablement, dry-run, the Anarchy block, `backendAllowlist`,
+`generic.allowedSources`, `maxCreditMinorPerTx`, and duplicate rejection.
+The player must be online; `source`/`reason` must be safe tokens (e.g.
+`lobby_parkour`, `parkour_completion_10`). Without an explicit `eventId` the
+command is not idempotent — callers own dedup (RealParkour persists milestone
+keys); pass a deterministic `eventId` to get producer-side duplicate
+rejection. Lobby1 needs `economy.gameplaySync` enabled with `lobby-1`
+allowlisted, `categories.gameplayEarn: true`, and `generic.enabled: true`
+with `allowedSources: [lobby_parkour]` and `allowGameplayEarn: true`; keep
+`dryRun: true` until the dry-run staging test passes.
+
 ## Command Rewards
 
 Commands are configured in `config.yml`:

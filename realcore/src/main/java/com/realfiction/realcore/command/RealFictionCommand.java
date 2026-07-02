@@ -1084,6 +1084,9 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
       appendVaultDeltaShadowStatus(sender, true);
       return true;
     }
+    if (args.length >= 2 && "gameplay-credit".equalsIgnoreCase(args[1])) {
+      return GameplayCreditCommand.handle(plugin, sender, args);
+    }
     if (args.length >= 2 && "gameplay".equalsIgnoreCase(args[1])) {
       if (args.length >= 3 && "simulate".equalsIgnoreCase(args[2])) {
         return GameplayEconomySimulateCommand.handle(plugin, sender, args);
@@ -2336,7 +2339,7 @@ public final class RealFictionCommand implements CommandExecutor, TabCompleter {
       return List.of("pets");
     }
     if (args.length == 2 && "economy".equalsIgnoreCase(args[0]) && sender.hasPermission("realcore.admin")) {
-      return List.of("audit", "balance", "flush", "gameplay", "provider", "reconcile", "shadow", "syncfromdb", "test");
+      return List.of("audit", "balance", "flush", "gameplay", "gameplay-credit", "provider", "reconcile", "shadow", "syncfromdb", "test");
     }
     if (args.length == 3 && "economy".equalsIgnoreCase(args[0])
         && "gameplay".equalsIgnoreCase(args[1])
