@@ -53,6 +53,7 @@ public final class EconomyReconciliationService {
   private final ConcurrentHashMap<UUID, Long> baselines = new ConcurrentHashMap<>();
   private final Set<String> warnedKeys = ConcurrentHashMap.newKeySet();
   private final AtomicBoolean running = new AtomicBoolean(false);
+  private final VaultReconcileRuntimeGuard vaultRuntimeGuard = new VaultReconcileRuntimeGuard();
   private volatile boolean baselinesDirty = false;
   private volatile ScheduledTaskHandle periodicTask;
   private volatile VaultBinding cachedBinding;
@@ -83,6 +84,11 @@ public final class EconomyReconciliationService {
     String guard = guardReason();
     if (!guard.isBlank()) {
       logger.info("Economy reconciliation disabled: " + guard);
+      return;
+    }
+    VaultBinding binding = binding();
+    if (binding == null) {
+      disableVaultUnavailable();
       return;
     }
     loadBaselines();
@@ -117,7 +123,7 @@ public final class EconomyReconciliationService {
   }
 
   public boolean enabled() {
-    return running.get();
+    return running.get() && vaultRuntimeGuard.enabled();
   }
 
   /**
@@ -130,7 +136,7 @@ public final class EconomyReconciliationService {
    * same DB and double up.)
    */
   public void creditLocalImmediately(UUID uuid, long amountMinor, boolean credit) {
-    if (uuid == null || amountMinor <= 0 || scheduler == null) {
+    if (uuid == null || amountMinor <= 0 || scheduler == null || vaultRuntimeGuard.disabled()) {
       return;
     }
     scheduler.runGlobal(() -> {
@@ -166,7 +172,7 @@ public final class EconomyReconciliationService {
 
   /** Schedules a delayed reconcile for a freshly joined player. Safe to call when disabled. */
   public void onPlayerJoin(Player player) {
-    if (!running.get() || player == null) {
+    if (!enabled() || player == null) {
       return;
     }
     EconomyReconcileConfig rc = reconcileConfig();
@@ -185,7 +191,7 @@ public final class EconomyReconciliationService {
 
   /** Reconciles all online players immediately (admin command). Returns the number scanned, or -1 when disabled. */
   public int triggerOnlineReconcile() {
-    if (!running.get()) {
+    if (!enabled()) {
       return -1;
     }
     int cap = reconcileConfig().maxPlayersPerRun();
@@ -202,7 +208,7 @@ public final class EconomyReconciliationService {
 
   private void reconcileOnlineTickSafely() {
     try {
-      if (!running.get() || scheduler == null) {
+      if (!enabled() || scheduler == null) {
         return;
       }
       scheduler.runGlobal(() -> {
@@ -223,7 +229,7 @@ public final class EconomyReconciliationService {
   }
 
   private void reconcile(UUID uuid, String name, String trigger) {
-    if (!running.get() || uuid == null) {
+    if (!enabled() || uuid == null) {
       return;
     }
     if (!guardReason().isBlank()) {
@@ -255,7 +261,7 @@ public final class EconomyReconciliationService {
       }
       VaultBinding binding = binding();
       if (binding == null) {
-        warnOnce("vault", "Vault economy provider unavailable; cannot reconcile balances.");
+        disableVaultUnavailable();
         return;
       }
       OfflinePlayer player = Bukkit.getOfflinePlayer(uuid);
@@ -378,6 +384,9 @@ public final class EconomyReconciliationService {
   // -- Vault provider access (reflection; mirrors VaultBalanceSyncService) -----
 
   private VaultBinding binding() {
+    if (vaultRuntimeGuard.disabled()) {
+      return null;
+    }
     VaultBinding existing = cachedBinding;
     if (existing != null) {
       return existing;
@@ -490,6 +499,9 @@ public final class EconomyReconciliationService {
   }
 
   String guardReason() {
+    if (vaultRuntimeGuard.disabled()) {
+      return vaultRuntimeGuard.disabledReason();
+    }
     if (config == null || economy == null) {
       return "economy is not loaded";
     }
@@ -521,7 +533,23 @@ public final class EconomyReconciliationService {
         + " holds=" + holds.get()
         + " noops=" + noops.get()
         + " capSkips=" + caps.get()
-        + " baselines=" + baselines.size();
+        + " baselines=" + baselines.size()
+        + " vault=" + (vaultRuntimeGuard.disabled() ? "disabled:" + vaultRuntimeGuard.disabledReason() : "available");
+  }
+
+  private void disableVaultUnavailable() {
+    running.set(false);
+    ScheduledTaskHandle task = periodicTask;
+    if (task != null) {
+      try {
+        task.cancel();
+      } catch (Throwable ignored) {
+        // best effort
+      }
+      periodicTask = null;
+    }
+    cachedBinding = null;
+    vaultRuntimeGuard.disableVaultUnavailable(message -> logger.warning("[EconomyReconcile] " + message));
   }
 
   private void recordOutcome(Action action) {
