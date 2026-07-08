@@ -6,6 +6,7 @@ import com.realfiction.realcore.scheduler.ScheduledTaskHandle;
 import com.realfiction.realcore.text.Text;
 import java.util.List;
 import java.util.function.Supplier;
+import java.util.logging.Logger;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import org.bukkit.Bukkit;
@@ -31,15 +32,22 @@ public final class ScoreboardService {
 
   private final RealCoreScheduler scheduler;
   private final Supplier<LobbyConfig> configSupplier;
+  private final Logger logger;
+  private final ScoreboardRuntimeGuard runtimeGuard = new ScoreboardRuntimeGuard();
   private ScheduledTaskHandle task;
 
   public ScoreboardService(Plugin plugin, RealCoreScheduler scheduler, Supplier<LobbyConfig> configSupplier) {
     this.scheduler = scheduler;
     this.configSupplier = configSupplier;
+    this.logger = plugin.getLogger();
   }
 
   public void start() {
     stop();
+    if (!runtimeGuard.available()) {
+      logger.info("RealCore scoreboard updates remain disabled: " + runtimeGuard.unavailableReason());
+      return;
+    }
     LobbyConfig config = configSupplier.get();
     long period = config == null ? 20L : config.scoreboard().refreshTicks();
     task = scheduler.runGlobalRepeating(this::tick, period, period);
@@ -53,6 +61,9 @@ public final class ScoreboardService {
   }
 
   private void tick() {
+    if (!runtimeGuard.available()) {
+      return;
+    }
     LobbyConfig config = configSupplier.get();
     if (config == null || !config.scoreboard().enabled()) {
       return;
@@ -65,11 +76,17 @@ public final class ScoreboardService {
   }
 
   public void clearFor(Player player) {
+    if (!runtimeGuard.available()) {
+      return;
+    }
     scheduler.runForPlayer(player, () -> resetToMain(player));
   }
 
   /** Applies the scoreboard to a single player immediately (e.g. on join). */
   public void refresh(Player player) {
+    if (!runtimeGuard.available()) {
+      return;
+    }
     LobbyConfig config = configSupplier.get();
     if (config == null || !config.scoreboard().enabled()) {
       return;
@@ -82,6 +99,19 @@ public final class ScoreboardService {
   }
 
   private void updatePlayer(Player player, LobbyConfig config, int online, int maxOnline) {
+    if (!runtimeGuard.available()) {
+      return;
+    }
+    try {
+      updatePlayerGuarded(player, config, online, maxOnline);
+    } catch (UnsupportedOperationException error) {
+      if (!runtimeGuard.disableIfUnsupported(error, logger::warning)) {
+        throw error;
+      }
+    }
+  }
+
+  private void updatePlayerGuarded(Player player, LobbyConfig config, int online, int maxOnline) {
     if (!player.isOnline()) {
       return;
     }
@@ -138,6 +168,19 @@ public final class ScoreboardService {
   }
 
   private void resetToMain(Player player) {
+    if (!runtimeGuard.available()) {
+      return;
+    }
+    try {
+      resetToMainGuarded(player);
+    } catch (UnsupportedOperationException error) {
+      if (!runtimeGuard.disableIfUnsupported(error, logger::warning)) {
+        throw error;
+      }
+    }
+  }
+
+  private void resetToMainGuarded(Player player) {
     ScoreboardManager manager = Bukkit.getScoreboardManager();
     if (manager == null) {
       return;
