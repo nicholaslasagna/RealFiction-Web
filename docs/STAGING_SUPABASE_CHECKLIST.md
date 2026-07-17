@@ -132,7 +132,7 @@ Expected result: `rls_security.test.sql` declares `plan(27)` and all 27 assertio
 2. Legacy `POST /api/account/link/verify` route deleted; `POST /api/plugin/account-link/confirm` (HMAC + nonce) is the only link finalizer.
 3. The `serverId` is now part of the HMAC signed message, so a server cannot spoof another server's id.
 4. `POST /api/rewards/claim` is owner-only again; plugin delivery transitions go exclusively through the atomic `poll_reward_queue` / `ack_reward_delivery` routes.
-5. `cleanup_plugin_request_nonces()` added (migration `202605200004`); schedule it per-environment (pg_cron snippet inline in the migration).
+5. `cleanup_plugin_request_nonces()` added (migration `202605200004`) and scheduled every 15 minutes by pg_cron (migration `202607160001`). Verify the job exists: `select jobname, schedule from cron.job where jobname = 'cleanup-plugin-request-nonces';` — if absent (no pg_cron), wire an external cron before going live, or the nonce table will grow until plugin auth fails.
 6. Webhook duplicate handling re-drives fulfillment for events persisted-but-not-processed (idempotent), instead of silently dropping a retry.
 
 ### Resolved in the feature pass (2026-05-20)

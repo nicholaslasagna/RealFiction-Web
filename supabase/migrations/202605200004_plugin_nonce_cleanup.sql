@@ -25,16 +25,10 @@ revoke all on function public.cleanup_plugin_request_nonces() from anon;
 revoke all on function public.cleanup_plugin_request_nonces() from authenticated;
 grant execute on function public.cleanup_plugin_request_nonces() to service_role;
 
--- Scheduling is intentionally left out of this migration so local `supabase db reset`
--- and CI stay deterministic and do not require the pg_cron extension. Enable and
--- schedule it per-environment (Supabase supports pg_cron):
---
---   create extension if not exists pg_cron with schema extensions;
---   select cron.schedule(
---     'cleanup-plugin-request-nonces',
---     '*/15 * * * *',
---     $$select public.cleanup_plugin_request_nonces();$$
---   );
---
--- Alternatively, call public.cleanup_plugin_request_nonces() from a scheduled
--- Cloudflare Worker / external cron using the Supabase service role.
+-- SUPERSEDED by 202607160001_plugin_nonce_prune_schedule.sql, which batches this
+-- prune and schedules it with pg_cron. Do not rely on the guidance that used to
+-- live here: leaving the schedule as a per-environment exercise meant no
+-- environment ever did it, the table reached ~6M rows (99.99% expired), disk IO
+-- was exhausted, and every plugin request failed. The snippet suggested here also
+-- specified `with schema extensions`, which errors — pg_cron is relocatable=false,
+-- schema=pg_catalog.

@@ -29,7 +29,7 @@ Replay protection:
 - Timestamp must be within five minutes of the platform clock.
 - Nonces are hashed and stored in `plugin_request_nonces`.
 - Reused nonces are rejected.
-- Expired nonces are pruned by `public.cleanup_plugin_request_nonces()` (scheduled per-environment); replay safety does not depend on the prune.
+- Expired nonces are pruned by `public.cleanup_plugin_request_nonces()`, scheduled by pg_cron every 15 minutes (migration `202607160001`). Replay safety does not depend on the prune, but **availability does**: unscheduled, the table grows without bound until nonce inserts time out and every plugin request fails with 503.
 
 The server id is part of the signed message, so a server cannot spoof another server's id even though all servers currently share one secret.
 
