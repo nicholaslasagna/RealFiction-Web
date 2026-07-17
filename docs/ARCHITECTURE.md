@@ -60,7 +60,7 @@ The RealCore delivery migration is in `supabase/migrations/202605200003_realcore
 - `public.poll_reward_queue(server_id, server_group, limit)` for service-role-only atomic queue claims.
 - `public.ack_reward_delivery(reward_id, server_id, status, failure_reason)` for service-role-only idempotent delivery acknowledgement.
 
-The nonce cleanup migration is in `supabase/migrations/202605200004_plugin_nonce_cleanup.sql` and adds `public.cleanup_plugin_request_nonces()` (service-role only) to prune expired replay nonces. Scheduling (pg_cron or an external cron) is per-environment and documented inline.
+The nonce cleanup migration is in `supabase/migrations/202605200004_plugin_nonce_cleanup.sql` and adds `public.cleanup_plugin_request_nonces()` (service-role only) to prune expired replay nonces. `202607160001_plugin_nonce_prune_schedule.sql` makes the prune batched and schedules it via pg_cron every 15 minutes — the schedule is **not** an optional per-environment step. Leaving it unscheduled is what let the table reach ~6M rows (99.99% expired), exhaust the project's disk IO budget, and fail 100% of plugin auth. Environments without pg_cron must call the function from an external cron instead.
 
 The refund/chargeback migration is in `supabase/migrations/202605200005_refund_chargeback.sql` and adds `public.revoke_order(order_id, mode, reason)` (service-role only): it transitions the order and its entitlements to refunded/revoked, cancels undelivered grant rewards, queues compensating revoke rewards, and writes an audit log row.
 
