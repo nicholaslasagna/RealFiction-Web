@@ -83,7 +83,7 @@ public final class RealVoteBridgePlugin {
 
     try {
       ClassLoader classLoader = nuVotifier
-          .flatMap(PluginContainer::getInstance)
+          .flatMap(pluginContainer -> pluginContainer.getInstance())
           .map(instance -> instance.getClass().getClassLoader())
           .orElse(getClass().getClassLoader());
       Class<?> eventClass = Class.forName(VOTIFIER_EVENT_CLASS, false, classLoader);
