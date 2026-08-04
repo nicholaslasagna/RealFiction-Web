@@ -24,7 +24,6 @@ import com.realfiction.realcore.api.dto.StatLeaderboardRequest;
 import com.realfiction.realcore.api.dto.StatLeaderboardResponse;
 import com.realfiction.realcore.config.RealCoreConfig;
 import java.io.Closeable;
-import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
