@@ -50,6 +50,13 @@ export type SubscriptionProduct = {
   summary: string
   details: string[]
   accent: string
+  /**
+   * Wide store banner, the same artwork uploaded to the Stripe catalog so the
+   * storefront and the Stripe checkout page look like one product. Files live in
+   * public/images/store/<id>.png — see the README there for the export spec.
+   * `lib/store-banners.test.ts` fails the build if one is missing.
+   */
+  banner: string
   featured?: boolean
   tiers: SubscriptionTier[]
 }
@@ -161,6 +168,7 @@ export const gamemodes = [
 export const storeProducts: SubscriptionProduct[] = [
   {
     id: "realvip",
+    banner: "/images/store/realvip.png",
     name: "RealVIP",
     category: "supporter",
     summary: "Supporter rank with profile style, chat flair, and lobby cosmetics.",
@@ -176,6 +184,7 @@ export const storeProducts: SubscriptionProduct[] = [
   },
   {
     id: "real-supporter",
+    banner: "/images/store/real-supporter.png",
     name: "RealSupporter",
     category: "supporter",
     summary: "Top supporter status for members who want to back the network in style.",
@@ -191,6 +200,7 @@ export const storeProducts: SubscriptionProduct[] = [
   },
   {
     id: "realpets",
+    banner: "/images/store/realpets.png",
     name: "RealPets Pack",
     category: "pets",
     summary: "A rotating pet collection for hubs, lobbies, and social spaces.",
@@ -205,6 +215,7 @@ export const storeProducts: SubscriptionProduct[] = [
   },
   {
     id: "particle-vault",
+    banner: "/images/store/particle-vault.png",
     name: "Particle Vault",
     category: "particles",
     summary: "Cinematic trails, celebration effects, and lobby visual effects.",
@@ -219,6 +230,7 @@ export const storeProducts: SubscriptionProduct[] = [
   },
   {
     id: "username-colors",
+    banner: "/images/store/username-colors.png",
     name: "Username Colors",
     category: "identity",
     summary: "Curated chat colors and nameplate identity styles for your in-game look.",
@@ -233,6 +245,7 @@ export const storeProducts: SubscriptionProduct[] = [
   },
   {
     id: "lobby-flight",
+    banner: "/images/store/lobby-flight.png",
     name: "Lobby Flight",
     category: "lobby",
     summary: "Smooth lobby flight for hubs, spawn showcases, and event spaces.",
@@ -247,6 +260,7 @@ export const storeProducts: SubscriptionProduct[] = [
   },
   {
     id: "cosmetic-atelier",
+    banner: "/images/store/cosmetic-atelier.png",
     name: "Cosmetic Atelier",
     category: "cosmetics",
     summary: "A curated bundle of profile effects, lobby entrances, particles, and badges.",

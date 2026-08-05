@@ -541,8 +541,24 @@ async function SignedInAccount() {
                 return (
                   <Card
                     key={perk.key}
-                    className={unlocked ? "minecraft-card border-emerald-300/18" : "minecraft-card"}
+                    className={
+                      unlocked
+                        ? "minecraft-card overflow-hidden border-emerald-300/18"
+                        : "minecraft-card overflow-hidden"
+                    }
                   >
+                    {/* Same store/Stripe artwork. Locked perks are desaturated so
+                        owned ones read at a glance. */}
+                    <div className="border-b border-white/10">
+                      <Image
+                        alt=""
+                        aria-hidden
+                        src={`/images/store/${perk.slugs[0]}.png`}
+                        width={1850}
+                        height={400}
+                        className={unlocked ? "h-auto w-full" : "h-auto w-full opacity-40 grayscale"}
+                      />
+                    </div>
                     <CardHeader>
                       <div className="flex items-center justify-between gap-3">
                         <span className="flex h-11 w-11 items-center justify-center border-2 border-[#00060e] bg-gradient-to-b from-[#1a2638] to-[#0a1424] shadow-[inset_0_2px_0_rgba(255,255,255,0.08),inset_0_-2px_0_rgba(0,0,0,0.3)]">

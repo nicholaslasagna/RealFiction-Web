@@ -27,6 +27,11 @@ type CartItem = { slug: string; quantity: number }
 /** sessionStorage key for the in-progress checkout attempt (UX only). */
 const CHECKOUT_ATTEMPT_STORAGE_KEY = "rf.checkoutAttempt"
 
+// Intrinsic size of the store banners (public/images/store/*.png). Only the
+// ratio matters — they always render as `h-auto w-full`.
+const BANNER_WIDTH = 1850
+const BANNER_HEIGHT = 400
+
 const accentThemes: Record<string, { surface: string; icon: string }> = {
   cyan: { surface: "border-cyan-300/16 bg-cyan-300/[0.055]", icon: "text-cyan-200" },
   amber: { surface: "border-amber-300/18 bg-amber-300/[0.06]", icon: "text-amber-200" },
@@ -38,16 +43,27 @@ const accentThemes: Record<string, { surface: string; icon: string }> = {
 }
 
 // Flat lookup for every purchasable slug (subscription tiers + gift cards).
-const skuIndex = new Map<string, { name: string; priceCents: number; consumable: boolean }>()
+const skuIndex = new Map<
+  string,
+  { name: string; priceCents: number; consumable: boolean; art: string; artWide: boolean }
+>()
 for (const card of giftCards) {
-  skuIndex.set(card.id, { name: card.name, priceCents: card.priceCents, consumable: true })
+  skuIndex.set(card.id, {
+    name: card.name,
+    priceCents: card.priceCents,
+    consumable: true,
+    art: card.image,
+    artWide: false
+  })
 }
 for (const product of storeProducts) {
   for (const tier of product.tiers) {
     skuIndex.set(tier.slug, {
       name: `${product.name} · ${DURATION_LABEL[tier.months]}`,
       priceCents: tier.priceCents,
-      consumable: false
+      consumable: false,
+      art: product.banner,
+      artWide: true
     })
   }
 }
@@ -141,7 +157,9 @@ export function Storefront({
         name: info.name,
         quantity: item.quantity,
         total: info.priceCents * item.quantity,
-        consumable: info.consumable
+        consumable: info.consumable,
+        art: info.art,
+        artWide: info.artWide
       }
     })
     .filter(Boolean) as Array<{
@@ -150,6 +168,8 @@ export function Storefront({
     quantity: number
     total: number
     consumable: boolean
+    art: string
+    artWide: boolean
   }>
 
   const total = cartLines.reduce((sum, item) => sum + item.total, 0)
@@ -404,13 +424,18 @@ export function Storefront({
 
                       return (
                         <Card key={product.id} className="minecraft-card flex flex-col overflow-hidden">
-                          <div
-                            className={cn(
-                              "relative flex h-24 items-center justify-center overflow-hidden border-b",
-                              theme.surface
-                            )}
-                          >
-                            <SectionIcon className={cn("relative h-10 w-10 drop-shadow-[0_6px_16px_rgba(0,0,0,0.5)]", theme.icon)} />
+                          {/* Same artwork as the Stripe catalog entry, so the
+                              storefront and the Stripe checkout page read as one
+                              product. */}
+                          <div className="relative overflow-hidden border-b border-white/10">
+                            <Image
+                              alt=""
+                              aria-hidden
+                              src={product.banner}
+                              width={BANNER_WIDTH}
+                              height={BANNER_HEIGHT}
+                              className="h-auto w-full"
+                            />
                             {product.featured ? (
                               <Badge variant="warning" className="absolute left-3 top-3">
                                 Popular
@@ -558,9 +583,23 @@ export function Storefront({
                   return (
                   <div key={item.slug} className="rounded-lg border border-amber-200/14 bg-black/24 p-3">
                     <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <div className="font-semibold">{item.name}</div>
-                        <div className="text-sm text-muted-foreground">{formatCurrency(item.total)}</div>
+                      <div className="flex min-w-0 items-start gap-3">
+                        {/* Same artwork as the product card and Stripe checkout. */}
+                        <Image
+                          alt=""
+                          aria-hidden
+                          src={item.art}
+                          width={item.artWide ? BANNER_WIDTH : 384}
+                          height={item.artWide ? BANNER_HEIGHT : 606}
+                          className={cn(
+                            "shrink-0 rounded border border-white/10 object-cover",
+                            item.artWide ? "h-9 w-[74px]" : "h-12 w-8"
+                          )}
+                        />
+                        <div className="min-w-0">
+                          <div className="font-semibold">{item.name}</div>
+                          <div className="text-sm text-muted-foreground">{formatCurrency(item.total)}</div>
+                        </div>
                       </div>
                       <button
                         aria-label={`Remove ${item.name}`}
