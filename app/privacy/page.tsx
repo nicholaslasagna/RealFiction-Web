@@ -30,7 +30,7 @@ const SECTIONS: LegalSection[] = [
     bullets: [
       "Account information — the email address and password you use to register. Passwords are stored only as salted hashes by our authentication provider; we never see or store your plaintext password.",
       "Minecraft identity — the Minecraft username and UUID you link to your account (including Java accounts and Bedrock accounts connecting through GeyserMC), so we can deliver rewards in-game.",
-      "Purchase information — the items you buy, order totals, and a payment confirmation token from our processor. Card numbers and full payment credentials are handled entirely by Stripe and PayPal; RealFiction never receives or stores them.",
+      "Purchase information — the items you buy, order totals, and a payment confirmation token from our processor. Card numbers and full payment credentials are handled entirely by Stripe; RealFiction never receives or stores them.",
       "Store credit and gift cards — balances, redemptions, and related ledger entries tied to your account.",
       "Voting activity — the vote sites you use, vote timestamps, streaks, and rewards granted, as reported by the vote listing services.",
       "Support and contact messages — anything you send us through contact forms or email.",
@@ -57,7 +57,7 @@ const SECTIONS: LegalSection[] = [
   {
     heading: "5. Payments",
     body: [
-      "Payments are processed by Stripe (card, Apple Pay, and Google Pay) and PayPal. When you check out, you provide payment details directly to the processor over their secure, PCI-compliant systems. We receive only confirmation of payment and limited transaction metadata needed to fulfill and account for your order. Please review the Stripe and PayPal privacy policies for how they handle your payment data."
+      "Payments are processed by Stripe. When you check out, you provide payment details directly to the processor over their secure, PCI-compliant systems. We receive only confirmation of payment and limited transaction metadata needed to fulfill and account for your order. Please review the Stripe privacy policy for how they handle your payment data."
     ]
   },
   {
@@ -68,7 +68,7 @@ const SECTIONS: LegalSection[] = [
     bullets: [
       "Hosting and database — our infrastructure and database providers store account, order, and reward data on our behalf.",
       "Content delivery and security — our CDN and edge provider helps serve the site and mitigate abuse.",
-      "Payment processors — Stripe and PayPal, to take payment and handle refunds, chargebacks, and disputes.",
+      "Payment processor — Stripe, to take payment and handle refunds, chargebacks, and disputes.",
       "Skin rendering — we request player avatar images from a public Minecraft head-rendering service using your Minecraft UUID or username so leaderboards and your profile can show your skin.",
       "Vote listing sites and Discord — when you choose to vote or connect those services.",
       "Legal compliance — when required by law, or to protect the rights, safety, and property of RealFiction, our players, or others."

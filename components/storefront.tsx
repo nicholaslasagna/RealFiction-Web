@@ -24,6 +24,9 @@ import { cn, formatCurrency } from "@/lib/utils"
 
 type CartItem = { slug: string; quantity: number }
 
+/** sessionStorage key for the in-progress checkout attempt (UX only). */
+const CHECKOUT_ATTEMPT_STORAGE_KEY = "rf.checkoutAttempt"
+
 const accentThemes: Record<string, { surface: string; icon: string }> = {
   cyan: { surface: "border-cyan-300/16 bg-cyan-300/[0.055]", icon: "text-cyan-200" },
   amber: { surface: "border-amber-300/18 bg-amber-300/[0.06]", icon: "text-amber-200" },
@@ -73,6 +76,10 @@ export function Storefront({
   const [applyCredit, setApplyCredit] = useState(false)
   const [storeCreditCents, setStoreCreditCents] = useState(0)
   const [checkoutState, setCheckoutState] = useState<string | null>(null)
+  const [checkoutBusy, setCheckoutBusy] = useState(false)
+  // Identity of the CURRENT checkout intent. Cleared whenever the cart changes,
+  // so a different cart can never reuse a previous attempt id.
+  const checkoutAttemptIdRef = useRef<string | null>(null)
   const cartRef = useRef<HTMLElement>(null)
 
   // Deep link: /store#<category> (e.g. from the homepage perk cards)
@@ -160,6 +167,53 @@ export function Storefront({
   const deliveryReady = isGift ? validRecipient : Boolean(linkedUsername)
   const canCheckout = signedIn && cartLines.length > 0 && deliveryReady
 
+  // Client-side view of the cart, used only to key the persisted attempt id.
+  // The server recomputes its own canonical fingerprint and is authoritative.
+  const clientCartKey = useMemo(
+    () =>
+      JSON.stringify({
+        items: [...cart].map((item) => `${item.slug}x${item.quantity}`).sort(),
+        applyCredit,
+        isGift,
+        giftRecipient: isGift ? giftRecipient.trim().toLowerCase() : ""
+      }),
+    [cart, applyCredit, isGift, giftRecipient]
+  )
+
+  // Persist the active attempt id for THIS cart so a same-tab refresh resumes
+  // the same checkout instead of starting a second one. Purely a UX aid — the
+  // database active-cart lock is the real guarantee. Contains no personal data
+  // and no secrets: a random UUID plus a hash-free cart shape.
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return
+    }
+    try {
+      const stored = window.sessionStorage.getItem(CHECKOUT_ATTEMPT_STORAGE_KEY)
+      const parsed = stored ? (JSON.parse(stored) as { cartKey?: string; attemptId?: string }) : null
+      // Only restore when it belongs to the cart currently on screen.
+      checkoutAttemptIdRef.current =
+        parsed && parsed.cartKey === clientCartKey && typeof parsed.attemptId === "string"
+          ? parsed.attemptId
+          : null
+      if (!checkoutAttemptIdRef.current) {
+        window.sessionStorage.removeItem(CHECKOUT_ATTEMPT_STORAGE_KEY)
+      }
+    } catch {
+      // Storage unavailable (private mode/quota) — fall back to in-memory only.
+      checkoutAttemptIdRef.current = null
+    }
+  }, [clientCartKey])
+
+  function clearCheckoutAttempt() {
+    checkoutAttemptIdRef.current = null
+    try {
+      window.sessionStorage.removeItem(CHECKOUT_ATTEMPT_STORAGE_KEY)
+    } catch {
+      // ignore
+    }
+  }
+
   function changeQuantity(slug: string, delta: number) {
     setCart((current) => {
       const info = skuIndex.get(slug)
@@ -189,7 +243,33 @@ export function Storefront({
     }
   }
 
-  async function checkout(provider: "stripe" | "paypal") {
+  async function checkout(provider: "stripe") {
+    // Guard against double submission: a second click while the first request is
+    // in flight would create a second checkout attempt. The server also collapses
+    // duplicate attempts onto one order, but the button must not invite it.
+    if (checkoutBusy) {
+      return
+    }
+
+    // One cryptographically random id per checkout intent, REUSED for every
+    // retry of that intent (that is why it is a ref, not a fresh value per
+    // call). The server binds it to this account + cart, and a unique DB
+    // constraint turns any number of retries or duplicate tabs into exactly one
+    // order — and therefore one payable Stripe session.
+    if (!checkoutAttemptIdRef.current) {
+      checkoutAttemptIdRef.current = crypto.randomUUID()
+    }
+    const checkoutAttemptId = checkoutAttemptIdRef.current
+    try {
+      window.sessionStorage.setItem(
+        CHECKOUT_ATTEMPT_STORAGE_KEY,
+        JSON.stringify({ cartKey: clientCartKey, attemptId: checkoutAttemptId })
+      )
+    } catch {
+      // Storage unavailable — the DB lock still prevents a second checkout.
+    }
+
+    setCheckoutBusy(true)
     setCheckoutState("Getting your payment ready...")
 
     try {
@@ -198,6 +278,7 @@ export function Storefront({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           provider,
+          checkoutAttemptId,
           isGift,
           applyStoreCredit: applyCredit,
           giftRecipient: isGift ? giftRecipient.trim() || undefined : undefined,
@@ -215,6 +296,7 @@ export function Storefront({
       // Fully covered by store credit — the order completed server-side with no
       // payment provider; send the buyer to their account to see it.
       if (json.completed) {
+        clearCheckoutAttempt()
         window.location.href = "/account?checkout=success"
         return
       }
@@ -222,10 +304,21 @@ export function Storefront({
         window.location.href = json.checkoutUrl
         return
       }
+      // A terminal/mismatched/expired attempt (409) can never succeed again —
+      // drop it (memory + storage) so the next click starts a new intent.
+      if (response.status === 409) {
+        clearCheckoutAttempt()
+      }
       setCheckoutState(json.message ?? json.error ?? "This payment option is not ready yet.")
+      setCheckoutBusy(false)
     } catch (error) {
+      // Network failure: keep the SAME attempt id. Retrying must resume this
+      // intent, not create a second order.
       setCheckoutState(error instanceof Error ? error.message : "Checkout failed.")
+      setCheckoutBusy(false)
     }
+    // Note: on the success paths above we intentionally leave the button
+    // disabled — the page is navigating away to Stripe/account.
   }
 
   return (
@@ -400,7 +493,7 @@ export function Storefront({
               <ShoppingCart className="h-5 w-5 text-amber-200" />
               Server Cart
             </CardTitle>
-            <CardDescription>Pay with Card, Apple Pay, Google Pay, or PayPal.</CardDescription>
+            <CardDescription>Secure payment methods available through Stripe Checkout.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-5">
             {!signedIn ? (
@@ -584,32 +677,26 @@ export function Storefront({
             ) : (
               <div className="grid gap-2">
                 <Button
-                  aria-label="Checkout — pay with card, Apple Pay, or Google Pay"
+                  aria-label="Checkout with secure card payment"
                   className="flex-col"
-                  disabled={!canCheckout}
+                  disabled={!canCheckout || checkoutBusy}
                   onClick={() => checkout("stripe")}
                   type="button"
                 >
-                  <span>{creditToApply > 0 ? "Pay the rest" : "Checkout"}</span>
-                  {/* What Stripe Checkout accepts — card networks + the wallets. */}
+                  <span>
+                    {checkoutBusy ? "Starting checkout…" : creditToApply > 0 ? "Pay the rest" : "Checkout"}
+                  </span>
+                  {/* Card networks only. Wallet availability is decided by Stripe
+                      Checkout per device/browser, so we do not promise it here. */}
                   <span className="flex items-center justify-center gap-1.5">
                     <PayMark src="/images/payments/visa.svg" label="Visa" />
                     <PayMark src="/images/payments/mastercard.svg" label="Mastercard" />
                     <PayMark src="/images/payments/amex.svg" label="American Express" />
-                    <PayMark src="/images/payments/apple-pay.svg" label="Apple Pay" />
-                    <PayMark src="/images/payments/google-pay.svg" label="Google Pay" />
                   </span>
                 </Button>
-                <Button
-                  aria-label="Pay with PayPal"
-                  disabled={!canCheckout}
-                  onClick={() => checkout("paypal")}
-                  type="button"
-                  variant="outline"
-                >
-                  Pay with
-                  <PayMark src="/images/payments/paypal.svg" label="PayPal" />
-                </Button>
+                <p className="text-center text-xs text-muted-foreground">
+                  Secure payment methods available through Stripe Checkout.
+                </p>
                 {isGift && !validRecipient ? (
                   <p className="text-xs text-muted-foreground">
                     Enter the recipient&apos;s Minecraft username to continue.
@@ -643,9 +730,8 @@ export function Storefront({
                 Privacy Policy
               </Link>
               . Prices in USD. Payments are securely processed by{" "}
-              <span className="font-semibold text-slate-200">Stripe</span> (Card / Apple Pay /
-              Google Pay) and <span className="font-semibold text-slate-200">PayPal</span>.
-              RealFiction never stores your card details.
+              <span className="font-semibold text-slate-200">Stripe</span>. RealFiction never
+              stores your card details.
             </p>
           </CardContent>
         </Card>
@@ -659,7 +745,7 @@ export function Storefront({
 
    The accepted-method marks use the real brand logos (official SVGs in
    /public/images/payments/) inside small white pills so they read clearly
-   on the green Checkout button. PayPal keeps its own labelled button.
+   on the green Checkout button.
    ============================================================ */
 
 // Real brand logo on a white pill — uniform height, natural width, so the

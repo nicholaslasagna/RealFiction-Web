@@ -66,22 +66,106 @@ Create one webhook endpoint in Stripe pointing at:
 https://realfiction.live/api/webhooks/stripe
 ```
 
-Subscribe it to exactly these events:
+This is the **only** Stripe webhook route in the app. There is deliberately no
+`/api/stripe/webhook` alias — a second endpoint would double-deliver events and
+split the deduplication ledger. `lib/payment-invariants.test.ts` fails the build
+if a second route appears or if any doc names a path that does not exist.
+
+Subscribe it to exactly these nine events:
 
 ```
 checkout.session.completed
 checkout.session.async_payment_succeeded
-charge.refunded
+checkout.session.async_payment_failed
+checkout.session.expired
+refund.created
+refund.updated
+refund.failed
 charge.dispute.created
+charge.dispute.closed
 ```
 
-- `checkout.session.completed` / `checkout.session.async_payment_succeeded` →
-  marks the order paid and fulfills it.
-- `charge.refunded` → revokes the order (refund).
-- `charge.dispute.created` → revokes the order (chargeback).
+| Event | Resulting state |
+| --- | --- |
+| `checkout.session.completed` (payment_status `paid`) | Order paid → fulfilled |
+| `checkout.session.completed` (still `unpaid`) | Stays pending; waits for the async result |
+| `checkout.session.async_payment_succeeded` | Order paid → fulfilled |
+| `checkout.session.async_payment_failed` | Store credit released once; order cancelled; no entitlement |
+| `checkout.session.expired` | Store credit released once; unpaid order cancelled; a paid order is untouched |
+| `refund.created` / `refund.updated`, status ≠ `succeeded` | Recorded only — never revokes |
+| `refund.created` / `refund.updated`, status `succeeded`, **full** amount | Order revoked (refund) |
+| `refund.*` succeeded, **partial** amount | `payment_reviews` manual review — never auto-revokes a whole order |
+| `refund.failed` | Recorded only — access is never removed |
+| `charge.dispute.created` | Order revoked (chargeback) |
+| `charge.dispute.closed`, `lost` | Stays revoked (idempotent re-revoke) |
+| `charge.dispute.closed`, `won` / other | Manual review — access is never auto-restored |
+
+Payload version: the destination uses **Snapshot** payloads pinned to
+`2026-04-22.dahlia`. Outgoing requests pin the same version via a
+`Stripe-Version` header (`STRIPE_API_VERSION` in `lib/payments.ts`), so an
+account-level version change cannot silently reshape checkout responses.
 
 Copy the endpoint's **Signing secret** (`whsec_…`) into `STRIPE_WEBHOOK_SECRET`.
 The verifier also rejects events whose timestamp is older than 5 minutes.
+
+## Checkout attempt lifecycle (bounded)
+
+Stripe prunes idempotency keys once they are roughly **24 hours** old; reusing a
+pruned key creates a *new* Session instead of replaying the original. Checkout
+identity is therefore explicitly time-bounded — there is no "same attempt forever"
+guarantee, and the code must never imply one.
+
+| Property | Value |
+| --- | --- |
+| Attempt lifetime | **1 hour** (`CHECKOUT_ATTEMPT_TTL_SECONDS`) |
+| Stripe Session lifetime | **1 hour** — sent as an explicit `expires_at` |
+| Retry/resume window | While the attempt is unclosed **and** unexpired |
+| `after_expiration.recovery` | **Never enabled** (a recovery URL is a second payable link) |
+
+**Identity.** The browser generates a random `checkoutAttemptId` (UUID) per
+checkout intent and reuses it across retries. The server binds it to the account,
+the canonical server-resolved cart (slugs, quantities, provider, store-credit
+choice, gift target) and the **verified Minecraft UUID**.
+
+**Two locks, both in Postgres:**
+
+1. `unique (user_id, attempt_id)` — one internal order per attempt.
+2. `unique (user_id, cart_fingerprint) where closed_at is null` — the
+   **active-cart lock**: at most one *live* checkout per account+cart, no matter
+   how many attempt UUIDs exist. This is what stops two browser tabs, or a reload
+   that lost its client-side id, from opening two payable Sessions.
+
+**What happens on retry**
+
+- *Same attempt, still active, Session valid* → the stored Session URL is
+  returned. Stripe is not called.
+- *Different attempt, same cart, one already active* → the live Session is
+  returned when usable; otherwise `409 checkout_already_in_progress`.
+- *Attempt expired or closed* → `409 checkout_attempt_expired`. Stripe is **not**
+  called with that order again, because its idempotency key may have been pruned.
+  The order stays immutable and auditable.
+- *Ambiguous Stripe response* → retry within the window reuses the same
+  order-derived key (`realfiction-checkout:<order-id>`), so Stripe replays the
+  original Session. Attachment is compare-and-set: a *different* Session can
+  never replace an already-attached one.
+
+**Starting a deliberate repeat purchase** (e.g. buying another month to stack
+time) requires the previous attempt to be terminal — paid, cancelled, failed, or
+expired. The client then mints a **new** `checkoutAttemptId`, which is allowed to
+take the released cart lock.
+
+**Frontend persistence.** The active `checkoutAttemptId` is kept in
+`sessionStorage`, keyed to the on-screen cart, so a same-tab refresh resumes the
+same checkout. It holds only a random UUID plus the cart shape — no personal data,
+no secrets — and it is **not** the security boundary: the database locks are.
+
+### Environment separation
+
+`STRIPE_ENVIRONMENT` must be `live` or `test`. The webhook compares it against
+`event.livemode` and **fails closed**: an unset or unrecognised value rejects
+every event, and a test-mode event can never modify a production order. Rejected
+events return `202` (valid signature, wrong environment) so Stripe stops
+retrying while no work is performed.
 
 ## Test mode setup (no real money)
 
@@ -121,8 +205,10 @@ The verifier also rejects events whose timestamp is older than 5 minutes.
 4. In Supabase, the `orders` row moves `pending` → `paid` → `fulfilled`.
 5. A `reward_queue` row is created for the purchase.
 6. RealCore polls and delivers it in-game; the reward acknowledges as delivered.
-7. Refund the test payment in Stripe → `charge.refunded` fires → the order is
-   marked refunded and a compensating revoke reward is queued.
+7. Refund the test payment in full in Stripe → `refund.created`/`refund.updated`
+   fires with status `succeeded` → the order is marked refunded and a
+   compensating revoke reward is queued. A *partial* refund is deliberately not
+   auto-revoked: it lands in `payment_reviews` for a human.
 8. Check Stripe → Developers → Webhooks → your endpoint shows `200` responses.
    A `401` means `STRIPE_WEBHOOK_SECRET` is wrong or from the other mode; a `503`
    means the runtime secrets/migrations are not in place yet.

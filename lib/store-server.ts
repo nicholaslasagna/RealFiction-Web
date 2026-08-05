@@ -418,3 +418,267 @@ export async function markWebhookEventProcessed(provider: "stripe" | "paypal", p
     .eq("provider", provider)
     .eq("provider_event_id", providerEventId)
 }
+
+// -- Checkout attempt idempotency + rate limiting ----------------------------
+
+export type CheckoutAttemptClaim = {
+  claimId: string
+  existingOrderId: string | null
+  storedFingerprint: string | null
+  /** 'new' | 'resumed' | 'active_elsewhere' | 'closed' */
+  status: string
+  attemptExpiresAt: string | null
+  sessionId: string | null
+  sessionUrl: string | null
+  sessionExpiresAt: string | null
+}
+
+/**
+ * Thrown when a guard that protects against duplicate payment cannot be
+ * evaluated. Callers MUST fail closed (503) — never proceed to create an order,
+ * reserve credit, or call Stripe.
+ */
+export class CheckoutGuardUnavailableError extends Error {
+  readonly guard: string
+
+  constructor(guard: string, cause?: string) {
+    super(`Checkout guard unavailable: ${guard}${cause ? ` (${cause})` : ""}`)
+    this.name = "CheckoutGuardUnavailableError"
+    this.guard = guard
+  }
+}
+
+/**
+ * Claims (or re-reads) the attempt slot for this account + attempt id.
+ *
+ * FAILS CLOSED. Duplicate-payment protection must never silently degrade: if
+ * this cannot be evaluated we refuse the checkout rather than risk two orders
+ * and two payable Stripe sessions for one intent.
+ */
+export async function claimCheckoutAttempt(
+  userId: string,
+  attemptId: string,
+  cartFingerprint: string,
+  ttlSeconds: number
+): Promise<CheckoutAttemptClaim> {
+  const supabase = getSupabaseServiceRoleClient()
+  const { data, error } = await supabase.rpc("claim_checkout_attempt", {
+    p_user_id: userId,
+    p_attempt_id: attemptId,
+    p_cart_fingerprint: cartFingerprint,
+    p_ttl_seconds: ttlSeconds
+  })
+
+  if (error) {
+    throw new CheckoutGuardUnavailableError("claim_checkout_attempt", error.message ?? "unknown")
+  }
+
+  const row = (Array.isArray(data) ? data[0] : data) as
+    | {
+        claim_id?: string
+        existing_order_id?: string | null
+        stored_fingerprint?: string | null
+        status?: string
+        attempt_expires_at?: string | null
+        stripe_session_id?: string | null
+        stripe_session_url?: string | null
+        stripe_session_expires_at?: string | null
+      }
+    | null
+
+  if (!row?.claim_id || !row.status) {
+    throw new CheckoutGuardUnavailableError("claim_checkout_attempt", "empty result")
+  }
+
+  return {
+    claimId: row.claim_id,
+    existingOrderId: row.existing_order_id ?? null,
+    storedFingerprint: row.stored_fingerprint ?? null,
+    status: row.status,
+    attemptExpiresAt: row.attempt_expires_at ?? null,
+    sessionId: row.stripe_session_id ?? null,
+    sessionUrl: row.stripe_session_url ?? null,
+    sessionExpiresAt: row.stripe_session_expires_at ?? null
+  }
+}
+
+/** Closes an attempt so its cart lock is released and it can never be revived. */
+export async function closeCheckoutAttempt(claimId: string, reason: string): Promise<void> {
+  const supabase = getSupabaseServiceRoleClient()
+  const { error } = await supabase.rpc("close_checkout_attempt", {
+    p_claim_id: claimId,
+    p_reason: reason
+  })
+  if (error) {
+    console.error("close_checkout_attempt_error", error.message ?? "unknown")
+  }
+}
+
+/**
+ * Compare-and-set Stripe session attachment. Fails closed: a different session
+ * already bound to this attempt is never replaced, because the displaced one
+ * would remain payable and untracked.
+ */
+export async function attachCheckoutSession(input: {
+  claimId: string
+  sessionId: string
+  sessionUrl: string | null
+  sessionExpiresAt: string | null
+}): Promise<boolean> {
+  const supabase = getSupabaseServiceRoleClient()
+  const { data, error } = await supabase.rpc("attach_checkout_session", {
+    p_claim_id: input.claimId,
+    p_session_id: input.sessionId,
+    p_session_url: input.sessionUrl,
+    p_session_expires_at: input.sessionExpiresAt
+  })
+  if (error) {
+    throw new CheckoutGuardUnavailableError("attach_checkout_session", error.message ?? "unknown")
+  }
+  return data === true
+}
+
+/** Links the created order to its attempt. Fails closed: a lost link would let a retry create a second order. */
+export async function attachCheckoutAttemptOrder(claimId: string, orderId: string) {
+  const supabase = getSupabaseServiceRoleClient()
+  const { error } = await supabase.rpc("attach_checkout_attempt_order", {
+    p_attempt_id: claimId,
+    p_order_id: orderId
+  })
+  if (error) {
+    throw new CheckoutGuardUnavailableError("attach_checkout_attempt_order", error.message ?? "unknown")
+  }
+}
+
+/**
+ * Durable (DB-backed) attempt count for rate limiting — Workers-safe.
+ * FAILS CLOSED: an unreadable counter must not become an unlimited counter.
+ */
+export async function countRecentCheckoutAttempts(userId: string, windowSeconds: number): Promise<number> {
+  const supabase = getSupabaseServiceRoleClient()
+  const { data, error } = await supabase.rpc("count_recent_checkout_attempts", {
+    p_user_id: userId,
+    p_window_seconds: windowSeconds
+  })
+  if (error) {
+    throw new CheckoutGuardUnavailableError("count_recent_checkout_attempts", error.message ?? "unknown")
+  }
+  const count = Number(Array.isArray(data) ? data[0] : data)
+  if (!Number.isFinite(count)) {
+    throw new CheckoutGuardUnavailableError("count_recent_checkout_attempts", "non-numeric result")
+  }
+  return Math.max(0, Math.trunc(count))
+}
+
+export async function getOrderStatus(orderId: string): Promise<string | null> {
+  const supabase = getSupabaseServiceRoleClient()
+  const { data } = await supabase.from("orders").select("status").eq("id", orderId).maybeSingle()
+  return (data?.status as string | undefined) ?? null
+}
+
+// -- Refund / dispute support ------------------------------------------------
+
+export type OrderPaymentContext = {
+  orderId: string
+  status: string
+  /** What Stripe actually charged (store credit excluded). */
+  paidCents: number | null
+  items: { id: string; totalCents: number }[]
+}
+
+/**
+ * Trusted server-side view of what we charged for an order, used to decide
+ * whether a refund is full or partial. Never derived from event metadata.
+ */
+export async function getOrderPaymentContext(orderId: string): Promise<OrderPaymentContext | null> {
+  const supabase = getSupabaseServiceRoleClient()
+  const { data: order } = await supabase
+    .from("orders")
+    .select("id, status, payment_due_cents, total_cents")
+    .eq("id", orderId)
+    .maybeSingle()
+
+  if (!order) {
+    return null
+  }
+
+  const { data: items } = await supabase.from("order_items").select("id, total_cents").eq("order_id", orderId)
+
+  const due = Number(order.payment_due_cents ?? order.total_cents)
+
+  return {
+    orderId: order.id as string,
+    status: order.status as string,
+    paidCents: Number.isFinite(due) ? due : null,
+    items: (items ?? []).map((item) => ({
+      id: item.id as string,
+      totalCents: Number(item.total_cents ?? 0)
+    }))
+  }
+}
+
+/** Append-only, idempotent audit record for refund/dispute outcomes. */
+export async function recordPaymentReview(input: {
+  providerEventId: string
+  eventType: string
+  reason: string
+  orderId?: string | null
+  paymentIntentId?: string | null
+  detail?: Record<string, unknown>
+}) {
+  const supabase = getSupabaseServiceRoleClient()
+  const { error } = await supabase.rpc("record_payment_review", {
+    p_provider_event_id: input.providerEventId,
+    p_event_type: input.eventType,
+    p_reason: input.reason,
+    p_order_id: input.orderId ?? null,
+    p_payment_intent_id: input.paymentIntentId ?? null,
+    p_detail: input.detail ?? {},
+    p_provider: "stripe"
+  })
+  if (error) {
+    console.error("record_payment_review_error", error.message ?? "unknown")
+  }
+}
+
+/**
+ * Claims a revocation keyed on the Stripe REFUND/DISPUTE object id.
+ * Returns true only for the first caller — later events for the same refund
+ * (refund.created then refund.updated, or any replay) return false.
+ */
+export async function claimPaymentRevocation(input: {
+  operationKey: string
+  orderId: string
+  mode: "refund" | "chargeback"
+  reason?: string | null
+}): Promise<boolean> {
+  const supabase = getSupabaseServiceRoleClient()
+  const { data, error } = await supabase.rpc("claim_payment_revocation", {
+    p_operation_key: input.operationKey,
+    p_order_id: input.orderId,
+    p_mode: input.mode,
+    p_reason: input.reason ?? null
+  })
+  if (error) {
+    // Fail closed: if we cannot prove this revocation is new, do not revoke.
+    // A missed revocation is recoverable by a human; a double revocation
+    // corrupts entitlement state.
+    console.error("claim_payment_revocation_error", error.message ?? "unknown")
+    return false
+  }
+  return data === true
+}
+
+/** Cancels an unpaid pending order (payment failed / session expired). */
+export async function markOrderUnpaidClosed(orderId: string, reason: string): Promise<boolean> {
+  const supabase = getSupabaseServiceRoleClient()
+  const { data, error } = await supabase.rpc("mark_order_unpaid_closed", {
+    p_order_id: orderId,
+    p_reason: reason
+  })
+  if (error) {
+    console.error("mark_order_unpaid_closed_error", error.message ?? "unknown")
+    return false
+  }
+  return data === true
+}

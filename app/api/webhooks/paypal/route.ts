@@ -1,3 +1,4 @@
+import { isPayPalAllowed } from "@/lib/checkout-guard"
 import { getPayPalAccessToken, getPayPalBaseUrl } from "@/lib/payments"
 import { safeJsonError } from "@/lib/security"
 import {
@@ -125,6 +126,13 @@ async function resolveRevokeOrderId(payload: PayPalWebhookEvent) {
 }
 
 export async function POST(request: Request) {
+  // PayPal is sandbox-only: a production deployment must never fulfil, revoke,
+  // or otherwise mutate an order from a PayPal event. 202 so a sandbox sender
+  // stops retrying; no work is performed.
+  if (!isPayPalAllowed()) {
+    return Response.json({ received: true, ignored: "paypal_disabled" }, { status: 202 })
+  }
+
   const payload = (await request.json().catch(() => null)) as PayPalWebhookEvent | null
   const verified = payload ? await verifyPayPalWebhook(request, payload) : false
 

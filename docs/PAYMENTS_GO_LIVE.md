@@ -40,8 +40,16 @@ delivers).
 `https://realfiction.live/api/webhooks/stripe`, events:
 - `checkout.session.completed`
 - `checkout.session.async_payment_succeeded`
-- `charge.refunded`
+- `checkout.session.async_payment_failed`
+- `checkout.session.expired`
+- `refund.created`
+- `refund.updated`
+- `refund.failed`
 - `charge.dispute.created`
+- `charge.dispute.closed`
+
+Also set `STRIPE_ENVIRONMENT=live`. The webhook fails closed without it and
+rejects any event whose `livemode` does not match.
 
 Copy the endpoint's **Signing secret** → `STRIPE_WEBHOOK_SECRET`.
 

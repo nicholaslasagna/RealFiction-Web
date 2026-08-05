@@ -60,7 +60,7 @@ export default async function StorePage() {
             a generic SaaS feature row. */}
         <Reveal className="grid gap-3 md:grid-cols-3">
           {[
-            { label: "Checkout", body: "Card, Apple Pay, Google Pay, and PayPal." },
+            { label: "Checkout", body: "Secure payment methods available through Stripe Checkout." },
             { label: "Delivery", body: "Rewards land on your linked Minecraft account." },
             { label: "What's sold", body: "Cosmetics, supporter perks, lobby fun, and gift cards. Nothing else." }
           ].map((item) => (

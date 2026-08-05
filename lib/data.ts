@@ -570,7 +570,7 @@ export const updates: UpdateEntry[] = [
         heading: "Added",
         items: [
           "Account system with email sign-in, Minecraft account linking, and a per-player dashboard.",
-          "Store checkout flow with Stripe, Apple Pay, Google Pay, and PayPal support.",
+          "Store checkout flow with secure Stripe Checkout payment support.",
           "Live network leaderboards for total playtime and economy balance, with real Minecraft skin avatars.",
           "Live BlueMap embeds for SMP, Factions, and RealAnarchy.",
           "Public economy balance lookup tied to your linked Minecraft account.",

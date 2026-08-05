@@ -3,6 +3,7 @@ import "server-only"
 import { z } from "zod"
 
 import type { CheckoutLine } from "@/lib/store-server"
+import { isPayPalAllowed, stripeSessionExpiresAt } from "@/lib/checkout-guard"
 import { isPayPalConfigured, isStripeConfigured } from "@/lib/payment-readiness"
 
 // Re-exported so existing importers (`@/lib/payments`) keep working. The real
@@ -12,6 +13,17 @@ export { isPayPalConfigured, isStripeConfigured }
 
 export const checkoutSchema = z.object({
   provider: z.enum(["stripe", "paypal"]),
+  // Client-generated identity for ONE checkout intent, reused across retries of
+  // that intent. Required: without it two clicks become two payable Stripe
+  // sessions. It is an identity only — the server binds it to the authenticated
+  // account and the canonical resolved cart before it means anything.
+  checkoutAttemptId: z
+    .string()
+    .trim()
+    .regex(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
+      "checkoutAttemptId must be a UUID"
+    ),
   // Gift mode is an explicit flag (a checkbox in the cart). For a normal
   // purchase the delivery target is the buyer's linked account, resolved on the
   // server — the client never sends its own username for non-gift orders.
@@ -52,6 +64,13 @@ function getSiteUrl() {
   return process.env.NEXT_PUBLIC_SITE_URL ?? "https://realfiction.live"
 }
 
+/**
+ * Stripe API version pinned for OUTGOING requests, matching the version the
+ * production event destination uses for incoming Snapshot payloads. The project
+ * uses no Stripe SDK, so this header is the only version contract there is.
+ */
+export const STRIPE_API_VERSION = "2026-04-22.dahlia"
+
 export async function createStripeCheckout(order: CheckoutOrder, lines: CheckoutLine[]) {
   const secret = process.env.STRIPE_SECRET_KEY
   const siteUrl = getSiteUrl()
@@ -63,6 +82,12 @@ export async function createStripeCheckout(order: CheckoutOrder, lines: Checkout
   const body = new URLSearchParams()
   body.set("mode", "payment")
   body.set("client_reference_id", order.id)
+  // Explicit, bounded session lifetime, matched to the internal attempt TTL.
+  // Without this the session would outlive the attempt and could still be paid
+  // after we consider the checkout dead. `after_expiration.recovery` is
+  // deliberately NOT enabled: a recovery URL is a second payable link created
+  // outside our attempt lock.
+  body.set("expires_at", String(stripeSessionExpiresAt(Date.now())))
   body.set("success_url", `${siteUrl}/account?checkout=success&order_id=${order.id}`)
   body.set("cancel_url", `${siteUrl}/store?checkout=cancelled&order_id=${order.id}`)
   body.set("metadata[network]", "RealFiction")
@@ -104,7 +129,16 @@ export async function createStripeCheckout(order: CheckoutOrder, lines: Checkout
     method: "POST",
     headers: {
       Authorization: `Bearer ${secret}`,
-      "Content-Type": "application/x-www-form-urlencoded"
+      "Content-Type": "application/x-www-form-urlencoded",
+      // Pin the request version to the same one the webhook destination sends
+      // (Snapshot payloads, 2026-04-22.dahlia) instead of inheriting whatever
+      // the account default happens to be — an account-level version change
+      // must never silently reshape checkout responses.
+      "Stripe-Version": STRIPE_API_VERSION,
+      // Deterministic per order: a double-click, a retry, or a resumed attempt
+      // replays the ORIGINAL session (same URL) instead of creating a second
+      // one. Scoped to our order id so unrelated carts never collide.
+      "Idempotency-Key": `realfiction-checkout:${order.id}`
     },
     body
   })
@@ -131,11 +165,15 @@ export async function createStripeCheckout(order: CheckoutOrder, lines: Checkout
     )
   }
 
-  const session = (await response.json()) as { url?: string; id?: string }
+  const session = (await response.json()) as { url?: string; id?: string; expires_at?: number }
 
   return {
     checkoutUrl: session.url ?? null,
-    providerSessionId: session.id ?? null
+    providerSessionId: session.id ?? null,
+    // Stripe echoes the authoritative expiry; store it rather than our own
+    // estimate so reuse decisions follow Stripe's clock.
+    sessionExpiresAt:
+      typeof session.expires_at === "number" ? new Date(session.expires_at * 1000).toISOString() : null
   }
 }
 
@@ -180,6 +218,14 @@ export function getPayPalBaseUrl() {
 }
 
 export async function createPayPalCheckout(order: CheckoutOrder, lines: CheckoutLine[]) {
+  // Hard server-side stop: PayPal is sandbox-only and must be unreachable in
+  // production even if a client posts provider=paypal directly. Throwing here
+  // (rather than deleting the module) keeps sandbox development and historical
+  // PayPal order records intact.
+  if (!isPayPalAllowed()) {
+    throw new Error("PayPal checkout is disabled in this environment.")
+  }
+
   const siteUrl = getSiteUrl()
   const token = await getPayPalAccessToken()
   const baseUrl = getPayPalBaseUrl()

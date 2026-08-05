@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 
+import { isPayPalAllowed } from "@/lib/checkout-guard"
 import { capturePayPalOrder } from "@/lib/payments"
 import { markOrderPaidAndFulfill } from "@/lib/store-server"
 
@@ -8,6 +9,12 @@ export async function GET(request: Request) {
   const localOrderId = url.searchParams.get("order_id")
   const payPalOrderId = url.searchParams.get("token")
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://realfiction.live"
+
+  // PayPal is sandbox-only: never fulfil a production order from this path, even
+  // if someone calls the capture URL directly with a crafted token.
+  if (!isPayPalAllowed()) {
+    return NextResponse.redirect(`${siteUrl}/store?checkout=paypal-unavailable`)
+  }
 
   if (!localOrderId || !payPalOrderId) {
     return NextResponse.redirect(`${siteUrl}/store?checkout=paypal-error`)
