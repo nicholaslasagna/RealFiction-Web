@@ -60,8 +60,12 @@ test("ownership comes from a server-provided prop, never inferred client-side", 
   assert.match(storePage, /ownedProductIds=\{ownedProductIds\}/)
 })
 
-test("owned or already-included products cannot be added to the cart again", () => {
-  assert.match(storefront, /disabled=\{owned \|\| Boolean\(includedBy\)\}/)
+test("owned or already-included products offer NO purchase control at all", () => {
+  // Stronger than the disabled button this replaced: a greyed-out "Add to cart"
+  // reads as temporarily unavailable, and its label overflowed the button at
+  // 320px. An owned card now renders the ownership badge and nothing to click.
+  assert.match(storefront, /cardLocked \? \(/)
+  assert.ok(!/disabled=\{cardLocked\}/.test(storefront), "an owned card must not render a disabled button")
 })
 
 test("term products disclose what is retained and what ends", () => {

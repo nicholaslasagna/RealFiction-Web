@@ -82,6 +82,69 @@ export function rejectDisabledProducts(
   return null
 }
 
+/**
+ * The SELLABLE catalogue, as opposed to the RESOLVABLE one.
+ *
+ * These are two different questions and conflating them is a rollout hazard:
+ *
+ *   "does this product row exist and can we act on it?"  -> products.active
+ *   "may a customer start a NEW purchase of it today?"   -> this list
+ *
+ * Legacy timed SKUs (`realvip-1m`, `realvip-3m`, …) must stay `active` in the
+ * database through the deploy overlap, because the previously deployed site is
+ * still serving traffic and still resolves them — deactivating them in a
+ * migration is what caused an earlier deploy-order outage. But the moment THIS
+ * application is live, it must stop selling them, without waiting for anyone to
+ * run an UPDATE.
+ *
+ * Keeping the rows active is also what keeps everything downstream working:
+ * outstanding Stripe sessions still fulfil, historical orders still render,
+ * refunds and revocations still resolve their products, and receipts still name
+ * what was bought. None of those paths consult this list — only new checkouts do.
+ *
+ * Written out rather than derived from the presentation catalogue on purpose.
+ * What the server will SELL is a deliberate list somebody has to edit and review;
+ * it must not change as a side effect of someone adjusting a storefront card. A
+ * test asserts the two agree, so drift is caught rather than silently shipped.
+ */
+const PURCHASABLE_SLUGS: ReadonlySet<string> = new Set([
+  "realvip-permanent",
+  "real-supporter-permanent",
+  "username-colors-permanent",
+  "particle-vault-permanent",
+  "realpets-permanent",
+  "cosmetic-atelier-permanent"
+])
+
+/** Exposed for tests and diagnostics; never sent to a browser as authority. */
+export function isPurchasableSlug(slug: string): boolean {
+  return PURCHASABLE_SLUGS.has(slug)
+}
+
+/**
+ * Server-side purchasable gate over already-resolved (trusted) product rows.
+ *
+ * Runs BEFORE any order row, checkout attempt, store-credit reservation,
+ * upgrade-credit reservation, or Stripe request exists, so a rejection leaves no
+ * trace to clean up.
+ *
+ * The message deliberately does not say "legacy" or name the SKU list — the
+ * customer's cart simply contains something we no longer sell.
+ */
+export function rejectUnsellableProducts(
+  products: ReadonlyArray<{ slug?: string | null }>
+): CheckoutRejection | null {
+  const offending = products.find((product) => !isPurchasableSlug((product.slug ?? "").toLowerCase()))
+  if (!offending) {
+    return null
+  }
+  return {
+    code: "product_not_sold",
+    status: 400,
+    message: "That item is no longer sold. Anything you already own is unaffected."
+  }
+}
+
 // -- Checkout attempt identity ------------------------------------------------
 
 /**

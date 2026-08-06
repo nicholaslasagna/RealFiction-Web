@@ -11,7 +11,7 @@ import { RankComparison } from "@/components/store/rank-comparison"
 import { Storefront } from "@/components/storefront"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
-import { getOwnedProductIds } from "@/lib/store/ownership"
+import { getOwnedProductIds, getStorefrontOwnership } from "@/lib/store/ownership"
 import { getVerifiedMinecraftLink } from "@/lib/store-server"
 import { getAuthenticatedUser } from "@/lib/supabase/server"
 
@@ -30,6 +30,9 @@ export default async function StorePage() {
   const link = user ? await getVerifiedMinecraftLink(user.id).catch(() => null) : null
   // Authoritative ownership, resolved server-side. The browser is never asked.
   const ownedProductIds = await getOwnedProductIds(user?.id ?? null)
+  // Real expiry dates, real provenance, and the server's own upgrade quote. The
+  // browser is shown these; it is never asked for them.
+  const ownership = await getStorefrontOwnership(user?.id ?? null)
   return (
     <section>
       <HolidayStoreBanner />
@@ -95,6 +98,8 @@ export default async function StorePage() {
             signedIn={Boolean(user)}
             linkedUsername={link?.username ?? null}
             ownedProductIds={ownedProductIds}
+            entitlements={ownership.entitlements}
+            upgradeQuote={ownership.upgrade}
           />
         </Reveal>
 

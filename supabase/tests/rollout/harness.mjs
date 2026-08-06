@@ -224,6 +224,91 @@ await check("new-app/new-db", "explicitly enabling the reviewed SKUs makes them 
   assert.equal(sql(newDb, `select active from public.products where slug='realfiction-plus-30d'`), "f")
 })
 
+// -- The cutover moment ------------------------------------------------------
+// The migrations are applied, the legacy rows are STILL ACTIVE, and the new
+// application has just gone live. It must stop SELLING them without waiting for
+// anyone to run an UPDATE, while everything downstream keeps working.
+
+const { rejectUnsellableProducts } = await loadFrom(repoRoot, "lib/checkout-guard.ts")
+
+await check("cutover", "legacy rows are still active — nothing was deactivated", () => {
+  const active = activeProducts(newDb, LEGACY_SLUGS)
+  assert.ok(active.length > 0, "the old application would break if these were gone")
+})
+
+await check("cutover", "the new application still RESOLVES a legacy SKU from the database", async () => {
+  // Resolution must keep working: refunds, revocations, receipts and history all
+  // depend on being able to load these rows.
+  const lines = await newStore.resolveCheckoutLines({ items: [{ productId: "realvip-1m", quantity: 1 }] })
+  assert.equal(lines[0].product.slug, "realvip-1m")
+})
+
+await check("cutover", "but REFUSES to sell it", async () => {
+  const lines = await newStore.resolveCheckoutLines({ items: [{ productId: "realvip-1m", quantity: 1 }] })
+  const rejection = rejectUnsellableProducts(lines.map((line) => line.product))
+  assert.ok(rejection, "a legacy term SKU must not be purchasable after cutover")
+  assert.equal(rejection.code, "product_not_sold")
+  assert.equal(rejection.status, 400)
+  // The customer-facing wording must not leak the mechanism.
+  assert.ok(!/legacy|sku|inactive|catalog/i.test(rejection.message), rejection.message)
+})
+
+await check("cutover", "the refusal happens BEFORE any state is created", () => {
+  const counts = () => ({
+    orders: sql(newDb, "select count(*) from public.orders"),
+    attempts: sql(newDb, "select count(*) from public.checkout_attempts"),
+    reservations: sql(newDb, "select count(*) from public.upgrade_credit_reservations"),
+    ledger: sql(newDb, "select count(*) from public.store_credit_ledger"),
+    outbox: sql(newDb, "select count(*) from public.email_deliveries")
+  })
+  const before = counts()
+  // The guard is pure and runs on resolved rows; nothing it can do writes.
+  rejectUnsellableProducts([{ slug: "realvip-1m" }])
+  assert.deepEqual(counts(), before)
+})
+
+await check("cutover", "every currently sellable SKU still passes the gate", async () => {
+  sql(newDb, `update public.products set active = true
+              where slug in ('realvip-permanent','real-supporter-permanent')`)
+  for (const slug of ["realvip-permanent", "real-supporter-permanent"]) {
+    const lines = await newStore.resolveCheckoutLines({ items: [{ productId: slug, quantity: 1 }] })
+    assert.equal(rejectUnsellableProducts(lines.map((l) => l.product)), null, `${slug} must remain sellable`)
+  }
+})
+
+await check("cutover", "an OUTSTANDING legacy Stripe session still fulfils after cutover", () => {
+  // Created before the deploy, paid after it. The customer must get what they
+  // bought; the cutover gate has nothing to do with fulfilment.
+  const id = "b0000000-0000-4000-8000-000000000004"
+  seedLegacyOrder(newDb, id, "b0000000-0000-4000-8000-0000000000a4")
+  sql(
+    newDb,
+    `insert into public.checkout_attempts (user_id, attempt_id, cart_fingerprint, order_id,
+       stripe_session_id, stripe_session_expires_at)
+     values ('b0000000-0000-4000-8000-0000000000a4', gen_random_uuid(), 'pre-cutover-${id}', '${id}',
+             'cs_pre_cutover', now() + interval '20 minutes')`
+  )
+  sql(newDb, `select public.fulfill_paid_order_with_outbox('${id}','pi_pre','ch_pre',null)`)
+  assert.equal(sql(newDb, `select status from public.orders where id='${id}'`), "fulfilled")
+  assert.equal(
+    sql(newDb, `select count(*) from public.entitlements e join public.order_items oi on oi.id=e.order_item_id
+                where oi.order_id='${id}' and e.status='active'`),
+    "1"
+  )
+  assert.equal(sql(newDb, `select count(*) from public.email_deliveries where order_id='${id}'`), "1")
+})
+
+await check("cutover", "a legacy refund still works after cutover", () => {
+  const id = "b0000000-0000-4000-8000-000000000004"
+  sql(newDb, `select public.record_order_refund('${id}','re_post_cutover',1299,'USD',true)`)
+  sql(
+    newDb,
+    `select public.revoke_order_with_refund_outbox('${id}','re_post:${id}','refund','post-cutover',
+       're_post_cutover',1299,'USD',true,'revoked',null)`
+  )
+  assert.equal(sql(newDb, `select status from public.orders where id='${id}'`), "refunded")
+})
+
 await check("new-app/new-db", "historical legacy orders still render and fulfil", () => {
   const id = "b0000000-0000-4000-8000-000000000003"
   seedLegacyOrder(newDb, id, "b0000000-0000-4000-8000-0000000000a3")

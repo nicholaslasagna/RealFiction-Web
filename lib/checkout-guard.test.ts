@@ -50,17 +50,17 @@ test("gift card products are detected by category and slug", () => {
   assert.equal(isGiftCardProduct({ category: "gift_cards" }), true)
   assert.equal(isGiftCardProduct({ slug: "gift-card-25" }), true)
   assert.equal(isGiftCardProduct({ slug: "gift_card_25" }), true)
-  assert.equal(isGiftCardProduct({ slug: "realvip-1m", category: "supporter" }), false)
+  assert.equal(isGiftCardProduct({ slug: "realvip-permanent", category: "supporter" }), false)
 })
 
 test("a direct API request cannot buy a gift card in production", () => {
-  const rejection = rejectDisabledProducts([{ slug: "realvip-1m", category: "supporter" }, { slug: "gift-card-25", category: "gift_cards" }], {})
+  const rejection = rejectDisabledProducts([{ slug: "realvip-permanent", category: "supporter" }, { slug: "gift-card-25", category: "gift_cards" }], {})
   assert.ok(rejection)
   assert.equal(rejection?.code, "gift_cards_disabled")
 })
 
 test("normal products are unaffected by the gift card gate", () => {
-  assert.equal(rejectDisabledProducts([{ slug: "realvip-1m", category: "supporter" }], {}), null)
+  assert.equal(rejectDisabledProducts([{ slug: "realvip-permanent", category: "supporter" }], {}), null)
 })
 
 test("gift cards can be re-enabled by explicit config after their audit", () => {
@@ -78,7 +78,7 @@ const baseCart = {
   applyStoreCredit: false,
   isGift: false,
   minecraftUuid: "00000000-0000-4000-8000-0000000000aa",
-  items: [{ productId: "realvip-1m", quantity: 1 }]
+  items: [{ productId: "realvip-permanent", quantity: 1 }]
 }
 
 test("attempt ids must be UUIDs — no client-chosen strings", () => {
@@ -93,15 +93,15 @@ test("the same cart produces a stable fingerprint regardless of item order", () 
   const a = buildCartFingerprint({
     ...baseCart,
     items: [
-      { productId: "realvip-1m", quantity: 1 },
-      { productId: "realpets-1m", quantity: 1 }
+      { productId: "realvip-permanent", quantity: 1 },
+      { productId: "realpets-permanent", quantity: 1 }
     ]
   })
   const b = buildCartFingerprint({
     ...baseCart,
     items: [
-      { productId: "realpets-1m", quantity: 1 },
-      { productId: "realvip-1m", quantity: 1 }
+      { productId: "realpets-permanent", quantity: 1 },
+      { productId: "realvip-permanent", quantity: 1 }
     ]
   })
   assert.equal(a, b)
@@ -110,8 +110,8 @@ test("the same cart produces a stable fingerprint regardless of item order", () 
 test("fingerprint changes with cart, account, delivery target, or credit choice", () => {
   const base = buildCartFingerprint(baseCart)
   assert.notEqual(base, buildCartFingerprint({ ...baseCart, userId: "user-2" }))
-  assert.notEqual(base, buildCartFingerprint({ ...baseCart, items: [{ productId: "realvip-3m", quantity: 1 }] }))
-  assert.notEqual(base, buildCartFingerprint({ ...baseCart, items: [{ productId: "realvip-1m", quantity: 2 }] }))
+  assert.notEqual(base, buildCartFingerprint({ ...baseCart, items: [{ productId: "realpets-permanent", quantity: 1 }] }))
+  assert.notEqual(base, buildCartFingerprint({ ...baseCart, items: [{ productId: "realvip-permanent", quantity: 2 }] }))
   assert.notEqual(base, buildCartFingerprint({ ...baseCart, applyStoreCredit: true }))
   // Binding to the linked Minecraft UUID: an attempt cannot be re-aimed at a
   // different delivery target.
@@ -133,7 +133,7 @@ test("an attempt retried with the SAME cart is accepted", () => {
 
 test("an attempt reused with a MODIFIED cart is rejected", () => {
   const original = buildCartFingerprint(baseCart)
-  const modified = buildCartFingerprint({ ...baseCart, items: [{ productId: "realvip-12m", quantity: 1 }] })
+  const modified = buildCartFingerprint({ ...baseCart, items: [{ productId: "realpets-permanent", quantity: 1 }] })
   const result = checkAttemptBinding(original, modified)
   assert.equal(result.ok, false)
   assert.equal(result.ok === false ? result.code : null, "attempt_cart_mismatch")

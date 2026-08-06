@@ -19,8 +19,72 @@ import {
   storeProducts,
   type ProductCategory
 } from "@/lib/data"
-import { getProduct, isIncludedIn } from "@/lib/store/catalog"
+import { CATALOG, getProduct, isIncludedIn } from "@/lib/store/catalog"
+import {
+  ownershipStateFor,
+  upgradeErrorMessage,
+  UPGRADE_COPY,
+  upgradeStateFrom,
+  type EntitlementView,
+  type UpgradeQuoteView
+} from "@/lib/store/ownership-view"
 import { cn, formatCurrency } from "@/lib/utils"
+
+/** The one product an upgrade can target today. */
+const UPGRADE_TARGET_ID = "real-supporter-permanent"
+
+/**
+ * Catalogue entries that are announced but not sold.
+ *
+ * RealFiction+ is here because RealCore does not enforce its benefits yet.
+ * Hiding it entirely would be tidier and less honest — people ask about it — so
+ * it gets a card that states plainly what it will be and that it is not on sale.
+ * It has no price and no add-to-cart control, and `products.active` is false, so
+ * even a hand-crafted request is refused server-side.
+ */
+const COMING_SOON_PRODUCTS = CATALOG.filter((product) => product.availability === "coming-soon")
+  .filter((product) => product.category !== "gift-cards")
+  .sort((a, b) => a.sortOrder - b.sortOrder)
+
+const CATEGORY_FOR_CATALOG: Record<string, string> = {
+  ranks: "supporter",
+  membership: "supporter",
+  cosmetics: "cosmetics",
+  pets: "pets",
+  bundles: "cosmetics",
+  "gift-cards": "gift-cards"
+}
+
+/**
+ * An announced-but-unavailable product.
+ *
+ * Deliberately NOT a price + disabled button: a greyed-out buy button reads as
+ * "temporarily out of stock, try again in a minute". This says what it is, what
+ * you would keep, and that it is not for sale, with nothing to click.
+ */
+function ComingSoonCard({ product }: { product: (typeof CATALOG)[number] }) {
+  return (
+    <Card className="minecraft-card border-dashed border-white/14">
+      <CardContent className="flex flex-col items-start gap-3 py-8">
+        <Badge variant="outline">Coming soon</Badge>
+        <CardTitle className="display-font text-xl">{product.name}</CardTitle>
+        <p className="max-w-prose text-sm leading-6 text-muted-foreground">
+          {product.features[0]}
+        </p>
+        {product.retained.length > 0 ? (
+          <p className="max-w-prose text-sm leading-6 text-muted-foreground">
+            When it launches it will be a {product.durationDays}-day pass that does not renew
+            itself. You would keep {product.retained.join(", ").toLowerCase()} after it ends.
+          </p>
+        ) : null}
+        <p className="text-sm text-muted-foreground">
+          It is not on sale yet — the in-game benefits are not built, and we would rather say so
+          than take your money for something half-finished.
+        </p>
+      </CardContent>
+    </Card>
+  )
+}
 
 type CartItem = { slug: string; quantity: number }
 
@@ -108,14 +172,24 @@ function includedByOwned(id: string, ownedIds: Set<string>): string | null {
 export function Storefront({
   signedIn,
   linkedUsername,
-  ownedProductIds = []
+  ownedProductIds = [],
+  entitlements = [],
+  upgradeQuote = null
 }: {
   signedIn: boolean
   linkedUsername: string | null
   /** Authoritative, server-resolved. Never derived in the browser. */
   ownedProductIds?: string[]
+  /** Real expiry dates and provenance, server-resolved. */
+  entitlements?: EntitlementView[]
+  /** The server's upgrade quote. Every figure shown comes from here. */
+  upgradeQuote?: UpgradeQuoteView | null
 }) {
   const ownedIds = useMemo(() => new Set(ownedProductIds), [ownedProductIds])
+  const upgradeState = useMemo(() => upgradeStateFrom(upgradeQuote), [upgradeQuote])
+  const [upgradeBusy, setUpgradeBusy] = useState(false)
+  const [upgradeError, setUpgradeError] = useState<string | null>(null)
+  const upgradeAttemptIdRef = useRef<string | null>(null)
   const [category, setCategory] = useState<ProductCategory | "all">("all")
   const [cart, setCart] = useState<CartItem[]>([])
   const [isGift, setIsGift] = useState(false)
@@ -172,11 +246,19 @@ export function Storefront({
           meta: c,
           id: c.id,
           products: c.id === "gift-cards" ? [] : storeProducts.filter((p) => p.category === c.id),
+          // Catalogue entries that exist but are NOT on sale. They are shown
+          // because saying "coming soon" is more honest than pretending the
+          // product does not exist — but they carry no price, no quantity, and
+          // no purchase action of any kind.
+          comingSoon:
+            c.id === "gift-cards"
+              ? []
+              : COMING_SOON_PRODUCTS.filter((p) => CATEGORY_FOR_CATALOG[p.category] === c.id),
           // Deliberately empty: gift cards render as a single coming-soon
           // panel, never as purchasable cards.
           cards: []
         }))
-        .filter((s) => s.products.length > 0 || s.id === "gift-cards"),
+        .filter((s) => s.products.length > 0 || s.comingSoon.length > 0 || s.id === "gift-cards"),
     [category]
   )
 
@@ -300,6 +382,75 @@ export function Storefront({
     }
   }
 
+  /**
+   * The upgrade checkout.
+   *
+   * Sends a REQUEST, never an amount: `requestUpgrade: true` plus the target
+   * slug and quantity 1. The server recomputes eligibility and the price from
+   * entitlements and settled orders, so a client that tampers with anything here
+   * gets refused, not discounted.
+   *
+   * There is deliberately no fallback. If eligibility changed between page load
+   * and click, this shows an error — it never quietly becomes a $34.99 checkout.
+   */
+  async function startUpgrade() {
+    if (upgradeBusy) {
+      return
+    }
+    setUpgradeError(null)
+    setUpgradeBusy(true)
+
+    // Same attempt-identity rule as the cart: one id per intent, reused across
+    // retries, so a double-click cannot produce two payable sessions.
+    if (!upgradeAttemptIdRef.current) {
+      upgradeAttemptIdRef.current = crypto.randomUUID()
+    }
+
+    try {
+      const response = await fetch("/api/store/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          provider: "stripe",
+          checkoutAttemptId: upgradeAttemptIdRef.current,
+          requestUpgrade: true,
+          isGift: false,
+          applyStoreCredit: false,
+          items: [{ productId: UPGRADE_TARGET_ID, quantity: 1 }]
+        })
+      })
+
+      const json = (await response.json()) as {
+        checkoutUrl?: string | null
+        completed?: boolean
+        code?: string
+        message?: string
+        error?: string
+      }
+
+      if (json.checkoutUrl) {
+        window.location.href = json.checkoutUrl
+        return
+      }
+      if (json.completed) {
+        window.location.href = "/account?checkout=success"
+        return
+      }
+
+      // A terminal attempt can never succeed again; drop the id so a retry is a
+      // genuinely new intent.
+      if (response.status === 409) {
+        upgradeAttemptIdRef.current = null
+      }
+      setUpgradeError(upgradeErrorMessage(json.code, json.message ?? json.error))
+      setUpgradeBusy(false)
+    } catch {
+      // Network failure: KEEP the attempt id so retrying resumes this intent.
+      setUpgradeError(upgradeErrorMessage("checkout_failed"))
+      setUpgradeBusy(false)
+    }
+  }
+
   async function checkout(provider: "stripe") {
     // Guard against double submission: a second click while the first request is
     // in flight would create a second checkout attempt. The server also collapses
@@ -381,7 +532,11 @@ export function Storefront({
   return (
     <div className="grid min-w-0 gap-8 lg:grid-cols-[minmax(0,1fr)_390px]">
       <div className="min-w-0 space-y-6">
-        <div className="-mx-4 flex max-w-[calc(100%+2rem)] gap-2 overflow-x-auto px-4 pb-2">
+        {/* Horizontal scroll is right on a phone and wrong on a desktop: with the
+            cart occupying 390px the filter row was 986px of content in a 790px
+            column, so two filters sat permanently off-screen behind the cart.
+            Wraps from `sm` up; still swipes below it. */}
+        <div className="-mx-4 flex max-w-[calc(100%+2rem)] gap-2 overflow-x-auto px-4 pb-2 sm:flex-wrap sm:overflow-x-visible">
           {productCategories.map((item) => {
             const Icon = item.icon
             const active = category === item.id
@@ -446,7 +601,23 @@ export function Storefront({
                     {section.products.map((product) => {
                       const theme = accentThemes[product.accent] ?? accentThemes.amber
                       const owned = ownedIds.has(product.id)
-                      const includedBy = includedByOwned(product.id, ownedIds)
+                      const includedByName = includedByOwned(product.id, ownedIds)
+                      const includedByProduct = includedByName
+                        ? { productId: "", name: includedByName }
+                        : null
+                      const ownership = ownershipStateFor(product.id, entitlements, {
+                        // The catalogue sells every rank permanently now; a dated
+                        // grant therefore means legacy timed access, which must
+                        // not read the same as an outright purchase.
+                        isPermanentProduct: product.durationDays === null,
+                        includedByOwned: includedByProduct
+                      })
+                      // A signed-out visitor has no entitlements at all, so the
+                      // legacy ownedIds set stays the fallback.
+                      const effectiveOwned =
+                        ownership.kind === "owned_permanent" || ownership.kind === "included" || owned
+                      const cardLocked = effectiveOwned || Boolean(includedByName)
+                      const isUpgradeTarget = product.id === UPGRADE_TARGET_ID
 
                       return (
                         <Card key={product.id} className="minecraft-card flex flex-col overflow-hidden">
@@ -516,29 +687,113 @@ export function Storefront({
                               </div>
                             ) : null}
 
-                            {owned ? (
-                              <Badge variant="success" className="w-fit">Owned permanently</Badge>
-                            ) : includedBy ? (
-                              <Badge variant="outline" className="w-fit">
-                                Included with {includedBy}
+                            {ownership.kind !== "none" ? (
+                              <Badge
+                                variant={
+                                  ownership.kind === "owned_permanent"
+                                    ? "success"
+                                    : ownership.kind === "legacy_term"
+                                      ? "warning"
+                                      : "outline"
+                                }
+                                className="w-fit"
+                              >
+                                {ownership.label}
                               </Badge>
                             ) : null}
 
-                            <Button
-                              className="mt-auto w-full"
-                              disabled={owned || Boolean(includedBy)}
-                              onClick={() => addToCart(product.id)}
-                              type="button"
-                            >
-                              <Plus className="h-4 w-4" />
-                              Add to cart
-                            </Button>
+                            {/* The upgrade offer. Shown ONLY on the target card,
+                                only when the server said this account is
+                                eligible, and always with the server's own
+                                figures. */}
+                            {isUpgradeTarget && upgradeState.kind === "available" ? (
+                              <div className="mt-auto space-y-3">
+                                <dl
+                                  className="space-y-1 rounded-md border border-emerald-300/25 bg-emerald-300/[0.06] p-3 text-sm"
+                                  aria-label="Your upgrade price"
+                                >
+                                  <div className="flex items-baseline justify-between gap-3">
+                                    <dt className="text-muted-foreground">RealSupporter permanent rank</dt>
+                                    <dd className="tabular-nums">{formatCurrency(upgradeState.targetPriceCents)}</dd>
+                                  </div>
+                                  <div className="flex items-baseline justify-between gap-3">
+                                    <dt className="text-muted-foreground">Your RealVIP upgrade credit</dt>
+                                    <dd className="tabular-nums text-emerald-200">
+                                      -{formatCurrency(upgradeState.creditCents)}
+                                    </dd>
+                                  </div>
+                                  <div className="flex items-baseline justify-between gap-3 border-t border-white/10 pt-1.5 font-semibold text-amber-100">
+                                    <dt>Upgrade today</dt>
+                                    <dd className="tabular-nums">{formatCurrency(upgradeState.upgradePriceCents)}</dd>
+                                  </div>
+                                </dl>
+                                <Button
+                                  className="h-auto w-full whitespace-normal py-3 leading-tight"
+                                  disabled={upgradeBusy}
+                                  onClick={startUpgrade}
+                                  type="button"
+                                  aria-describedby={upgradeError ? "upgrade-error" : undefined}
+                                >
+                                  {upgradeBusy ? "Getting your upgrade ready..." : "Upgrade to RealSupporter"}
+                                </Button>
+                                {upgradeError ? (
+                                  <p
+                                    id="upgrade-error"
+                                    role="alert"
+                                    className="text-sm leading-6 text-rose-200"
+                                  >
+                                    {upgradeError}
+                                  </p>
+                                ) : null}
+                                <p className="text-xs leading-5 text-muted-foreground">
+                                  Upgrades apply to your own account and cannot be gifted. Prefer to buy
+                                  RealSupporter at the full price? Add it to the cart below.
+                                </p>
+                              </div>
+                            ) : null}
+
+                            {isUpgradeTarget &&
+                            upgradeState.kind !== "available" &&
+                            upgradeState.kind !== "none" &&
+                            UPGRADE_COPY[upgradeState.kind] ? (
+                              <p className="rounded-md border border-white/10 bg-black/24 p-3 text-xs leading-5 text-muted-foreground">
+                                {UPGRADE_COPY[upgradeState.kind]}
+                              </p>
+                            ) : null}
+
+                            {/* An owned product gets NO purchase control at all.
+                                A greyed-out "Add to cart" is a control that
+                                looks temporarily broken; the badge above already
+                                says what is true, and removing the button also
+                                removes a disabled tab stop and a 253px label
+                                that overflowed its 238px box at 320px wide. */}
+                            {cardLocked ? (
+                              <div className="mt-auto" />
+                            ) : (
+                              <Button
+                                className="mt-auto h-auto w-full whitespace-normal py-3 leading-tight"
+                                onClick={() => addToCart(product.id)}
+                                type="button"
+                                variant={
+                                  isUpgradeTarget && upgradeState.kind === "available" ? "outline" : "default"
+                                }
+                              >
+                                <Plus className="h-4 w-4" />
+                                {isUpgradeTarget && upgradeState.kind === "available"
+                                  ? "Buy at full price instead"
+                                  : "Add to cart"}
+                              </Button>
+                            )}
                           </CardContent>
                         </Card>
                       )
                     })}
                   </div>
                 )}
+
+                {section.comingSoon.map((product) => (
+                  <ComingSoonCard key={product.id} product={product} />
+                ))}
               </section>
             )
           })}

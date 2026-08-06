@@ -84,9 +84,18 @@ export function RankComparison() {
               {columns.map((product) => (
                 <th key={product.id} scope="col" className="pb-4 text-center align-bottom">
                   <div className="display-font text-lg text-white">{product.name}</div>
-                  <div className="font-mono text-base font-semibold text-amber-100">
-                    {formatCurrency(product.priceCents)}
-                  </div>
+                  {/* A bare price on a product that cannot be bought reads as
+                      an offer. Unavailable columns say so instead — the price is
+                      a proposal until it goes on sale anyway. */}
+                  {product.availability === "available" ? (
+                    <div className="font-mono text-base font-semibold text-amber-100">
+                      {formatCurrency(product.priceCents)}
+                    </div>
+                  ) : (
+                    <div className="font-mono text-base font-semibold text-muted-foreground">
+                      Coming soon
+                    </div>
+                  )}
                   <div className="mt-1 text-[11px] leading-4 text-muted-foreground">
                     {BILLING_DISCLOSURE[product.billing].join(" · ")}
                   </div>

@@ -8,7 +8,8 @@ import {
   evaluateRateLimit,
   requireVerifiedBuyerEmail,
   rejectDisabledProducts,
-  rejectDisabledProvider
+  rejectDisabledProvider,
+  rejectUnsellableProducts
 } from "@/lib/checkout-guard"
 import {
   createPayPalCheckout,
@@ -150,6 +151,21 @@ export async function POST(request: Request) {
     const productRejection = rejectDisabledProducts(lines.map((line) => line.product))
     if (productRejection) {
       return safeJsonError(productRejection.message, productRejection.status)
+    }
+
+    // CUTOVER GATE. Legacy timed SKUs stay `active` in the database so the
+    // previously deployed site, outstanding Stripe sessions, refunds,
+    // revocations, receipts and order history all keep working. This application
+    // still refuses to START a new purchase of one, from the moment it is live
+    // and without waiting for anyone to run an UPDATE.
+    //
+    // Placed here deliberately: before the order row, before the checkout
+    // attempt, before either reservation, and before any Stripe request — so a
+    // rejection leaves nothing behind.
+    const sellableRejection = rejectUnsellableProducts(lines.map((line) => line.product))
+    if (sellableRejection) {
+      console.info("checkout_product_not_sold", baseLog)
+      return safeJsonError(sellableRejection.message, sellableRejection.status)
     }
 
     // Duplicate-purchase prevention. A permanent product the account already

@@ -977,7 +977,11 @@ select {
 .icon-bar a.discord { background: #5865f2; }
 .icon-bar a.discord:hover { background: #4854e0; }
 
-@media (max-width: 760px) { .icon-bar { display: none; } }
+/* The rail is 56px wide and fixed to the left edge. `.container-shell` is
+   min(1180px, 100% - 32px), so the page gutter only clears 56px once the
+   viewport reaches ~1292px. Below that the rail sat ON TOP of store cards —
+   measured at 768px, where it covered the "Owned permanently" badge. */
+@media (max-width: 1300px) { .icon-bar { display: none; } }
 
 /* ============================================================
    Live map frame — gold inset border around the screenshot

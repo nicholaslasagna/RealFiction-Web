@@ -70,7 +70,10 @@ export function SocialRail() {
     .filter((s): s is (typeof socials)[number] => Boolean(s))
 
   return (
-    <div className="icon-bar" aria-label="RealFiction community links">
+    // A labelled <aside> rather than a bare div: axe flags floating content
+    // outside any landmark, and a screen-reader user landing here otherwise gets
+    // an unannounced pile of links with no way to skip past them.
+    <aside className="icon-bar" aria-label="RealFiction community links">
       {sorted.map((item) => (
         <Link
           key={item.href}
@@ -81,6 +84,6 @@ export function SocialRail() {
           <SocialIcon label={item.label} />
         </Link>
       ))}
-    </div>
+    </aside>
   )
 }

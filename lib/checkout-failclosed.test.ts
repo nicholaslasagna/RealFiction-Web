@@ -200,7 +200,7 @@ const VALID_BODY = {
   checkoutAttemptId: "f47ac10b-58cc-4372-a567-0e02b2c3d479",
   isGift: false,
   applyStoreCredit: false,
-  items: [{ productId: "realvip-1m", quantity: 1 }]
+  items: [{ productId: "realvip-permanent", quantity: 1 }]
 }
 
 test("guard failure fails CLOSED: 503, no order, no Stripe call, no credit reserved", async () => {

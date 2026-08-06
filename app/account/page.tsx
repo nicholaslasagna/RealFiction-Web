@@ -32,7 +32,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { STORE_BANNER_HEIGHT, STORE_BANNER_WIDTH, voteSites } from "@/lib/data"
-import { buildOrderAccounting } from "@/lib/store/order-accounting"
+import { PurchaseRowCard, type PurchaseRow } from "@/components/account/purchase-history"
 import { createSupabaseServerClient, getAuthenticatedUser } from "@/lib/supabase/server"
 
 export const dynamic = "force-dynamic"
@@ -68,30 +68,7 @@ type EntitlementRow = {
   products?: ProductRef | ProductRef[] | null
 }
 
-type OrderItemRow = {
-  quantity: number
-  product_snapshot?: {
-    name?: string
-    slug?: string
-  } | null
-}
-
-type OrderRow = {
-  id: string
-  status: string
-  total_cents: number
-  currency: string
-  created_at: string
-  paid_at: string | null
-  gifted_to_minecraft_username?: string | null
-  store_credit_applied_cents?: number | null
-  payment_due_cents?: number | null
-  // Absent on historical orders placed before upgrades existed. The accounting
-  // helper falls back rather than rendering a blank or a NaN.
-  subtotal_cents?: number | null
-  discount_cents?: number | null
-  order_items?: OrderItemRow[] | null
-}
+type OrderRow = PurchaseRow
 
 type RewardRow = {
   id: string
@@ -223,27 +200,6 @@ function formatDate(value: string | null) {
   }).format(new Date(value))
 }
 
-function formatMoney(cents: number, currency: string) {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: currency || "USD"
-  }).format(cents / 100)
-}
-
-function orderLabel(status: string) {
-  const labels: Record<string, string> = {
-    draft: "Not started",
-    pending: "Waiting for checkout",
-    paid: "Almost ready",
-    fulfilled: "Ready in-game",
-    refunded: "Refunded",
-    chargeback: "Closed",
-    cancelled: "Cancelled"
-  }
-
-  return labels[status] ?? "Checking"
-}
-
 function rewardLabel(status: string) {
   const labels: Record<string, string> = {
     pending: "Queued for delivery",
@@ -254,20 +210,6 @@ function rewardLabel(status: string) {
   }
 
   return labels[status] ?? "Checking"
-}
-
-// Pixel-art status chips — a green check when it's done, an amber warning sign
-// when it needs help, an hourglass-style clock while it's in flight.
-function OrderStatusBadge({ status }: { status: string }) {
-  const Icon = status === "fulfilled" ? CheckIcon : status === "refunded" || status === "chargeback" ? WarningIcon : ClockIcon
-  const variant: "success" | "warning" | "outline" =
-    status === "fulfilled" ? "success" : status === "refunded" || status === "chargeback" ? "warning" : "outline"
-  return (
-    <Badge variant={variant}>
-      <Icon size={12} />
-      {orderLabel(status)}
-    </Badge>
-  )
 }
 
 function RewardStatusBadge({ status }: { status: string }) {
@@ -700,90 +642,15 @@ function AllPurchases({ orders }: { orders: OrderRow[] }) {
       <CardContent>
         {orders.length ? (
           <div className="max-h-[24rem] space-y-3 overflow-y-auto pr-1">
-            {orders.map((order) => {
-              const firstItem = order.order_items?.[0]
-              const itemName = firstItem?.product_snapshot?.name ?? "Store item"
-              const moreItems = Math.max((order.order_items?.length ?? 1) - 1, 0)
-              const giftedTo = order.gifted_to_minecraft_username
-
-              return (
-                <div key={order.id} className="rounded-lg border border-white/10 bg-black/24 p-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="font-semibold text-white">
-                        {itemName}
-                        {moreItems ? ` + ${moreItems} more` : ""}
-                      </p>
-                      <p className="mt-1 text-sm text-muted-foreground">{formatDate(order.created_at)}</p>
-                      {giftedTo ? (
-                        <p className="mt-1 inline-flex items-center gap-1.5 text-sm text-amber-100">
-                          <Gift className="h-3.5 w-3.5" />
-                          Gifted to: <span className="font-semibold">{giftedTo}</span>
-                        </p>
-                      ) : null}
-                    </div>
-                    <OrderStatusBadge status={order.status} />
-                  </div>
-                  <OrderAccounting order={order} />
-                </div>
-              )
-            })}
+            {orders.map((order) => (
+              <PurchaseRowCard key={order.id} order={order} />
+            ))}
           </div>
         ) : (
           <EmptyState icon={Gift} title="No purchases yet" text="Cosmetics and supporter perks will show here." />
         )}
       </CardContent>
     </Card>
-  )
-}
-
-/**
- * The money story for one order, from the same function the receipt email uses.
- *
- * An order with nothing to explain keeps the single-amount layout it has always
- * had. An upgrade or store-credit order gets the full breakdown, because the
- * merchandise subtotal, the order total, and the amount actually charged are
- * three different numbers and only one of them is what the customer paid.
- */
-function OrderAccounting({ order }: { order: OrderRow }) {
-  const accounting = buildOrderAccounting({
-    subtotalCents: order.subtotal_cents,
-    discountCents: order.discount_cents,
-    totalCents: order.total_cents,
-    storeCreditCents: order.store_credit_applied_cents,
-    paymentDueCents: order.payment_due_cents
-  })
-
-  if (accounting.simple) {
-    return (
-      <p className="mt-3 text-sm font-semibold text-amber-100">
-        {formatMoney(accounting.orderTotalCents, order.currency)}
-      </p>
-    )
-  }
-
-  return (
-    <dl className="mt-3 space-y-0.5 text-sm">
-      {accounting.lines.map((line) => (
-        <div key={line.key} className="flex items-baseline justify-between gap-3">
-          <dt className={line.emphasis ? "font-semibold text-amber-100" : "text-muted-foreground"}>
-            {line.label}
-          </dt>
-          <dd
-            className={
-              line.negative
-                ? "tabular-nums text-emerald-200"
-                : line.emphasis
-                  ? "tabular-nums font-semibold text-amber-100"
-                  : "tabular-nums text-muted-foreground"
-            }
-          >
-            {line.negative ? "-" : ""}
-            {formatMoney(line.cents, order.currency)}
-          </dd>
-        </div>
-      ))}
-    </dl>
   )
 }
 
