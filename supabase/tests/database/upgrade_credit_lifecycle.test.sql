@@ -3,7 +3,14 @@
 
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(24);
+select plan(26);
+
+-- The availability gate ships the new SKUs INACTIVE. Enabling them here is the
+-- operator step Nicholas performs after approving prices; without it nothing is
+-- purchasable, which is the gate working as designed.
+update public.products set active = true
+where slug in ('realvip-permanent','real-supporter-permanent','username-colors-permanent',
+               'particle-vault-permanent','realpets-permanent','cosmetic-atelier-permanent');
 
 insert into auth.users (id,email) values
   ('c1000000-0000-4000-8000-000000000001','u1@example.test'),
@@ -13,6 +20,10 @@ insert into public.profiles (id,email) values
   ('c1000000-0000-4000-8000-000000000002','u2@example.test') on conflict do nothing;
 
 -- Helper: a settled purchase of p_slug, fully paid externally.
+-- Creates a settled purchase AND actually fulfils it, so a real entitlement
+-- exists. Eligibility now requires an order-sourced entitlement (which is what
+-- excludes manual grants and inherited ranks), so a fixture that only sets a
+-- status is not a valid source.
 create or replace function pg_temp.buy(p_order uuid, p_user uuid, p_slug text,
   p_status text default 'fulfilled', p_gift text default null, p_credit bigint default 0)
 returns uuid language plpgsql as $$
@@ -22,10 +33,17 @@ begin
   insert into public.orders (id,user_id,buyer_email,minecraft_username,minecraft_uuid,provider,status,
     subtotal_cents,discount_cents,total_cents,store_credit_applied_cents,payment_due_cents,currency,
     gifted_to_minecraft_username)
-  values (p_order,p_user,'u@example.test','T','00000000-0000-4000-8000-00000000aaaa','stripe',
-    p_status::public.order_status, v_price,0,v_price,p_credit,v_price-p_credit,'USD',p_gift);
+  values (p_order,p_user,'u@example.test','T','00000000-0000-4000-8000-00000000aaaa','stripe','pending',
+    v_price,0,v_price,p_credit,v_price-p_credit,'USD',p_gift);
   insert into public.order_items (order_id,product_id,product_snapshot,quantity,unit_price_cents,total_cents)
   values (p_order,v_pid,jsonb_build_object('slug',p_slug),1,v_price,v_price);
+
+  if p_status <> 'pending' then
+    perform public.fulfill_paid_order(p_order);
+    if p_status <> 'fulfilled' then
+      update public.orders set status = p_status::public.order_status where id = p_order;
+    end if;
+  end if;
   return p_order;
 end; $$;
 
@@ -119,9 +137,14 @@ select is((select has_dependency from public.upgrade_dependency_for_order(
   'refunding the SOURCE VIP is flagged as an upgrade dependency');
 
 -- Reversing the UPGRADED order invalidates (does not return) the credit.
+-- Owner policy: a FULL refund of the upgraded order, with the rank revoked and
+-- a still-valid source, RESTORES the same credit. It is never duplicated.
+update public.entitlements set status='revoked'
+where user_id='c1000000-0000-4000-8000-000000000001'
+  and entitlement_key='product:real-supporter-permanent';
 update public.orders set status='refunded' where id='d1000000-0000-4000-8000-000000000012';
-select is(pg_temp.state('d1000000-0000-4000-8000-000000000012'), 'invalidated',
-  'a refunded upgrade INVALIDATES the credit rather than silently returning it');
+select is(pg_temp.state('d1000000-0000-4000-8000-000000000012'), 'released',
+  'a fully refunded upgrade RESTORES the credit to available');
 
 -- 11. Stale reservations are swept -------------------------------------------
 select pg_temp.buy('d1000000-0000-4000-8000-000000000020','c1000000-0000-4000-8000-000000000002','realvip-permanent');
@@ -131,9 +154,22 @@ select public.reserve_upgrade_credit('c1000000-0000-4000-8000-000000000002','rea
   'd1000000-0000-4000-8000-000000000021','e1000000-0000-4000-8000-000000000010');
 update public.upgrade_credit_reservations set expires_at = now() - interval '1 minute'
 where order_id='d1000000-0000-4000-8000-000000000021';
-select ok(public.expire_stale_upgrade_reservations() >= 1, 'stale holds are swept');
+
+-- Age ALONE must not release: without evidence the payment path is closed, the
+-- hold stays. This is what protects a delayed webhook.
+select public.expire_stale_upgrade_reservations();
+select is(pg_temp.state('d1000000-0000-4000-8000-000000000021'), 'reserved',
+  'age alone does NOT release — evidence is required');
+
+-- With authoritative evidence (Stripe session expired, order still unpaid) it
+-- releases safely.
+insert into public.checkout_attempts (user_id,attempt_id,cart_fingerprint,order_id,
+  stripe_session_id,stripe_session_expires_at)
+values ('c1000000-0000-4000-8000-000000000002',gen_random_uuid(),'cart-sweep',
+  'd1000000-0000-4000-8000-000000000021','cs_gone', now() - interval '5 minutes');
+select ok(public.expire_stale_upgrade_reservations() >= 1, 'an expired session releases the hold');
 select is(pg_temp.state('d1000000-0000-4000-8000-000000000021'), 'released',
-  'an abandoned checkout does not park credit forever');
+  'an abandoned checkout with a dead session does not park credit forever');
 
 -- 12. Ineligible sources ------------------------------------------------------
 -- A GIFT purchase grants no upgrade credit.
@@ -157,11 +193,13 @@ select is((select reason from public.compute_upgrade_price(
 -- Bought entirely with store credit -> no external money -> no credit.
 insert into auth.users (id,email) values ('c1000000-0000-4000-8000-000000000005','u5@example.test') on conflict do nothing;
 insert into public.profiles (id,email) values ('c1000000-0000-4000-8000-000000000005','u5@example.test') on conflict do nothing;
+-- Owner policy: store credit is real customer value (refunds, gift balances),
+-- so a store-credit-funded purchase grants the FULL item credit.
 select pg_temp.buy('d1000000-0000-4000-8000-000000000050','c1000000-0000-4000-8000-000000000005',
   'realvip-permanent','fulfilled',null,1299);
-select is((select reason from public.compute_upgrade_price(
-  'c1000000-0000-4000-8000-000000000005','real-supporter-permanent')), 'upgrade_credit_unavailable',
-  'a source bought entirely with store credit grants no external-money credit');
+select is((select credit_cents from public.compute_upgrade_price(
+  'c1000000-0000-4000-8000-000000000005','real-supporter-permanent')), 1299::bigint,
+  'a store-credit-funded source grants the full item credit');
 
 select * from finish();
 rollback;

@@ -4,6 +4,13 @@ begin;
 create extension if not exists pgtap with schema extensions;
 select plan(21);
 
+-- The availability gate ships the new SKUs INACTIVE. Enabling them here is the
+-- operator step Nicholas performs after approving prices; without it nothing is
+-- purchasable, which is the gate working as designed.
+update public.products set active = true
+where slug in ('realvip-permanent','real-supporter-permanent','username-colors-permanent',
+               'particle-vault-permanent','realpets-permanent','cosmetic-atelier-permanent');
+
 insert into auth.users (id,email) values ('a1000000-0000-4000-8000-000000000001','rank@example.test') on conflict do nothing;
 insert into public.profiles (id,email) values ('a1000000-0000-4000-8000-000000000001','rank@example.test') on conflict do nothing;
 
