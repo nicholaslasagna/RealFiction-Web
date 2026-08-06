@@ -164,8 +164,10 @@ export const CATALOG: CatalogProduct[] = [
       "Lobby flight (unless you own RealSupporter)",
       "Discord member role"
     ],
-    availability: "available",
-    giftable: true,
+    // NOT purchasable until the benefits exist. RealCore implements none of
+    // them today, so a checkout action here would sell nothing.
+    availability: "coming-soon",
+    giftable: false,
     banner: null,
     badge: null,
     sortOrder: 30

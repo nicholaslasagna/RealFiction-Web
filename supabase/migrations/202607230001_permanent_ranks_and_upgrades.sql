@@ -103,11 +103,16 @@ values
    jsonb_build_object('safe_reward', true, 'cosmetic_only', true,
      'luckperms_group', 'realsupporter', 'permanent', true), true, false, 20),
 
+  -- NOT purchasable. Seeded inactive on purpose: none of the advertised
+  -- benefits (collectible grant, rotating vault, member frame, extra loadout
+  -- slots, temporary lobby flight) exist in RealCore yet, so selling it would
+  -- take money for entitlements nothing can deliver. Flip active=true only when
+  -- the benefits are implemented end to end.
   ('realfiction-plus-30d', 'supporter', 'RealFiction+',
    '30 days of membership. One-time purchase, does not automatically renew.',
    599, 'USD', 'subscription', 30,
    jsonb_build_object('safe_reward', true, 'cosmetic_only', true,
-     'luckperms_permission', 'realfiction.plus', 'membership', true), true, false, 30),
+     'luckperms_permission', 'realfiction.plus', 'membership', true), false, false, 30),
 
   ('username-colors-permanent', 'identity', 'Username Colours',
    'Permanent username colour palette. Cosmetic only.',
@@ -145,12 +150,22 @@ on conflict (slug) do update set
   sort_order = excluded.sort_order,
   updated_at = now();
 
--- Retire the legacy term SKUs from FUTURE SALE only. Already-granted
--- entitlements keep their expiry dates and are untouched.
-update public.products
-set active = false, updated_at = now()
-where slug ~ '-(1m|3m|6m|12m)$'
-  and slug !~ '^gift-card';
+-- DELIBERATELY NOT deactivating the legacy term SKUs here.
+--
+-- This migration is the ADDITIVE stage of expand-and-contract. It runs while
+-- the OLD application is still deployed, and that application sells the term
+-- SKUs. Flipping active=false here would break checkout for every customer
+-- between the migration and the deploy — an outage caused purely by ordering.
+--
+-- Legacy SKUs therefore stay resolvable, fulfillable, refundable and revocable,
+-- and any Stripe session already in flight still completes.
+--
+-- The NEW application stops OFFERING them via a server-authoritative
+-- purchasable-product policy (lib/store/catalog.ts + the checkout guard), not
+-- by UI hiding. Deactivating the rows is a separate CLEANUP migration, to be
+-- applied only after the new app is deployed, old sessions have expired, and
+-- production has been observed. That migration is intentionally not part of
+-- this rollout.
 
 -- ---------------------------------------------------------------------------
 -- 4. Grant included products at fulfilment

@@ -378,15 +378,12 @@ export type UpgradeQuote = {
   targetPriceCents: number
   creditCents: number
   upgradePriceCents: number
+  sourceOrderItemId: string | null
   sourceOrderId: string | null
   fromSlug: string | null
 }
 
-/**
- * Authoritative upgrade quote. Computed entirely in Postgres from entitlements
- * and settled orders — the browser contributes nothing but the intent to
- * upgrade.
- */
+/** Read-only quote. No side effects, no reservation. */
 export async function getUpgradeQuote(userId: string, toSlug: string): Promise<UpgradeQuote | null> {
   const supabase = getSupabaseServiceRoleClient()
   const { data, error } = await supabase.rpc("compute_upgrade_price", {
@@ -395,7 +392,6 @@ export async function getUpgradeQuote(userId: string, toSlug: string): Promise<U
   })
 
   if (error) {
-    // Fail CLOSED: an unreadable quote must not silently become a discount.
     console.error("upgrade_quote_failed", { to_slug: toSlug })
     return null
   }
@@ -411,35 +407,66 @@ export async function getUpgradeQuote(userId: string, toSlug: string): Promise<U
     targetPriceCents: Number(row.target_price_cents ?? 0),
     creditCents: Number(row.credit_cents ?? 0),
     upgradePriceCents: Number(row.upgrade_price_cents ?? 0),
+    sourceOrderItemId: (row.source_order_item_id as string | null) ?? null,
     sourceOrderId: (row.source_order_id as string | null) ?? null,
     fromSlug: (row.from_slug as string | null) ?? null
   }
 }
 
-/**
- * Claims the upgrade credit for a specific order. Returns false when the source
- * purchase was already consumed — the PRIMARY KEY on source_order_id makes this
- * the race guard, so two concurrent upgrade checkouts cannot both discount.
- */
-export async function consumeUpgradeCredit(input: {
-  sourceOrderId: string
-  upgradeOrderId: string
-  fromSlug: string
-  toSlug: string
+export type UpgradeReservation = {
+  reserved: boolean
+  reason: string
+  reservationId: string | null
   creditCents: number
-}): Promise<boolean> {
+  upgradePriceCents: number
+}
+
+/**
+ * RESERVES a credit for a pending order. Does not consume it.
+ *
+ * The credit is only spent inside the transaction that successfully fulfils the
+ * order; every failure path releases it. Idempotent for the same order, so a
+ * retried checkout attempt never stacks reservations.
+ */
+export async function reserveUpgradeCredit(input: {
+  userId: string
+  toSlug: string
+  orderId: string
+  checkoutAttemptId: string
+}): Promise<UpgradeReservation> {
   const supabase = getSupabaseServiceRoleClient()
-  const { data, error } = await supabase.rpc("consume_upgrade_credit", {
-    p_source_order_id: input.sourceOrderId,
-    p_upgrade_order_id: input.upgradeOrderId,
-    p_from_slug: input.fromSlug,
+  const { data, error } = await supabase.rpc("reserve_upgrade_credit", {
+    p_user_id: input.userId,
     p_to_slug: input.toSlug,
-    p_credit_cents: input.creditCents
+    p_order_id: input.orderId,
+    p_checkout_attempt_id: input.checkoutAttemptId,
+    p_ttl_seconds: 7200
   })
+
   if (error) {
-    throw new CheckoutGuardUnavailableError("consume_upgrade_credit", error.message ?? "unknown")
+    // Fail CLOSED: an unreadable reservation must never become a free discount.
+    throw new CheckoutGuardUnavailableError("reserve_upgrade_credit", error.message ?? "unknown")
   }
-  return data === true
+
+  const row = (Array.isArray(data) ? data[0] : data) as Record<string, unknown> | null
+  return {
+    reserved: row?.reserved === true,
+    reason: String(row?.reason ?? "unknown"),
+    reservationId: (row?.reservation_id as string | null) ?? null,
+    creditCents: Number(row?.credit_cents ?? 0),
+    upgradePriceCents: Number(row?.upgrade_price_cents ?? 0)
+  }
+}
+
+/** Returns a reservation to available. Idempotent; never throws. */
+export async function releaseUpgradeCredit(orderId: string, reason: string): Promise<void> {
+  try {
+    const supabase = getSupabaseServiceRoleClient()
+    await supabase.rpc("release_upgrade_credit", { p_order_id: orderId, p_reason: reason })
+  } catch {
+    // A stale reservation self-expires; never fail a cleanup path on this.
+    console.error("release_upgrade_credit_failed", { order_id: orderId })
+  }
 }
 
 /** Product ids in this cart that the account already owns outright. */

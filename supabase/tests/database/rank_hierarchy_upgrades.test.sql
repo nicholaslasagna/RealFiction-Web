@@ -2,7 +2,7 @@
 
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(22);
+select plan(21);
 
 insert into auth.users (id,email) values ('a1000000-0000-4000-8000-000000000001','rank@example.test') on conflict do nothing;
 insert into public.profiles (id,email) values ('a1000000-0000-4000-8000-000000000001','rank@example.test') on conflict do nothing;
@@ -35,12 +35,16 @@ select ok((select duration_days from public.products where slug='realvip-permane
   'a permanent rank has no duration');
 select is((select fulfillment_type::text from public.products where slug='realfiction-plus-30d'),
   'subscription', 'RealFiction+ is a fixed-term product');
+select is((select active from public.products where slug='realfiction-plus-30d'), false,
+  'RealFiction+ is NOT purchasable: none of its advertised benefits exist yet');
 select is((select duration_days from public.products where slug='realfiction-plus-30d'), 30,
   'RealFiction+ runs 30 days');
 
 -- 2. LEGACY COMPATIBILITY ----------------------------------------------------
-select ok((select count(*) from public.products where slug ~ '-(1m|3m|6m|12m)$' and slug !~ '^gift-card' and active) = 0,
-  'legacy term SKUs are no longer purchasable');
+-- EXPAND-AND-CONTRACT: the additive migration must NOT deactivate legacy SKUs
+-- while the old application is still deployed and selling them.
+select ok((select count(*) from public.products where slug ~ '-(1m|3m|6m|12m)$' and slug !~ '^gift-card' and active) > 0,
+  'legacy term SKUs stay purchasable during the additive stage (no deploy-order outage)');
 select ok((select count(*) from public.products where slug='realvip-12m') = 1,
   'legacy SKU ROWS are preserved so historical orders still join');
 
@@ -67,17 +71,10 @@ select is((select upgrade_price_cents from public.compute_upgrade_price(
   'a1000000-0000-4000-8000-000000000001','real-supporter-permanent')), 3499::bigint - 1299,
   'upgrade price = target minus what was actually paid');
 
--- 5. Credit is consumed exactly once (the race guard) ------------------------
+-- 5. Credit consumption now lives in the RESERVATION lifecycle ---------------
+-- See upgrade_credit_lifecycle.test.sql: reserve at checkout, consume only
+-- inside successful fulfilment, release on every failure path.
 select pg_temp.buy('b1000000-0000-4000-8000-000000000002','real-supporter-permanent');
-select is(public.consume_upgrade_credit('b1000000-0000-4000-8000-000000000001',
-  'b1000000-0000-4000-8000-000000000002','realvip-permanent','real-supporter-permanent',1299),
-  true, 'the first upgrade consumes the credit');
-select is(public.consume_upgrade_credit('b1000000-0000-4000-8000-000000000001',
-  'b1000000-0000-4000-8000-000000000002','realvip-permanent','real-supporter-permanent',1299),
-  false, 'the SAME purchase can never fund a second upgrade');
-select is((select eligible from public.compute_upgrade_price(
-  'a1000000-0000-4000-8000-000000000001','real-supporter-permanent')), false,
-  'once consumed, the credit no longer applies');
 
 -- 6. RANK INCLUSION ----------------------------------------------------------
 select public.fulfill_paid_order('b1000000-0000-4000-8000-000000000002');
@@ -86,7 +83,7 @@ select ok(pg_temp.owns('realvip-permanent'), 'and it INCLUDES RealVIP');
 
 -- Already owning the target blocks a second purchase-as-upgrade.
 select is((select reason from public.compute_upgrade_price(
-  'a1000000-0000-4000-8000-000000000001','real-supporter-permanent')), 'already_owned',
+  'a1000000-0000-4000-8000-000000000001','real-supporter-permanent')), 'upgrade_target_already_owned',
   'an owner cannot upgrade to what they already own');
 
 -- 7. Bundle inclusion is transitive-safe and idempotent ----------------------
@@ -113,7 +110,7 @@ select 'b1000000-0000-4000-8000-000000000009', id, '{"slug":"realvip-permanent"}
 from public.products where slug='realvip-permanent';
 
 select is((select reason from public.compute_upgrade_price(
-  'a1000000-0000-4000-8000-000000000002','real-supporter-permanent')), 'no_eligible_purchase',
+  'a1000000-0000-4000-8000-000000000002','real-supporter-permanent')), 'upgrade_credit_unavailable',
   'a REFUNDED purchase grants no upgrade credit');
 
 -- 9. Upgrade price can never go negative -------------------------------------
