@@ -109,7 +109,7 @@ async function renderDelivery(
   const { data: order } = await supabase
     .from("orders")
     .select(
-      "id,status,minecraft_username,gifted_to_minecraft_username,subtotal_cents,store_credit_applied_cents,payment_due_cents,total_cents,currency,created_at,stripe_receipt_url"
+      "id,status,minecraft_username,gifted_to_minecraft_username,subtotal_cents,discount_cents,store_credit_applied_cents,payment_due_cents,total_cents,currency,created_at,stripe_receipt_url"
     )
     .eq("id", row.order_id)
     .maybeSingle()
@@ -156,6 +156,7 @@ async function renderDelivery(
     giftRecipient: (order.gifted_to_minecraft_username as string | null) ?? null,
     items: emailItems,
     subtotalCents: Number(order.subtotal_cents ?? 0),
+    upgradeDiscountCents: Number(order.discount_cents ?? 0),
     storeCreditCents: Number(order.store_credit_applied_cents ?? 0),
     totalPaidCents: Number(order.payment_due_cents ?? order.total_cents ?? 0),
     currency: (order.currency as string) ?? "USD",

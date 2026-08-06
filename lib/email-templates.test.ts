@@ -73,8 +73,10 @@ test("store credit is itemised only when it was applied", () => {
     storeCreditCents: 500,
     totalPaidCents: 799
   })
-  assert.match(withCredit.text, /Store credit applied: -\$5\.00/)
-  assert.match(withCredit.text, /Total paid: \$7\.99/)
+  assert.match(withCredit.text, /Store credit: -\$5\.00/)
+  // Renamed from "Total paid": once store credit is applied, the externally
+  // collected amount is NOT the order total, and must not be labelled as one.
+  assert.match(withCredit.text, /Paid through Stripe: \$7\.99/)
 })
 
 test("an unfulfilled-but-paid order says delivery is in progress", () => {
@@ -171,4 +173,116 @@ test("money formatting is currency-correct and cent-accurate", () => {
   assert.equal(formatMoney(1299), "$12.99")
   assert.equal(formatMoney(0), "$0.00")
   assert.equal(formatMoney(100000), "$1,000.00")
+})
+
+// -- Upgrade discount presentation -------------------------------------------
+
+const UPGRADE_ORDER = {
+  orderId: "3f2504e0-4f89-41d3-9a0c-0305e82c3301",
+  purchasedAt: "2026-07-27T10:00:00Z",
+  deliveryUsername: "Tester",
+  isGift: false,
+  giftRecipient: null,
+  items: [
+    {
+      name: "RealSupporter",
+      quantity: 1,
+      durationLabel: null,
+      totalCents: 3499,
+      expiresAt: null
+    }
+  ],
+  subtotalCents: 3499,
+  upgradeDiscountCents: 1299,
+  storeCreditCents: 500,
+  totalPaidCents: 1700,
+  currency: "USD",
+  fulfillmentStatus: "fulfilled",
+  supportEmail: "support@realfiction.live",
+  siteUrl: "https://realfiction.live",
+  stripeReceiptUrl: null
+}
+
+test("an upgrade order shows the full accounting, and the numbers reconcile", () => {
+  const email = buildOrderConfirmationEmail(UPGRADE_ORDER)
+
+  for (const form of [email.text, email.html]) {
+    assert.match(form, /\$34\.99/, "merchandise subtotal")
+    assert.match(form, /-\$12\.99/, "upgrade credit as a negative line")
+    assert.match(form, /\$22\.00/, "order total after the discount")
+    assert.match(form, /-\$5\.00/, "store credit as a separate negative line")
+    assert.match(form, /\$17\.00/, "externally paid amount")
+  }
+
+  // The arithmetic the customer can check: 3499 - 1299 = 2200; 2200 - 500 = 1700.
+  assert.equal(
+    UPGRADE_ORDER.subtotalCents - UPGRADE_ORDER.upgradeDiscountCents,
+    2200
+  )
+  assert.equal(2200 - UPGRADE_ORDER.storeCreditCents, UPGRADE_ORDER.totalPaidCents)
+})
+
+test("upgrade credit and store credit are SEPARATE lines, never merged", () => {
+  const email = buildOrderConfirmationEmail(UPGRADE_ORDER)
+  assert.match(email.text, /RealVIP upgrade credit/)
+  assert.match(email.text, /Store credit/)
+  assert.match(email.html, /RealVIP upgrade credit/)
+})
+
+test("the externally paid amount is never labelled the order total", () => {
+  const email = buildOrderConfirmationEmail(UPGRADE_ORDER)
+  // $17.00 must be described as paid through Stripe, and $22.00 as the total.
+  assert.match(email.text, /Order total: \$22\.00/)
+  assert.match(email.text, /Paid through Stripe: \$17\.00/)
+  assert.doesNotMatch(email.text, /Order total: \$17\.00/)
+})
+
+test("an ordinary order without a discount keeps its previous shape", () => {
+  const email = buildOrderConfirmationEmail({
+    ...UPGRADE_ORDER,
+    upgradeDiscountCents: 0,
+    storeCreditCents: 0,
+    subtotalCents: 3499,
+    totalPaidCents: 3499
+  })
+  assert.doesNotMatch(email.text, /upgrade credit/i, "no discount line when there is no discount")
+  assert.doesNotMatch(email.text, /Store credit/i)
+  assert.match(email.text, /Paid through Stripe: \$34\.99/)
+})
+
+test("a store-credit-only order shows no misleading Stripe line", () => {
+  const email = buildOrderConfirmationEmail({
+    ...UPGRADE_ORDER,
+    upgradeDiscountCents: 0,
+    storeCreditCents: 3499,
+    subtotalCents: 3499,
+    totalPaidCents: 0
+  })
+  assert.doesNotMatch(email.text, /Paid through Stripe/, "nothing was paid through Stripe")
+  assert.match(email.text, /Paid with store credit: \$34\.99/)
+})
+
+test("an upgrade with no store credit reads correctly", () => {
+  const email = buildOrderConfirmationEmail({
+    ...UPGRADE_ORDER,
+    storeCreditCents: 0,
+    totalPaidCents: 2200
+  })
+  assert.match(email.text, /Order total: \$22\.00/)
+  assert.match(email.text, /Paid through Stripe: \$22\.00/)
+  assert.doesNotMatch(email.text, /Store credit/)
+})
+
+test("HTML and plain text agree on every figure", () => {
+  const email = buildOrderConfirmationEmail(UPGRADE_ORDER)
+  for (const amount of ["$34.99", "$12.99", "$22.00", "$5.00", "$17.00"]) {
+    assert.ok(email.text.includes(amount), `text missing ${amount}`)
+    assert.ok(email.html.includes(amount), `html missing ${amount}`)
+  }
+})
+
+test("a legacy order object without the discount field still renders", () => {
+  const { upgradeDiscountCents, ...legacy } = UPGRADE_ORDER
+  void upgradeDiscountCents
+  assert.doesNotThrow(() => buildOrderConfirmationEmail(legacy))
 })

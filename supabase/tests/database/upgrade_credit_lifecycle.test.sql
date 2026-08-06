@@ -3,7 +3,7 @@
 
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(26);
+select plan(27);
 
 -- The availability gate ships the new SKUs INACTIVE. Enabling them here is the
 -- operator step Nicholas performs after approving prices; without it nothing is
@@ -172,9 +172,16 @@ values ('c1000000-0000-4000-8000-000000000002',gen_random_uuid(),'cart-sweep',
 select public.expire_stale_upgrade_reservations();
 select is(pg_temp.state('d1000000-0000-4000-8000-000000000021'), 'reserved',
   'a configured expiry alone does not release a session-backed hold');
+-- A SESSION-BACKED order does not release on local cancellation: Stripe may
+-- already hold the money (see cancellation_safety.test.sql). Only a provider
+-- verdict may release it.
 update public.orders set status='cancelled' where id='d1000000-0000-4000-8000-000000000021';
-select is(pg_temp.state('d1000000-0000-4000-8000-000000000021'), 'released',
-  'terminal cancellation releases it');
+select is(pg_temp.state('d1000000-0000-4000-8000-000000000021'), 'reserved',
+  'a session-backed cancel does NOT release — reconciliation must decide');
+select is((select outcome from public.apply_upgrade_reconciliation(
+  (select id from public.upgrade_credit_reservations where order_id='d1000000-0000-4000-8000-000000000021'),
+  'expired_unpaid','cs_gone')), 'released_expired_unpaid',
+  'a proven-dead session releases it');
 
 -- 12. Ineligible sources ------------------------------------------------------
 -- A GIFT purchase grants no upgrade credit.

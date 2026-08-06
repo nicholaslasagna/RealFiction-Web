@@ -28,6 +28,8 @@ export type OrderEmailData = {
   giftRecipient: string | null
   items: OrderEmailItem[]
   subtotalCents: number
+  /** Server-computed upgrade discount. Zero for an ordinary order. */
+  upgradeDiscountCents?: number
   storeCreditCents: number
   totalPaidCents: number
   currency: string
@@ -152,11 +154,29 @@ export function buildOrderConfirmationEmail(data: OrderEmailData): EmailContent 
   }
   textLines.push("")
 
-  if (data.storeCreditCents > 0) {
+  // An upgrade discount and store credit are DIFFERENT things and are shown on
+  // separate lines: one reduces the price of the goods, the other is money the
+  // customer already had with us.
+  const discountCents = data.upgradeDiscountCents ?? 0
+  const orderTotalCents = data.subtotalCents - discountCents
+
+  if (discountCents > 0 || data.storeCreditCents > 0) {
     textLines.push(`Subtotal: ${formatMoney(data.subtotalCents, data.currency)}`)
-    textLines.push(`Store credit applied: -${formatMoney(data.storeCreditCents, data.currency)}`)
+    if (discountCents > 0) {
+      textLines.push(`RealVIP upgrade credit: -${formatMoney(discountCents, data.currency)}`)
+      textLines.push(`Order total: ${formatMoney(orderTotalCents, data.currency)}`)
+    }
+    if (data.storeCreditCents > 0) {
+      textLines.push(`Store credit: -${formatMoney(data.storeCreditCents, data.currency)}`)
+    }
   }
-  textLines.push(`Total paid: ${formatMoney(data.totalPaidCents, data.currency)}`)
+  // The externally collected amount is labelled as such — never as the order
+  // total, which it is not once store credit is applied.
+  textLines.push(
+    data.totalPaidCents > 0
+      ? `Paid through Stripe: ${formatMoney(data.totalPaidCents, data.currency)}`
+      : `Paid with store credit: ${formatMoney(orderTotalCents, data.currency)}`
+  )
   textLines.push("")
 
   if (data.stripeReceiptUrl) {
@@ -183,12 +203,25 @@ export function buildOrderConfirmationEmail(data: OrderEmailData): EmailContent 
     })
     .join("")
 
+  const row = (label: string, value: string, strong = false) =>
+    `<tr><td style="padding:${strong ? "8px" : "4px"} 0;color:${strong ? "#f6f4ef" : "#9db3c4"};${strong ? "font-weight:600;" : ""}">${escapeHtml(label)}</td><td style="padding:${strong ? "8px" : "4px"} 0;color:${strong ? "#f6f4ef" : "#9db3c4"};text-align:right;${strong ? "font-weight:600;" : ""}">${escapeHtml(value)}</td></tr>`
+
   const totalsRows = [
-    data.storeCreditCents > 0
-      ? `<tr><td style="padding:4px 0;color:#9db3c4;">Subtotal</td><td style="padding:4px 0;color:#9db3c4;text-align:right;">${escapeHtml(formatMoney(data.subtotalCents, data.currency))}</td></tr>
-         <tr><td style="padding:4px 0;color:#9db3c4;">Store credit applied</td><td style="padding:4px 0;color:#9db3c4;text-align:right;">-${escapeHtml(formatMoney(data.storeCreditCents, data.currency))}</td></tr>`
+    discountCents > 0 || data.storeCreditCents > 0
+      ? row("Subtotal", formatMoney(data.subtotalCents, data.currency))
       : "",
-    `<tr><td style="padding:8px 0;color:#f6f4ef;font-weight:600;">Total paid</td><td style="padding:8px 0;color:#f6f4ef;font-weight:600;text-align:right;">${escapeHtml(formatMoney(data.totalPaidCents, data.currency))}</td></tr>`
+    discountCents > 0
+      ? row("RealVIP upgrade credit", `-${formatMoney(discountCents, data.currency)}`)
+      : "",
+    discountCents > 0
+      ? row("Order total", formatMoney(orderTotalCents, data.currency), true)
+      : "",
+    data.storeCreditCents > 0
+      ? row("Store credit", `-${formatMoney(data.storeCreditCents, data.currency)}`)
+      : "",
+    data.totalPaidCents > 0
+      ? row("Paid through Stripe", formatMoney(data.totalPaidCents, data.currency), true)
+      : row("Paid with store credit", formatMoney(orderTotalCents, data.currency), true)
   ].join("")
 
   const html = `<!doctype html>

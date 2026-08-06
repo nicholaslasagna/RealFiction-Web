@@ -113,10 +113,11 @@ select public.expire_stale_upgrade_reservations();
 select is(pg_temp.st('a3000000-0000-4000-8000-000000000002'), 'reserved',
   'a session-backed hold survives the sweep — only terminal evidence releases it');
 
--- A cancelled order (terminal evidence) does release.
+-- A cancelled SESSION-BACKED order still does not release: only a provider
+-- verdict may conclude the money did not move.
 update public.orders set status='cancelled' where id='a3000000-0000-4000-8000-000000000002';
-select is(pg_temp.st('a3000000-0000-4000-8000-000000000002'), 'released',
-  'a cancelled order releases the hold through the trigger');
+select is(pg_temp.st('a3000000-0000-4000-8000-000000000002'), 'reserved',
+  'a session-backed cancel retains the hold pending reconciliation');
 
 -- ===== REFUND POLICY =========================================================
 select pg_temp.mk_pending('a3000000-0000-4000-8000-000000000001','f1000000-0000-4000-8000-000000000001');
