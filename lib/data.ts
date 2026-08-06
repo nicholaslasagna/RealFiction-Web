@@ -28,8 +28,9 @@ import {
 
 import {
   BILLING_DISCLOSURE,
+  bestValueSlug,
   purchasableProducts,
-  type BillingType,
+  type CatalogPrice,
   type StoreCategory
 } from "@/lib/store/catalog"
 
@@ -55,21 +56,18 @@ export type StoreProduct = {
   id: string
   name: string
   category: ProductCategory
-  summary: string
-  details: string[]
+  /** The approved store description, rendered verbatim. */
+  description: string
   accent: string
   banner: string | null
-  /** Display price. Checkout re-resolves the authoritative price server-side. */
-  priceCents: number
-  billing: BillingType
-  durationDays: number | null
-  /** Rendered verbatim so every card states its billing shape. */
-  disclosure: string[]
-  includes: string[]
-  upgradeFrom: string | null
-  retained: string[]
-  expires: string[]
-  badge: string | null
+  /** The four purchasable durations, cheapest first. */
+  prices: CatalogPrice[]
+  /** "One-time payment" / "Does not automatically renew". Always shown. */
+  disclosure: readonly string[]
+  /** Slug of the duration with the lowest effective monthly rate. */
+  bestValueSlug: string | null
+  cosmeticOnly: boolean
+  giftable: boolean
 }
 
 export const STORE_BANNER_WIDTH = 1825
@@ -169,53 +167,41 @@ export const gamemodes = [
   }
 ]
 
-// Subscription products. Every non-gift product offers 1 / 3 / 6 / 12-month
-// tiers with built-in discounts on the longer terms. Each tier is its own
-// server-authoritative product slug (priced + duration-bound in the database).
+// The seven fixed-duration products, derived from the catalog so the storefront
+// and the server allowlist cannot disagree about what exists.
 const CATEGORY_FOR: Record<StoreCategory, ProductCategory> = {
-  ranks: "supporter",
-  membership: "supporter",
+  supporter: "supporter",
   cosmetics: "cosmetics",
   pets: "pets",
-  bundles: "cosmetics",
+  particles: "particles",
+  identity: "identity",
+  lobby: "lobby",
   "gift-cards": "gift-cards"
 }
 
 const ACCENT_FOR: Record<string, string> = {
-  "realvip-permanent": "cyan",
-  "real-supporter-permanent": "emerald",
-  "realfiction-plus-30d": "violet",
-  "username-colors-permanent": "rose",
-  "particle-vault-permanent": "sky",
-  "realpets-permanent": "amber",
-  "cosmetic-atelier-permanent": "blue"
+  realvip: "cyan",
+  realsupporter: "emerald",
+  cosmetic_atelier: "blue",
+  realpets: "amber",
+  particle_vault: "sky",
+  username_colors: "rose",
+  lobby_flight: "violet"
 }
 
-/**
- * Every purchasable product, in catalog order. Sourced from the catalog so the
- * storefront and the seed migration cannot disagree about what exists.
- */
-export const storeProducts: StoreProduct[] = purchasableProducts()
-  .sort((a, b) => a.sortOrder - b.sortOrder)
-  .map((product) => ({
-    id: product.id,
-    name: product.name,
-    category: CATEGORY_FOR[product.category],
-    summary: product.features[0] ?? "",
-    details: product.features,
-    accent: ACCENT_FOR[product.id] ?? "amber",
-    banner: product.banner,
-    priceCents: product.priceCents,
-    billing: product.billing,
-    durationDays: product.durationDays,
-    disclosure: BILLING_DISCLOSURE[product.billing],
-    includes: product.includes,
-    upgradeFrom: product.upgradeFrom,
-    retained: product.retained,
-    expires: product.expires,
-    badge: product.badge
-  }))
-
+export const storeProducts: StoreProduct[] = purchasableProducts().map((product) => ({
+  id: product.id,
+  name: product.name,
+  category: CATEGORY_FOR[product.category],
+  description: product.description,
+  accent: ACCENT_FOR[product.id] ?? "amber",
+  banner: product.banner,
+  prices: [...product.prices].sort((a, b) => a.months - b.months),
+  disclosure: BILLING_DISCLOSURE,
+  bestValueSlug: bestValueSlug(product),
+  cosmeticOnly: product.cosmeticOnly,
+  giftable: product.giftable
+}))
 
 export const giftCards: GiftCard[] = [
   {

@@ -107,7 +107,7 @@ try {
   const cards = all.html.split('data-testid="purchase-row"').slice(1)
 
   check("every fixture order renders a purchase row", () => {
-    assert.equal(cards.length, 10)
+    assert.equal(cards.length, 9)
   })
 
   check("ordinary Stripe order renders ONE amount, no breakdown", () => {
@@ -133,62 +133,43 @@ try {
     ])
   })
 
-  check("upgrade with NO store credit", () => {
+  check("a longer duration paid partly with store credit", () => {
     assert.deepEqual(accountingLines(cards[3]), [
-      "subtotal|Subtotal|$34.99",
-      "upgrade_credit|RealVIP upgrade credit|-$12.99",
-      "order_total|Order total|$22.00",
-      "paid_external|Paid through Stripe|$22.00"
-    ])
-  })
-
-  // THE example.
-  check("upgrade WITH store credit renders 34.99 / -12.99 / 22.00 / -5.00 / 17.00", () => {
-    assert.deepEqual(accountingLines(cards[4]), [
-      "subtotal|Subtotal|$34.99",
-      "upgrade_credit|RealVIP upgrade credit|-$12.99",
-      "order_total|Order total|$22.00",
+      "subtotal|Subtotal|$23.99",
       "store_credit|Store credit|-$5.00",
-      "paid_external|Paid through Stripe|$17.00"
+      "paid_external|Paid through Stripe|$18.99"
     ])
   })
 
-  check("$34.99 is never described as paid", () => {
-    const lines = accountingLines(cards[4])
-    for (const line of lines) {
-      if (line.endsWith("$34.99")) {
+  check("the subtotal is never described as paid", () => {
+    for (const line of accountingLines(cards[3])) {
+      if (line.endsWith("$23.99")) {
         assert.match(line, /^subtotal\|/, `"${line}" presents the subtotal as something else`)
       }
     }
   })
 
-  check("$17.00 is never described as the order total", () => {
-    const lines = accountingLines(cards[4])
-    assert.ok(lines.includes("order_total|Order total|$22.00"))
-    assert.ok(!lines.some((l) => l.startsWith("order_total") && l.endsWith("$17.00")))
-  })
-
-  check("upgrade credit and store credit are separate rows", () => {
-    const keys = accountingLines(cards[4]).map((l) => l.split("|")[0])
-    assert.ok(keys.includes("upgrade_credit"))
-    assert.ok(keys.includes("store_credit"))
+  check("the Stripe charge is never described as the order total", () => {
+    const lines = accountingLines(cards[3])
+    assert.ok(lines.some((l) => l.startsWith("paid_external") && l.endsWith("$18.99")))
+    assert.ok(!lines.some((l) => l.startsWith("order_total") && l.endsWith("$18.99")))
   })
 
   check("a historical order with no discount columns renders, with its snapshot name", () => {
-    assert.match(text(cards[5]), /RealVIP · 1 Month/)
-    assert.match(text(cards[5]), /\$9\.99/)
-    assert.ok(!text(cards[5]).includes("NaN"))
+    assert.match(text(cards[4]), /RealVIP · 1 Month/)
+    assert.match(text(cards[4]), /\$9\.99/)
+    assert.ok(!text(cards[4]).includes("NaN"))
   })
 
   check("refunded, review, pending and revoked states all render a status", () => {
-    assert.match(text(cards[6]), /Refunded/)
-    assert.match(text(cards[7]), /Being reviewed/)
-    assert.match(text(cards[8]), /Waiting for checkout/)
-    assert.match(text(cards[9]), /Closed/)
+    assert.match(text(cards[5]), /Refunded/)
+    assert.match(text(cards[6]), /Being reviewed/)
+    assert.match(text(cards[7]), /Waiting for checkout/)
+    assert.match(text(cards[8]), /Closed/)
   })
 
-  check("a refunded upgrade still shows what was originally charged", () => {
-    assert.deepEqual(accountingLines(cards[6]), accountingLines(cards[4]))
+  check("a refunded order still shows what was originally charged", () => {
+    assert.deepEqual(accountingLines(cards[5]), accountingLines(cards[3]))
   })
 
   check("NO internal identifier reaches the rendered page", () => {
@@ -204,160 +185,134 @@ try {
   })
 
   // =========================================================================
-  // Upgrade interaction
+  // The fixed-duration store
   // =========================================================================
-  const eligible = await get("/dev/preview/vip-upgradeable")
+  const store = await get("/dev/preview/no-access")
 
-  check("an eligible RealVIP owner sees the server's three figures", () => {
-    const body = text(eligible.html)
-    assert.match(body, /RealSupporter permanent rank/)
-    assert.match(body, /\$34\.99/)
-    assert.match(body, /Your RealVIP upgrade credit/)
-    assert.match(body, /-\$12\.99/)
-    assert.match(body, /Upgrade today/)
-    assert.match(body, /\$22\.00/)
+  check("every product offers FOUR durations as radio options", () => {
+    const radios = (store.html.match(/type="radio"/g) ?? []).length
+    // 7 products x 4 durations.
+    assert.equal(radios, 28)
   })
 
-  check("the upgrade button says exactly what it does", () => {
-    assert.match(text(eligible.html), /Upgrade to RealSupporter/)
+  check("every card carries the one-time-payment disclosure", () => {
+    const body = text(store.html)
+    assert.equal((body.match(/One-time payment/g) ?? []).length, 7)
+    assert.equal((body.match(/Does not automatically renew/g) ?? []).length, 7)
   })
 
-  check("the price panel is a labelled description list", () => {
-    assert.match(eligible.html, /<dl[^>]*aria-label="Your upgrade price"/)
+  check("prices, monthly rates and savings are all rendered", () => {
+    const body = text(store.html)
+    for (const amount of ["$4.99", "$12.99", "$23.99", "$39.99"]) {
+      assert.ok(body.includes(amount), `RealVIP is missing ${amount}`)
+    }
+    // React splits adjacent text nodes, so the amount and the "/month" suffix
+    // arrive separately; both must be present.
+    assert.ok(body.includes("$4.33"), "3-month effective monthly rate")
+    assert.ok(body.includes("$3.33"), "12-month effective monthly rate")
+    assert.ok(body.includes("/month"))
+    // "Save", the number and "%" are three text nodes in the server render.
+    assert.ok(body.includes("Save"))
+    assert.ok(body.includes("13"), "3-month savings figure")
+    assert.ok(body.includes("33"), "12-month savings figure")
   })
 
-  check("the upgrade states it is for your own account and cannot be gifted", () => {
-    assert.match(text(eligible.html), /cannot be gifted/i)
+  check("Best value marks the 12-month option and nothing claims popularity", () => {
+    const body = text(store.html)
+    assert.match(body, /Best value/)
+    assert.ok(!/most popular/i.test(body))
   })
 
-  check("a full-price purchase is a SEPARATE, differently-labelled action", () => {
-    // Never a silent substitution: the discounted action and the full-price
-    // action are two distinct buttons with distinct words.
-    assert.match(text(eligible.html), /Buy at full price instead/)
-  })
-
-  check("an already-owned RealVIP card offers no purchase control at all", () => {
-    // Not a disabled button — no control. A disabled buy button reads as
-    // "temporarily unavailable" for something the customer already owns.
-    const body = text(eligible.html)
-    assert.match(body, /Owned permanently/)
-    // The phrase only ever appeared on a disabled buy button, which no longer exists.
-    assert.ok(!/Already in your collection/.test(body))
-  })
-
-  const ineligible = {
-    legacy: await get("/dev/preview/legacy-vip"),
-    inherited: await get("/dev/preview/supporter-inherited-vip"),
-    manual: await get("/dev/preview/vip-ineligible-source"),
-    reserved: await get("/dev/preview/upgrade-reserved"),
-    review: await get("/dev/preview/upgrade-review"),
-    owned: await get("/dev/preview/supporter-owner"),
-    down: await get("/dev/preview/service-unavailable")
-  }
-
-  check("NO ineligible state ever renders an upgrade button", () => {
-    for (const [name, page] of Object.entries(ineligible)) {
-      assert.ok(!/Upgrade to RealSupporter/.test(text(page.html)), `${name} offered an upgrade`)
+  check("NOTHING on the store says permanent, lifetime, or never expires", () => {
+    const body = text(store.html)
+    for (const phrase of [/permanent unlock/i, /lifetime/i, /never expires?/i, /owned permanently/i]) {
+      assert.ok(!phrase.test(body), `store page says ${phrase}`)
     }
   })
 
-  check("no ineligible state silently shows a discounted price", () => {
-    for (const [name, page] of Object.entries(ineligible)) {
-      assert.ok(!/Upgrade today/.test(text(page.html)), `${name} showed an upgrade price`)
-      assert.ok(!/Your RealVIP upgrade credit/.test(text(page.html)), `${name} showed a credit`)
-    }
+  check("NOTHING offers an upgrade or claims one rank includes another", () => {
+    const body = text(store.html)
+    assert.ok(!/upgrade to real/i.test(body))
+    assert.ok(!/everything in realvip/i.test(body))
+    assert.ok(!/included with real/i.test(body))
   })
 
-  check("LEGACY timed RealVIP reads as legacy, never as owned permanently", () => {
-    const body = text(ineligible.legacy.html)
-    assert.match(body, /Legacy access active until August 30, 2026/)
-    assert.match(body, /Upgrade pricing applies to a RealVIP rank bought outright/)
+  check("RealFiction+ is gone from the store entirely", () => {
+    assert.ok(!/realfiction\s*\+|realfiction-plus/i.test(store.html))
   })
 
-  check("INHERITED RealVIP reads as included, and cannot fund an upgrade", () => {
-    const body = text(ineligible.inherited.html)
-    assert.match(body, /Included with RealSupporter/)
-    assert.match(body, /You already have RealSupporter/)
+  check("copy uses US spelling", () => {
+    assert.ok(!/colour/i.test(text(store.html)), "British spelling on the store page")
   })
 
-  check("a granted (non-purchased) RealVIP explains why the discount does not apply", () => {
-    assert.match(text(ineligible.manual.html), /bought outright/)
+  const active = await get("/dev/preview/active-realvip")
+
+  check("an active entitlement shows its real expiry date", () => {
+    assert.match(text(active.html), /Active until September 18, 2026/)
   })
 
-  check("a credit reserved by another checkout is explained, not hidden", () => {
-    assert.match(text(ineligible.reserved.html), /already started/)
+  check("selecting a duration projects the EXTENDED expiry", () => {
+    // Default selection is 1 month: Sep 18 + 1 month = Oct 18.
+    assert.match(text(active.html), /would extend access through October 18, 2026/)
   })
 
-  check("a source under review is explained without exposing the mechanism", () => {
-    const body = text(ineligible.review.html)
-    assert.match(body, /being reviewed/i)
-    assert.ok(!/needs_review|reservation|payment_reviews/i.test(body))
+  check("stacked purchases show the FURTHEST expiry, not the most recent", async () => {
+    const stacked = await get("/dev/preview/stacked-renewals")
+    assert.match(text(stacked.html), /Active until December 18, 2026/)
+    assert.ok(!/Active until September 18, 2026/.test(text(stacked.html)))
   })
 
-  check("an unreadable quote offers nothing rather than guessing", () => {
-    const body = text(ineligible.down.html)
-    assert.ok(!/Upgrade today/.test(body))
-    assert.ok(!/Upgrade to RealSupporter/.test(body))
+  check("expired access reads as expired and projects from today", async () => {
+    const expired = await get("/dev/preview/expired-realvip")
+    assert.match(text(expired.html), /Expired July 5, 2026/)
+    assert.match(text(expired.html), /would give you access through/)
   })
 
-  // =========================================================================
-  // Availability
-  // =========================================================================
-  check("RealFiction+ is presented as coming soon with NO purchase action", () => {
-    const html = eligible.html
-    assert.match(text(html), /RealFiction\+/)
-    // Isolate the coming-soon card and prove it holds no button and no price.
-    const start = html.indexOf("Coming soon")
-    const card = html.slice(start, start + 2600)
-    assert.match(text(card), /not on sale yet/i)
-    const buttons = card.split("</button>").length - 1
-    assert.equal(buttons, 0, "a coming-soon product must have no purchase control")
+  check("RealVIP and RealSupporter are independent — one active does not imply the other", async () => {
+    const supporter = await get("/dev/preview/active-realsupporter")
+    const body = text(supporter.html)
+    // Exactly one product reports active access.
+    assert.equal((body.match(/Active until/g) ?? []).length, 1)
+    assert.ok(!/included with/i.test(body))
   })
 
-  check("gift cards are presented as coming soon with NO purchase action", () => {
-    const body = text(eligible.html)
-    assert.match(body, /gift cards/i)
-    assert.match(body, /aren't on sale yet/i)
-    // No gift-card SKU appears as a buyable line anywhere.
-    assert.ok(!/gift-card-\d+/.test(eligible.html), "a gift card SKU is exposed to the client")
+  check("gift cards are coming soon with NO purchase action and no SKU exposed", () => {
+    assert.match(text(store.html), /gift cards/i)
+    assert.ok(!/gift-card-\d+/.test(store.html), "a gift-card SKU reached the client")
   })
 
-  check("a coming-soon product is never given a price to compare against", () => {
-    // RealFiction+ is $5.99 in the catalogue. A price on a product nobody can
-    // buy reads as an offer, so the comparison column says "Coming soon".
-    assert.ok(!/\$5\.99/.test(text(eligible.html)), "a coming-soon price is being advertised")
+  check("the Fair Play Promise states that nothing auto-renews", () => {
+    assert.match(text(store.html), /Automatic renewals/)
   })
 
   // =========================================================================
   // Accessibility structure
   // =========================================================================
-  check("the comparison table has a caption and scoped headers", () => {
-    const table = eligible.html.slice(eligible.html.indexOf("<table"), eligible.html.indexOf("</table>"))
-    assert.match(table, /<caption/)
-    // `<th`, not `<thead`.
-    const headers = (table.match(/<th[\s>]/g) ?? []).length
-    const scoped = (table.match(/<th[^>]*scope="(col|row)"/g) ?? []).length
-    assert.ok(headers > 0)
-    assert.equal(scoped, headers, `${headers - scoped} header cells lack a scope`)
+  check("each duration group is a labelled fieldset with a radiogroup", () => {
+    assert.match(store.html, /<fieldset/)
+    assert.match(store.html, /<legend/)
+    assert.match(store.html, /role="radiogroup"/)
+    assert.match(store.html, /aria-label="RealVIP duration"/)
   })
 
-  check("the comparison table can scroll horizontally on a narrow screen", () => {
-    const index = eligible.html.indexOf("<table")
-    const before = eligible.html.slice(Math.max(0, index - 400), index)
-    assert.match(before, /overflow-x-auto/)
+  check("the savings claim says what it is compared against", () => {
+    assert.ok(text(store.html).includes("separate months"), "the comparison basis is stated")
+  })
+
+  check("the projection is announced when the duration changes", () => {
+    assert.match(active.html, /aria-live="polite"/)
   })
 
   check("the social rail is a labelled landmark, not a bare div", () => {
-    assert.match(eligible.html, /<aside[^>]*aria-label="RealFiction community links"/)
+    assert.match(store.html, /<aside[^>]*aria-label="RealFiction community links"/)
   })
 
   check("every store section heading is a real heading element", () => {
-    assert.match(eligible.html, /<h2[^>]*>[\s\S]{0,40}Supporter/)
+    assert.match(store.html, /<h2[^>]*>[\s\S]{0,60}Supporter/)
   })
 
   check("images are either described or explicitly decorative", () => {
-    const imgs = [...eligible.html.matchAll(/<img[^>]*>/g)].map((m) => m[0])
-    for (const img of imgs) {
+    for (const img of [...store.html.matchAll(/<img[^>]*>/g)].map((m) => m[0])) {
       assert.match(img, /alt=/, `image without alt: ${img.slice(0, 90)}`)
     }
   })

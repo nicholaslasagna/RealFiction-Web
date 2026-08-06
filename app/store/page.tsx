@@ -7,18 +7,17 @@ import Link from "next/link"
 import { HolidayStoreBanner } from "@/components/holiday-store-banner"
 import { Reveal } from "@/components/reveal"
 import { FairPlayPromise } from "@/components/store/fair-play"
-import { RankComparison } from "@/components/store/rank-comparison"
 import { Storefront } from "@/components/storefront"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
-import { getOwnedProductIds, getStorefrontOwnership } from "@/lib/store/ownership"
+import { getStorefrontAccess } from "@/lib/store/ownership"
 import { getVerifiedMinecraftLink } from "@/lib/store-server"
 import { getAuthenticatedUser } from "@/lib/supabase/server"
 
 export const metadata: Metadata = {
   title: "Store",
   description:
-    "RealFiction store for cosmetics, supporter ranks, pets, particles, username colors, lobby flight, and gift cards."
+    "RealFiction store: cosmetic supporter access, pets, particles, username colors, and lobby perks, sold as one-time payments for 1, 3, 6, or 12 months."
 }
 
 // Checkout eligibility (signed in + linked account) is gated in the cart, so
@@ -28,11 +27,10 @@ export const dynamic = "force-dynamic"
 export default async function StorePage() {
   const user = await getAuthenticatedUser().catch(() => null)
   const link = user ? await getVerifiedMinecraftLink(user.id).catch(() => null) : null
-  // Authoritative ownership, resolved server-side. The browser is never asked.
-  const ownedProductIds = await getOwnedProductIds(user?.id ?? null)
-  // Real expiry dates, real provenance, and the server's own upgrade quote. The
-  // browser is shown these; it is never asked for them.
-  const ownership = await getStorefrontOwnership(user?.id ?? null)
+  // Authoritative access, resolved server-side: real entitlement expiry dates,
+  // never inferred from a product's duration. The browser is shown these; it is
+  // never asked for them.
+  const ownership = await getStorefrontAccess(user?.id ?? null)
   return (
     <section>
       <HolidayStoreBanner />
@@ -52,8 +50,9 @@ export default async function StorePage() {
               RealFiction Store
             </h1>
             <p className="mt-5 max-w-3xl text-base leading-7 text-muted-foreground sm:text-lg sm:leading-8">
-              Support the network with RealVIP, RealSupporter, pets, particles, username colors,
-              lobby flight, cosmetic bundles, and gift cards. No paid power, no gameplay shortcuts.
+              Cosmetic supporter access, pets, particles, username colors, and lobby perks —
+              bought for 1, 3, 6, or 12 months at a time. One-time payments that never renew
+              on their own. No paid power, no gameplay shortcuts.
             </p>
             <Button asChild className="mt-7" variant="outline">
               <Link href="/account">Link your Minecraft account</Link>
@@ -68,9 +67,9 @@ export default async function StorePage() {
             a generic SaaS feature row. */}
         <Reveal className="grid gap-3 md:grid-cols-3">
           {[
-            { label: "Checkout", body: "Secure payment methods available through Stripe Checkout." },
-            { label: "Delivery", body: "Rewards land on your linked Minecraft account." },
-            { label: "What's sold", body: "Cosmetics, supporter perks, lobby fun, and gift cards. Nothing else." }
+            { label: "Checkout", body: "One-time payment through Stripe. Nothing renews automatically." },
+            { label: "Delivery", body: "Access is delivered to your linked Minecraft account." },
+            { label: "What's sold", body: "Fixed periods of cosmetic access. Buying more time extends what you have." }
           ].map((item) => (
             <div
               key={item.label}
@@ -87,19 +86,11 @@ export default async function StorePage() {
           ))}
         </Reveal>
 
-        {/* Comparison first: the three headline choices and exactly how each
-            one bills, before any card asks for money. */}
-        <Reveal className="mt-10">
-          <RankComparison />
-        </Reveal>
-
         <Reveal className="mt-10">
           <Storefront
             signedIn={Boolean(user)}
             linkedUsername={link?.username ?? null}
-            ownedProductIds={ownedProductIds}
             entitlements={ownership.entitlements}
-            upgradeQuote={ownership.upgrade}
           />
         </Reveal>
 

@@ -1,7 +1,8 @@
 import "server-only"
 
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role"
-import type { EntitlementSource, EntitlementView, UpgradeQuoteView } from "@/lib/store/ownership-view"
+import type { EntitlementView } from "@/lib/store/access-view"
+import { findPrice } from "@/lib/store/catalog"
 
 /**
  * Product ids this account currently owns, resolved SERVER-SIDE from
@@ -41,104 +42,51 @@ export async function getOwnedProductIds(userId: string | null): Promise<string[
 }
 
 /**
- * The full server-authoritative view the storefront renders from: what this
- * account holds, with real expiry dates and real provenance, plus the upgrade
- * quote.
+ * The access this account currently holds, for the storefront.
  *
- * Every number the customer is shown for the upgrade comes from
- * `compute_upgrade_price`. Nothing is derived in the browser, and nothing is
- * derived here either — this only reshapes what the database said.
+ * Only expiry dates: the store needs to say "Active until September 18, 2026"
+ * and "adding 3 months would extend through December 18, 2026", and both come
+ * from `entitlements.expires_at`. Nothing is inferred from a product's duration,
+ * because a customer who stacked two purchases has more time than any single
+ * duration implies.
  */
-export type StorefrontOwnership = {
-  entitlements: EntitlementView[]
-  upgrade: UpgradeQuoteView | null
-}
+export type StorefrontAccess = { entitlements: EntitlementView[] }
 
-const EMPTY: StorefrontOwnership = { entitlements: [], upgrade: null }
-
-function readSource(value: unknown): EntitlementSource {
-  return value === "order" || value === "inclusion" || value === "manual_grant" ? value : "unknown"
-}
-
-export async function getStorefrontOwnership(
-  userId: string | null,
-  upgradeTargetSlug = "real-supporter-permanent"
-): Promise<StorefrontOwnership> {
+export async function getStorefrontAccess(userId: string | null): Promise<StorefrontAccess> {
   if (!userId) {
-    return EMPTY
+    return { entitlements: [] }
   }
 
   try {
     const supabase = getSupabaseServiceRoleClient()
-
-    const { data: rows } = await supabase
+    const { data } = await supabase
       .from("entitlements")
-      .select("entitlement_key,status,expires_at,metadata")
+      .select("entitlement_key,status,expires_at")
       .eq("user_id", userId)
       .eq("status", "active")
 
-    const now = Date.now()
-    const entitlements: EntitlementView[] = (rows ?? [])
-      .filter((row) => {
-        const expiry = row.expires_at as string | null
-        return !expiry || Date.parse(expiry) > now
-      })
-      .map((row) => ({
-        productId: String(row.entitlement_key).replace(/^product:/, ""),
-        expiresAt: (row.expires_at as string | null) ?? null,
-        source: readSource((row.metadata as Record<string, unknown> | null)?.source)
-      }))
-
-    // The quote. A failure here means NO upgrade is offered — never a guess.
-    const { data: quoteRows, error: quoteError } = await supabase.rpc("compute_upgrade_price", {
-      p_user_id: userId,
-      p_to_slug: upgradeTargetSlug
-    })
-
-    if (quoteError) {
-      return { entitlements, upgrade: null }
-    }
-
-    const quote = (Array.isArray(quoteRows) ? quoteRows[0] : quoteRows) as Record<string, unknown> | null
-    if (!quote) {
-      return { entitlements, upgrade: null }
-    }
-
-    // `eligible_upgrade_sources` excludes anything already reserved or in
-    // review, so an ineligible quote alone cannot tell "you have no paid
-    // RealVIP" from "your credit is held by another checkout". Those need
-    // different words, so the ledger is consulted directly.
-    let hold: UpgradeQuoteView["hold"] = "none"
-    if (quote.eligible !== true) {
-      const { data: heldRows } = await supabase
-        .from("upgrade_credit_reservations")
-        .select("state")
-        .eq("user_id", userId)
-        .eq("to_slug", upgradeTargetSlug)
-        .in("state", ["reserved", "needs_review"])
-
-      const states = new Set((heldRows ?? []).map((row) => String(row.state)))
-      if (states.has("needs_review")) {
-        hold = "needs_review"
-      } else if (states.has("reserved")) {
-        hold = "reserved"
-      }
-    }
-
     return {
-      entitlements,
-      upgrade: {
-        eligible: quote.eligible === true,
-        reason: String(quote.reason ?? "unknown"),
-        targetPriceCents: Number(quote.target_price_cents ?? 0),
-        creditCents: Number(quote.credit_cents ?? 0),
-        upgradePriceCents: Number(quote.upgrade_price_cents ?? 0),
-        hold
-      }
+      entitlements: (data ?? []).map((row) => ({
+        productId: entitlementProductId(String(row.entitlement_key)),
+        expiresAt: (row.expires_at as string | null) ?? null
+      }))
     }
   } catch {
-    // Presentation only. A failure shows the store as if signed out rather than
-    // failing the page — and offers no upgrade, which is the safe direction.
-    return EMPTY
+    // Presentation only. If this cannot be read the store renders as if signed
+    // out rather than failing the page.
+    return { entitlements: [] }
   }
+}
+
+/**
+ * `product:realvip-3m` -> `realvip`.
+ *
+ * Entitlements are keyed by the DURATION slug that was bought, but the store
+ * card is per PRODUCT — so the duration suffix is stripped to group a customer's
+ * 1m, 3m, 6m and 12m purchases of the same product together.
+ */
+function entitlementProductId(entitlementKey: string): string {
+  const slug = entitlementKey.replace(/^product:/, "")
+  const match = findPrice(slug)
+  return match ? match.product.id : slug.replace(/-(1|3|6|12)m$/, "")
 }

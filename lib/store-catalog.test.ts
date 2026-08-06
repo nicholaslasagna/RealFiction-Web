@@ -1,210 +1,261 @@
-// Catalog integrity.
+// The catalog contract.
 //
-// The catalog is presentation metadata; the Supabase `products` table is the
-// billing authority. These tests keep the two honest about each other and keep
-// the product-policy invariants (hierarchy, no-auto-renew, gift cards off) from
-// silently regressing.
+// Seven products, four durations each, twenty-eight purchasable SKUs, at exactly
+// the approved prices. These assertions exist because the last time this file
+// was wrong the store invented products that did not exist in Stripe — so the
+// numbers are written out literally rather than derived from the thing under
+// test.
 import assert from "node:assert/strict"
-import { existsSync, readFileSync } from "node:fs"
-import path from "node:path"
+import { register } from "node:module"
 import test from "node:test"
+
+register("./test-alias-hook.mjs", import.meta.url)
 
 import {
   BILLING_DISCLOSURE,
+  bestValueSlug,
   CATALOG,
-  CATALOG_BY_ID,
-  expandIncludes,
-  FAIR_PLAY,
-  getProduct,
-  isIncludedIn,
-  purchasableProducts
+  DURATION_LABEL,
+  effectiveMonthlyCents,
+  findPrice,
+  purchasableProducts,
+  purchasableSlugs,
+  savingsPercent
 } from "./store/catalog.ts"
 
-const repoRoot = path.resolve(import.meta.dirname, "..")
-const migration = readFileSync(
-  path.join(repoRoot, "supabase", "migrations", "202607230001_permanent_ranks_and_upgrades.sql"),
-  "utf8"
+const { isPurchasableSlug, rejectUnsellableProducts, PURCHASABLE_SKU_COUNT } = await import(
+  "./checkout-guard.ts"
 )
 
-test("product ids are unique and stable", () => {
-  const ids = CATALOG.map((p) => p.id)
-  assert.equal(new Set(ids).size, ids.length, "duplicate product id")
-  for (const id of ids) {
-    assert.match(id, /^[a-z0-9-]+$/, `${id} is not a clean slug`)
-  }
+/** The approved catalog, written out. slug -> [months, cents, lookup key]. */
+const APPROVED: Record<string, [number, number, string]> = {
+  "realvip-1m": [1, 499, "realvip_1m"],
+  "realvip-3m": [3, 1299, "realvip_3m"],
+  "realvip-6m": [6, 2399, "realvip_6m"],
+  "realvip-12m": [12, 3999, "realvip_12m"],
+  "real-supporter-1m": [1, 999, "realsupporter_1m"],
+  "real-supporter-3m": [3, 2699, "realsupporter_3m"],
+  "real-supporter-6m": [6, 4799, "realsupporter_6m"],
+  "real-supporter-12m": [12, 7999, "realsupporter_12m"],
+  "cosmetic-atelier-1m": [1, 699, "cosmetic_atelier_1m"],
+  "cosmetic-atelier-3m": [3, 1899, "cosmetic_atelier_3m"],
+  "cosmetic-atelier-6m": [6, 3399, "cosmetic_atelier_6m"],
+  "cosmetic-atelier-12m": [12, 5599, "cosmetic_atelier_12m"],
+  "realpets-1m": [1, 299, "realpets_1m"],
+  "realpets-3m": [3, 799, "realpets_3m"],
+  "realpets-6m": [6, 1399, "realpets_6m"],
+  "realpets-12m": [12, 2399, "realpets_12m"],
+  "particle-vault-1m": [1, 349, "particle_vault_1m"],
+  "particle-vault-3m": [3, 899, "particle_vault_3m"],
+  "particle-vault-6m": [6, 1699, "particle_vault_6m"],
+  "particle-vault-12m": [12, 2799, "particle_vault_12m"],
+  "username-colors-1m": [1, 199, "username_colors_1m"],
+  "username-colors-3m": [3, 499, "username_colors_3m"],
+  "username-colors-6m": [6, 899, "username_colors_6m"],
+  "username-colors-12m": [12, 1599, "username_colors_12m"],
+  "lobby-flight-1m": [1, 249, "lobby_flight_1m"],
+  "lobby-flight-3m": [3, 649, "lobby_flight_3m"],
+  "lobby-flight-6m": [6, 1199, "lobby_flight_6m"],
+  "lobby-flight-12m": [12, 1999, "lobby_flight_12m"]
+}
+
+const APPROVED_ENTITLEMENTS: Record<string, string> = {
+  realvip: "rank.realvip",
+  realsupporter: "rank.realsupporter",
+  cosmetic_atelier: "cosmetic.atelier",
+  realpets: "cosmetic.pets",
+  particle_vault: "cosmetic.particles",
+  username_colors: "cosmetic.username_colors",
+  lobby_flight: "capability.lobby_flight"
+}
+
+// -- Shape --------------------------------------------------------------------
+
+test("exactly SEVEN purchasable products", () => {
+  assert.equal(purchasableProducts().length, 7)
 })
 
-test("entitlement keys match fulfill_paid_order's construction", () => {
-  // fulfill_paid_order builds 'product:' || slug — a mismatch would silently
-  // grant an entitlement nobody checks for.
-  for (const product of CATALOG) {
-    assert.equal(product.entitlementKey, `product:${product.id}`, product.id)
-  }
+test("exactly TWENTY-EIGHT purchasable SKUs", () => {
+  assert.equal(purchasableSlugs().length, 28)
+  assert.equal(PURCHASABLE_SKU_COUNT, 28)
 })
 
-test("no negative prices", () => {
-  for (const product of CATALOG) {
-    assert.ok(product.priceCents >= 0, `${product.id} has a negative price`)
-  }
-})
-
-test("every included product exists, and inclusion has no cycles", () => {
-  for (const product of CATALOG) {
-    for (const child of product.includes) {
-      assert.ok(CATALOG_BY_ID.has(child), `${product.id} includes unknown ${child}`)
-    }
-    // expandIncludes is cycle-guarded; this asserts the DATA has no cycle.
-    assert.ok(!expandIncludes(product.id).includes(product.id), `${product.id} includes itself`)
-  }
-})
-
-test("RealSupporter includes RealVIP — the core hierarchy rule", () => {
-  assert.ok(isIncludedIn("realvip-permanent", "real-supporter-permanent"))
-  // ...and not the other way round.
-  assert.ok(!isIncludedIn("real-supporter-permanent", "realvip-permanent"))
-})
-
-test("the bundle includes its three cosmetic packs", () => {
-  const included = expandIncludes("cosmetic-atelier-permanent")
-  for (const child of ["username-colors-permanent", "particle-vault-permanent", "realpets-permanent"]) {
-    assert.ok(included.includes(child), `bundle should include ${child}`)
-  }
-})
-
-test("upgrade targets reference a real product", () => {
-  for (const product of CATALOG) {
-    if (product.upgradeFrom) {
-      assert.ok(CATALOG_BY_ID.has(product.upgradeFrom), `${product.id} upgrades from unknown product`)
-    }
-  }
-})
-
-// -- The no-auto-renew guarantee ---------------------------------------------
-
-test("NO live product claims recurring billing", () => {
-  // There is no Stripe Billing foundation in this repo — no customer,
-  // subscription, price ids, invoices, or cancellation flow. Claiming automatic
-  // renewal would be a lie to the customer.
+test("every SKU is exactly the approved slug, duration, price and lookup key", () => {
+  const seen = new Set<string>()
   for (const product of purchasableProducts()) {
-    assert.notEqual(product.billing, "recurring", `${product.id} claims recurring billing`)
+    for (const price of product.prices) {
+      const approved = APPROVED[price.slug]
+      assert.ok(approved, `${price.slug} is not an approved SKU`)
+      const [months, cents, lookupKey] = approved
+      assert.equal(price.months, months, `${price.slug} duration`)
+      assert.equal(price.priceCents, cents, `${price.slug} price`)
+      assert.equal(price.stripeLookupKey, lookupKey, `${price.slug} lookup key`)
+      seen.add(price.slug)
+    }
+  }
+  assert.equal(seen.size, Object.keys(APPROVED).length, "a SKU is missing from the catalog")
+})
+
+test("every product offers exactly 1, 3, 6 and 12 months", () => {
+  for (const product of purchasableProducts()) {
+    assert.deepEqual(
+      product.prices.map((price) => price.months).sort((a, b) => a - b),
+      [1, 3, 6, 12],
+      product.id
+    )
   }
 })
 
-test("RealFiction+ is a non-renewing fixed-term pass", () => {
-  const plus = getProduct("realfiction-plus-30d")!
-  assert.equal(plus.billing, "term")
-  assert.equal(plus.durationDays, 30)
-  assert.deepEqual(BILLING_DISCLOSURE[plus.billing], [
-    "One-time purchase",
-    "Does not automatically renew"
-  ])
+test("entitlement keys match the approved Stripe metadata", () => {
+  for (const product of purchasableProducts()) {
+    assert.equal(product.stripeEntitlement, APPROVED_ENTITLEMENTS[product.id], product.id)
+  }
 })
 
-test("term products declare what expires; permanent products declare nothing expires", () => {
+test("the server allowlist and the catalog agree exactly", () => {
+  const allowed = Object.keys(APPROVED).filter(isPurchasableSlug).sort()
+  assert.deepEqual(allowed, purchasableSlugs().sort())
+  assert.equal(allowed.length, 28)
+})
+
+// -- What must NOT exist ------------------------------------------------------
+
+test("NO permanent SKU exists anywhere in the catalog", () => {
+  const serialized = JSON.stringify(CATALOG)
+  assert.ok(!/-permanent/.test(serialized), "a permanent SKU survived")
+  assert.ok(!/permanent unlock/i.test(serialized), "permanent-unlock copy survived")
+  assert.ok(!/never expire/i.test(serialized), "never-expires copy survived")
+  assert.ok(!/lifetime/i.test(serialized), "lifetime copy survived")
+})
+
+test("RealFiction+ does not exist", () => {
+  assert.ok(!/realfiction[-_ ]?\+|realfiction-plus/i.test(JSON.stringify(CATALOG)))
+  for (const slug of ["realfiction-plus-30d", "realfiction-plus"]) {
+    assert.equal(isPurchasableSlug(slug), false)
+  }
+})
+
+test("nothing claims one product includes another", () => {
+  const serialized = JSON.stringify(CATALOG)
+  assert.ok(!/includes realvip/i.test(serialized))
+  assert.ok(!/everything in realvip/i.test(serialized))
+  assert.ok(!/upgrade/i.test(serialized), "upgrade wording survived in the catalog")
+})
+
+test("no invented perk counts appear in any description", () => {
+  // "8 username colors", "3 permanent pets", "4 particle effects" and the rest
+  // were invented. Descriptions are the approved text and nothing more.
   for (const product of CATALOG) {
-    if (product.billing === "term") {
-      assert.ok(product.durationDays && product.durationDays > 0, `${product.id} term needs a duration`)
-      assert.ok(product.expires.length > 0, `${product.id} must say what expires`)
-      assert.ok(product.retained.length > 0, `${product.id} must say what is retained`)
-    }
-    if (product.billing === "permanent" && product.availability === "available") {
-      assert.equal(product.durationDays, null, `${product.id} is permanent but has a duration`)
-      assert.equal(product.expires.length, 0, `${product.id} is permanent but claims something expires`)
-    }
+    assert.ok(
+      !/\b\d+\s+(username colou?rs|cosmetic (loadout )?slots|permanent pets|permanent particle)/i.test(
+        product.description
+      ),
+      `${product.id} description contains an invented quantity`
+    )
   }
 })
 
-// -- Gift cards --------------------------------------------------------------
-
-test("gift cards are NOT purchasable", () => {
-  const gift = CATALOG.filter((p) => p.category === "gift-cards")
-  assert.ok(gift.length > 0, "expected a gift-card placeholder")
-  for (const product of gift) {
-    assert.equal(product.availability, "coming-soon", "gift cards must not be purchasable")
+test("copy uses US spelling", () => {
+  const serialized = JSON.stringify(CATALOG)
+  for (const britishism of [/colour/i, /customise/i, /organis/i, /catalogue/i]) {
+    assert.ok(!britishism.test(serialized), `catalog copy contains ${britishism}`)
   }
+})
+
+test("every product carries the exact approved description", () => {
+  const realvip = CATALOG.find((product) => product.id === "realvip")
   assert.equal(
-    purchasableProducts().some((p) => p.category === "gift-cards"),
-    false
+    realvip?.description,
+    "Cosmetic supporter access for the RealFiction Minecraft network, including supporter profile style, chat flair, and lobby cosmetic perks. No gameplay or competitive advantages."
   )
+  const flight = CATALOG.find((product) => product.id === "lobby_flight")
+  assert.match(flight?.description ?? "", /does not apply to survival, Factions, PvP, BedWars/)
 })
 
-// -- Merchandising honesty ---------------------------------------------------
+// -- Gift cards ---------------------------------------------------------------
 
-test("at most ONE product carries a recommendation badge", () => {
-  const badged = CATALOG.filter((p) => p.badge)
-  assert.ok(badged.length <= 1, `${badged.length} products are badged; at most one may be`)
+test("gift cards are present as coming-soon and have NO purchasable price", () => {
+  const gift = CATALOG.find((product) => product.id === "gift_card")
+  assert.ok(gift)
+  assert.equal(gift?.availability, "coming-soon")
+  assert.deepEqual(gift?.prices, [])
 })
 
-test("no vague benefit copy", () => {
-  const vague = [/^cosmetic perks$/i, /^premium features$/i, /^monthly drop$/i, /^exclusive benefits$/i]
-  for (const product of CATALOG) {
-    for (const feature of product.features) {
-      for (const pattern of vague) {
-        assert.doesNotMatch(feature, pattern, `${product.id}: "${feature}" is too vague`)
+test("every gift-card denomination is refused by the server", () => {
+  for (const amount of [5, 10, 15, 20, 25, 30, 50, 75, 100]) {
+    assert.equal(isPurchasableSlug(`gift-card-${amount}`), false, `gift-card-${amount}`)
+    assert.ok(rejectUnsellableProducts([{ slug: `gift-card-${amount}` }]))
+  }
+})
+
+// -- Disclosure ---------------------------------------------------------------
+
+test("the billing disclosure says one-time payment and no auto-renewal", () => {
+  assert.deepEqual([...BILLING_DISCLOSURE], ["One-time payment", "Does not automatically renew"])
+})
+
+test("no duration is described as a subscription or a renewal", () => {
+  for (const label of Object.values(DURATION_LABEL)) {
+    assert.ok(!/per month|\/mo\b|monthly|subscription/i.test(label), label)
+  }
+})
+
+// -- Derived presentation -----------------------------------------------------
+
+test("effective monthly price is derived from the authoritative price", () => {
+  const realvip = CATALOG.find((product) => product.id === "realvip")!
+  const twelve = realvip.prices.find((price) => price.months === 12)!
+  // 3999 / 12 = 333.25 -> 333
+  assert.equal(effectiveMonthlyCents(twelve), 333)
+})
+
+test("savings compare against buying the same months one at a time", () => {
+  const realvip = CATALOG.find((product) => product.id === "realvip")!
+  const three = realvip.prices.find((price) => price.months === 3)!
+  const twelve = realvip.prices.find((price) => price.months === 12)!
+  // 3 x 499 = 1497 vs 1299 -> 13%
+  assert.equal(savingsPercent(realvip, three), 13)
+  // 12 x 499 = 5988 vs 3999 -> 33%
+  assert.equal(savingsPercent(realvip, twelve), 33)
+  // A one-month purchase is the baseline and claims nothing.
+  assert.equal(savingsPercent(realvip, realvip.prices.find((price) => price.months === 1)!), 0)
+})
+
+test("every product's savings claim is true, for every duration", () => {
+  for (const product of purchasableProducts()) {
+    const monthly = product.prices.find((price) => price.months === 1)!
+    for (const price of product.prices) {
+      const claimed = savingsPercent(product, price)
+      if (claimed > 0) {
+        const baseline = monthly.priceCents * price.months
+        assert.ok(price.priceCents < baseline, `${price.slug} claims savings but is not cheaper`)
       }
     }
   }
 })
 
-test("every purchasable product states no competitive advantage", () => {
+test("Best value is the lowest MONTHLY rate, and it is the 12-month option", () => {
   for (const product of purchasableProducts()) {
-    assert.ok(
-      product.features.some((f) => /no competitive advantage/i.test(f)),
-      `${product.id} must state it grants no competitive advantage`
+    const best = bestValueSlug(product)
+    const cheapest = product.prices.reduce((a, b) =>
+      effectiveMonthlyCents(a) <= effectiveMonthlyCents(b) ? a : b
     )
+    assert.equal(best, cheapest.slug, product.id)
+    assert.equal(cheapest.months, 12, `${product.id} 12 months should be the best monthly rate`)
   }
 })
 
-test("the Fair Play Promise names concrete things, not vibes", () => {
-  assert.ok(FAIR_PLAY.never.length >= 5)
-  assert.ok(FAIR_PLAY.sell.length >= 4)
-  for (const line of [...FAIR_PLAY.never, ...FAIR_PLAY.sell]) {
-    assert.ok(line.length > 8, `"${line}" is too vague to be a promise`)
-  }
+test("nothing is labelled most popular — there are no analytics for that", () => {
+  assert.ok(!/most popular/i.test(JSON.stringify(CATALOG)))
 })
 
-// -- Assets ------------------------------------------------------------------
+// -- Lookups ------------------------------------------------------------------
 
-test("declared banners exist on disk", () => {
-  for (const product of CATALOG) {
-    if (product.banner) {
-      assert.ok(
-        existsSync(path.join(repoRoot, "public", product.banner)),
-        `${product.id} banner missing: public${product.banner}`
-      )
-    }
-  }
-})
-
-// -- Catalog vs the billing authority ----------------------------------------
-
-test("every purchasable product is seeded in the migration at the SAME price", () => {
-  // A price mismatch here is a display bug (checkout uses the DB), but a
-  // visible wrong price is still a trust problem.
-  for (const product of purchasableProducts()) {
-    const seeded = new RegExp(
-      `'${product.id}',[\\s\\S]{0,400}?\\n\\s*${product.priceCents}, 'USD'`,
-      "m"
-    )
-    assert.match(migration, seeded, `${product.id} @ ${product.priceCents} not seeded at that price`)
-  }
-})
-
-test("the migration enforces inclusion server-side, not just in the catalog", () => {
-  for (const product of CATALOG) {
-    for (const child of product.includes) {
-      assert.match(
-        migration,
-        new RegExp(`'${product.id}',\\s*'${child}'`),
-        `inclusion ${product.id} -> ${child} is not enforced server-side`
-      )
-    }
-  }
-})
-
-test("the migration never deletes products or entitlements", () => {
-  // Legacy compatibility: historical orders must keep joining, and nobody may
-  // lose paid value.
-  assert.doesNotMatch(migration, /delete\s+from\s+public\.(products|entitlements|orders)/i)
-  assert.doesNotMatch(migration, /drop\s+table\s+public\.(products|entitlements|orders)/i)
+test("findPrice resolves a duration slug to its product and duration", () => {
+  const found = findPrice("realpets-6m")
+  assert.equal(found?.product.id, "realpets")
+  assert.equal(found?.price.months, 6)
+  assert.equal(found?.price.priceCents, 1399)
+  assert.equal(findPrice("realvip-permanent"), null)
+  assert.equal(findPrice("nope"), null)
 })

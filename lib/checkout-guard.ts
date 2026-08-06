@@ -83,38 +83,40 @@ export function rejectDisabledProducts(
 }
 
 /**
- * The SELLABLE catalogue, as opposed to the RESOLVABLE one.
+ * The SELLABLE catalog: the 28 approved fixed-duration SKUs, and nothing else.
  *
- * These are two different questions and conflating them is a rollout hazard:
+ * This answers a different question from `products.active`:
  *
- *   "does this product row exist and can we act on it?"  -> products.active
- *   "may a customer start a NEW purchase of it today?"   -> this list
+ *   "does this row exist and can we act on it?"        -> products.active
+ *   "may a customer start a NEW purchase of it today?" -> this list
  *
- * Legacy timed SKUs (`realvip-1m`, `realvip-3m`, …) must stay `active` in the
- * database through the deploy overlap, because the previously deployed site is
- * still serving traffic and still resolves them — deactivating them in a
- * migration is what caused an earlier deploy-order outage. But the moment THIS
- * application is live, it must stop selling them, without waiting for anyone to
- * run an UPDATE.
+ * Resolution deliberately stays broader than sale. Refunds, revocations,
+ * receipts, order history, and any Stripe session created before a SKU was
+ * retired all need to load product rows this list does not contain — so nothing
+ * downstream consults it. Only new checkouts do.
  *
- * Keeping the rows active is also what keeps everything downstream working:
- * outstanding Stripe sessions still fulfil, historical orders still render,
- * refunds and revocations still resolve their products, and receipts still name
- * what was bought. None of those paths consult this list — only new checkouts do.
+ * Written out by hand rather than derived from the presentation catalog. What
+ * the server will charge for is a deliberate list somebody has to edit and
+ * review; it must not change as a side effect of someone adjusting a storefront
+ * card. A contract test asserts this list and the catalog agree exactly.
  *
- * Written out rather than derived from the presentation catalogue on purpose.
- * What the server will SELL is a deliberate list somebody has to edit and review;
- * it must not change as a side effect of someone adjusting a storefront card. A
- * test asserts the two agree, so drift is caught rather than silently shipped.
+ * Gift cards are absent on purpose and must stay absent: their generation,
+ * redemption, balance, refund and reversal lifecycle is unfinished, and
+ * RealCore's delivery for them fails safely rather than issuing an unusable
+ * reward. Selling one would defeat that fail-safe.
  */
 const PURCHASABLE_SLUGS: ReadonlySet<string> = new Set([
-  "realvip-permanent",
-  "real-supporter-permanent",
-  "username-colors-permanent",
-  "particle-vault-permanent",
-  "realpets-permanent",
-  "cosmetic-atelier-permanent"
+  "realvip-1m", "realvip-3m", "realvip-6m", "realvip-12m",
+  "real-supporter-1m", "real-supporter-3m", "real-supporter-6m", "real-supporter-12m",
+  "cosmetic-atelier-1m", "cosmetic-atelier-3m", "cosmetic-atelier-6m", "cosmetic-atelier-12m",
+  "realpets-1m", "realpets-3m", "realpets-6m", "realpets-12m",
+  "particle-vault-1m", "particle-vault-3m", "particle-vault-6m", "particle-vault-12m",
+  "username-colors-1m", "username-colors-3m", "username-colors-6m", "username-colors-12m",
+  "lobby-flight-1m", "lobby-flight-3m", "lobby-flight-6m", "lobby-flight-12m"
 ])
+
+/** Exactly 28. A drifting count is a product decision, not a refactor. */
+export const PURCHASABLE_SKU_COUNT = 28
 
 /** Exposed for tests and diagnostics; never sent to a browser as authority. */
 export function isPurchasableSlug(slug: string): boolean {
@@ -141,7 +143,7 @@ export function rejectUnsellableProducts(
   return {
     code: "product_not_sold",
     status: 400,
-    message: "That item is no longer sold. Anything you already own is unaffected."
+    message: "That item is not available for purchase. Anything you already have is unaffected."
   }
 }
 

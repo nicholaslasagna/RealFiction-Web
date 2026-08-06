@@ -5,37 +5,20 @@
 // real people's accounts. They are plain data: no secrets, no identifiers that
 // resolve to anything, no network.
 //
-// The shapes are the real ones — `EntitlementView` and `UpgradeQuoteView` are
-// exactly what `getStorefrontOwnership` returns from Postgres, and `PurchaseRow`
-// is exactly what the account page selects. If those shapes change, this file
-// stops compiling, which is the point.
+// The shapes are the real ones — `EntitlementView` is exactly what
+// `getStorefrontAccess` returns from Postgres, and `PurchaseRow` is exactly what
+// the account page selects. If those shapes change, this file stops compiling,
+// which is the point.
 
 import type { PurchaseRow } from "@/components/account/purchase-history"
-import type { EntitlementView, UpgradeQuoteView } from "@/lib/store/ownership-view"
+import type { EntitlementView } from "@/lib/store/access-view"
 
-const VIP = "realvip-permanent"
-const SUPPORTER = "real-supporter-permanent"
+const VIP = "realvip-3m"
+const SUPPORTER = "real-supporter-3m"
 
-/** Far enough out to stay in the future for the life of this harness. */
-const AUG_2026 = "2026-08-30T12:00:00.000Z"
-
-const ELIGIBLE_QUOTE: UpgradeQuoteView = {
-  eligible: true,
-  reason: "ok",
-  targetPriceCents: 3499,
-  creditCents: 1299,
-  upgradePriceCents: 2200,
-  hold: "none"
-}
-
-const NO_SOURCE_QUOTE: UpgradeQuoteView = {
-  eligible: false,
-  reason: "upgrade_credit_unavailable",
-  targetPriceCents: 3499,
-  creditCents: 0,
-  upgradePriceCents: 3499,
-  hold: "none"
-}
+const SEP_2026 = "2026-09-18T12:00:00.000Z"
+const DEC_2026 = "2026-12-18T12:00:00.000Z"
+const LAST_MONTH = "2026-07-05T12:00:00.000Z"
 
 type StoreFixture = {
   surface: "store"
@@ -43,9 +26,7 @@ type StoreFixture = {
   note: string
   signedIn: boolean
   linkedUsername: string | null
-  ownedProductIds: string[]
   entitlements: EntitlementView[]
-  upgradeQuote: UpgradeQuoteView | null
 }
 
 type AccountFixture = {
@@ -69,7 +50,7 @@ const ORDINARY_STRIPE: PurchaseRow = {
   total_cents: 1299,
   store_credit_applied_cents: 0,
   payment_due_cents: 1299,
-  order_items: [{ quantity: 1, product_snapshot: { name: "RealVIP", slug: VIP } }]
+  order_items: [{ quantity: 1, product_snapshot: { name: "RealVIP · 3 months", slug: VIP } }]
 }
 
 const STORE_CREDIT_ONLY: PurchaseRow = {
@@ -82,7 +63,7 @@ const STORE_CREDIT_ONLY: PurchaseRow = {
   total_cents: 3499,
   store_credit_applied_cents: 3499,
   payment_due_cents: 0,
-  order_items: [{ quantity: 1, product_snapshot: { name: "RealSupporter", slug: SUPPORTER } }]
+  order_items: [{ quantity: 1, product_snapshot: { name: "RealSupporter · 3 months", slug: SUPPORTER } }]
 }
 
 const MIXED_TENDER: PurchaseRow = {
@@ -95,34 +76,20 @@ const MIXED_TENDER: PurchaseRow = {
   total_cents: 1299,
   store_credit_applied_cents: 500,
   payment_due_cents: 799,
-  order_items: [{ quantity: 1, product_snapshot: { name: "RealVIP", slug: VIP } }]
+  order_items: [{ quantity: 1, product_snapshot: { name: "RealVIP · 3 months", slug: VIP } }]
 }
 
-const UPGRADE_NO_CREDIT: PurchaseRow = {
-  id: "44444444-4444-4444-8444-444444444444",
-  status: "fulfilled",
-  currency: "USD",
-  created_at: "2026-07-12T10:00:00.000Z",
-  subtotal_cents: 3499,
-  discount_cents: 1299,
-  total_cents: 2200,
-  store_credit_applied_cents: 0,
-  payment_due_cents: 2200,
-  order_items: [{ quantity: 1, product_snapshot: { name: "RealSupporter", slug: SUPPORTER } }]
-}
-
-/** THE example: 3499 / -1299 / 2200 / -500 / 1700. */
-const UPGRADE_WITH_CREDIT: PurchaseRow = {
+const SIX_MONTH_MIXED: PurchaseRow = {
   id: "55555555-5555-4555-8555-555555555555",
   status: "fulfilled",
   currency: "USD",
   created_at: "2026-07-18T10:00:00.000Z",
-  subtotal_cents: 3499,
-  discount_cents: 1299,
-  total_cents: 2200,
+  subtotal_cents: 2399,
+  discount_cents: 0,
+  total_cents: 2399,
   store_credit_applied_cents: 500,
-  payment_due_cents: 1700,
-  order_items: [{ quantity: 1, product_snapshot: { name: "RealSupporter", slug: SUPPORTER } }]
+  payment_due_cents: 1899,
+  order_items: [{ quantity: 1, product_snapshot: { name: "RealVIP · 6 months", slug: "realvip-6m" } }]
 }
 
 /** Placed before discount/payment_due columns existed. Must not crash or NaN. */
@@ -137,13 +104,13 @@ const HISTORICAL_NO_DISCOUNT_FIELDS: PurchaseRow = {
 }
 
 const REFUNDED_UPGRADE: PurchaseRow = {
-  ...UPGRADE_WITH_CREDIT,
+  ...SIX_MONTH_MIXED,
   id: "77777777-7777-4777-8777-777777777777",
   status: "refunded"
 }
 
 const UNDER_REVIEW: PurchaseRow = {
-  ...UPGRADE_WITH_CREDIT,
+  ...SIX_MONTH_MIXED,
   id: "88888888-8888-4888-8888-888888888888",
   status: "under_review"
 }
@@ -153,12 +120,12 @@ const PENDING: PurchaseRow = {
   status: "pending",
   currency: "USD",
   created_at: "2026-08-01T10:00:00.000Z",
-  subtotal_cents: 3499,
-  discount_cents: 1299,
-  total_cents: 2200,
+  subtotal_cents: 2699,
+  discount_cents: 0,
+  total_cents: 2699,
   store_credit_applied_cents: 0,
-  payment_due_cents: 2200,
-  order_items: [{ quantity: 1, product_snapshot: { name: "RealSupporter", slug: SUPPORTER } }]
+  payment_due_cents: 2699,
+  order_items: [{ quantity: 1, product_snapshot: { name: "RealSupporter · 3 months", slug: SUPPORTER } }]
 }
 
 const REVOKED: PurchaseRow = {
@@ -172,157 +139,68 @@ const REVOKED: PurchaseRow = {
 export const PREVIEW_STATES = {
   "signed-out": {
     surface: "store",
-    title: "1. Signed out",
-    note: "No account. No ownership, no upgrade offer, no prices personalised.",
+    title: "Signed out",
+    note: "No account. Prices and durations shown; no access state, no projection.",
     signedIn: false,
     linkedUsername: null,
-    ownedProductIds: [],
-    entitlements: [],
-    upgradeQuote: null
+    entitlements: []
   },
 
-  "no-purchases": {
+  "no-access": {
     surface: "store",
-    title: "2. Signed in, nothing owned",
-    note: "Linked account, empty collection. Everything sellable is offered at list price.",
+    title: "Signed in, nothing active",
+    note: "Linked account, no entitlements. Every card offers four durations at list price.",
     signedIn: true,
     linkedUsername: "LittleNicholas",
-    ownedProductIds: [],
-    entitlements: [],
-    upgradeQuote: NO_SOURCE_QUOTE
+    entitlements: []
   },
 
-  "vip-upgradeable": {
+  "active-realvip": {
     surface: "store",
-    title: "3. Permanent RealVIP, eligible to upgrade",
-    note: "The headline case. RealSupporter shows 34.99 / -12.99 / 22.00 from the server quote.",
+    title: "Active RealVIP",
+    note: "Access until September 18, 2026. Selecting a duration projects the extension.",
     signedIn: true,
     linkedUsername: "LittleNicholas",
-    ownedProductIds: [VIP],
-    entitlements: [{ productId: VIP, expiresAt: null, source: "order" }],
-    upgradeQuote: ELIGIBLE_QUOTE
+    entitlements: [{ productId: "realvip", expiresAt: SEP_2026 }]
   },
 
-  "vip-ineligible-source": {
+  "active-realsupporter": {
     surface: "store",
-    title: "4. Permanent RealVIP, source ineligible",
-    note: "Owns RealVIP, but it was gifted/granted/store-credit funded. No upgrade offer, no silent full-price swap.",
+    title: "Active RealSupporter",
+    note: "RealSupporter active, RealVIP NOT active — the two are independent products.",
     signedIn: true,
     linkedUsername: "LittleNicholas",
-    ownedProductIds: [VIP],
-    entitlements: [{ productId: VIP, expiresAt: null, source: "manual_grant" }],
-    upgradeQuote: NO_SOURCE_QUOTE
+    entitlements: [{ productId: "realsupporter", expiresAt: SEP_2026 }]
   },
 
-  "supporter-owner": {
+  "active-cosmetic": {
     surface: "store",
-    title: "5. Permanent RealSupporter owner",
-    note: "Top rank owned outright. Nothing to upgrade to; the card is locked.",
+    title: "Active cosmetic product",
+    note: "Particle Vault active; everything else unaffected.",
     signedIn: true,
     linkedUsername: "LittleNicholas",
-    ownedProductIds: [SUPPORTER],
-    entitlements: [{ productId: SUPPORTER, expiresAt: null, source: "order" }],
-    upgradeQuote: {
-      eligible: false,
-      reason: "upgrade_target_already_owned",
-      targetPriceCents: 3499,
-      creditCents: 0,
-      upgradePriceCents: 3499,
-      hold: "none"
-    }
+    entitlements: [{ productId: "particle_vault", expiresAt: SEP_2026 }]
   },
 
-  "supporter-inherited-vip": {
+  "expired-realvip": {
     surface: "store",
-    title: "6. RealSupporter with INHERITED RealVIP",
-    note: "RealVIP came with RealSupporter. It reads as included, not as a purchase, and cannot fund an upgrade.",
+    title: "Expired RealVIP",
+    note: "Lapsed access reads as expired, and a new purchase starts from today, not the old date.",
     signedIn: true,
     linkedUsername: "LittleNicholas",
-    ownedProductIds: [SUPPORTER, VIP],
+    entitlements: [{ productId: "realvip", expiresAt: LAST_MONTH }]
+  },
+
+  "stacked-renewals": {
+    surface: "store",
+    title: "Multiple stacked renewals",
+    note: "Two purchases of the same product. The card shows the FURTHEST expiry, not the latest purchase.",
+    signedIn: true,
+    linkedUsername: "LittleNicholas",
     entitlements: [
-      { productId: SUPPORTER, expiresAt: null, source: "order" },
-      { productId: VIP, expiresAt: null, source: "inclusion" }
-    ],
-    upgradeQuote: {
-      eligible: false,
-      reason: "upgrade_target_already_owned",
-      targetPriceCents: 3499,
-      creditCents: 0,
-      upgradePriceCents: 3499,
-      hold: "none"
-    }
-  },
-
-  "legacy-vip": {
-    surface: "store",
-    title: "7. LEGACY timed RealVIP",
-    note: "A dated grant on a card the catalogue now sells permanently. Must not read as 'Owned permanently'.",
-    signedIn: true,
-    linkedUsername: "LittleNicholas",
-    ownedProductIds: [VIP],
-    entitlements: [{ productId: VIP, expiresAt: AUG_2026, source: "order" }],
-    upgradeQuote: NO_SOURCE_QUOTE
-  },
-
-  "legacy-supporter": {
-    surface: "store",
-    title: "8. LEGACY timed RealSupporter",
-    note: "Expiring top rank. Both ranks show dated legacy access.",
-    signedIn: true,
-    linkedUsername: "LittleNicholas",
-    ownedProductIds: [SUPPORTER, VIP],
-    entitlements: [
-      { productId: SUPPORTER, expiresAt: AUG_2026, source: "order" },
-      { productId: VIP, expiresAt: AUG_2026, source: "inclusion" }
-    ],
-    upgradeQuote: NO_SOURCE_QUOTE
-  },
-
-  "vip-direct-and-inherited": {
-    surface: "store",
-    title: "9. RealVIP owned BOTH directly and by inclusion",
-    note: "A paid RealVIP plus an inherited one. The paid purchase is what the upgrade quote may use.",
-    signedIn: true,
-    linkedUsername: "LittleNicholas",
-    ownedProductIds: [VIP],
-    entitlements: [
-      { productId: VIP, expiresAt: null, source: "order" },
-      { productId: VIP, expiresAt: null, source: "inclusion" }
-    ],
-    upgradeQuote: ELIGIBLE_QUOTE
-  },
-
-  "upgrade-reserved": {
-    surface: "store",
-    title: "10. Upgrade credit held by another checkout",
-    note: "A pending checkout already holds the credit. Explained plainly; no button, no full-price fallback.",
-    signedIn: true,
-    linkedUsername: "LittleNicholas",
-    ownedProductIds: [VIP],
-    entitlements: [{ productId: VIP, expiresAt: null, source: "order" }],
-    upgradeQuote: { ...NO_SOURCE_QUOTE, hold: "reserved" }
-  },
-
-  "upgrade-review": {
-    surface: "store",
-    title: "11. Upgrade source refunded or under review",
-    note: "The source purchase is being reviewed. Paused, explained, and never silently repriced.",
-    signedIn: true,
-    linkedUsername: "LittleNicholas",
-    ownedProductIds: [VIP],
-    entitlements: [{ productId: VIP, expiresAt: null, source: "order" }],
-    upgradeQuote: { ...NO_SOURCE_QUOTE, hold: "needs_review" }
-  },
-
-  "service-unavailable": {
-    surface: "store",
-    title: "14. Upgrade/product service unavailable",
-    note: "The quote could not be read. No upgrade is offered — the safe direction — and the store still renders.",
-    signedIn: true,
-    linkedUsername: "LittleNicholas",
-    ownedProductIds: [VIP],
-    entitlements: [{ productId: VIP, expiresAt: null, source: "order" }],
-    upgradeQuote: null
+      { productId: "realvip", expiresAt: SEP_2026 },
+      { productId: "realvip", expiresAt: DEC_2026 }
+    ]
   },
 
   // -- Account surfaces -------------------------------------------------------
@@ -348,23 +226,15 @@ export const PREVIEW_STATES = {
     orders: [MIXED_TENDER, STORE_CREDIT_ONLY]
   },
 
-  "orders-upgrade": {
-    surface: "account",
-    title: "18. Upgraded RealSupporter order",
-    note: "THE example: 34.99 / -12.99 / 22.00 / -5.00 / 17.00.",
-    orders: [UPGRADE_WITH_CREDIT, UPGRADE_NO_CREDIT]
-  },
-
   "orders-all": {
     surface: "account",
     title: "Account history — every accounting shape at once",
-    note: "Ordinary, store-credit-only, mixed, upgrade, upgrade+credit, historical, refunded, review, pending, revoked.",
+    note: "Ordinary, store-credit-only, mixed tender, historical, refunded, review, pending, revoked.",
     orders: [
       ORDINARY_STRIPE,
       STORE_CREDIT_ONLY,
       MIXED_TENDER,
-      UPGRADE_NO_CREDIT,
-      UPGRADE_WITH_CREDIT,
+      SIX_MONTH_MIXED,
       HISTORICAL_NO_DISCOUNT_FIELDS,
       REFUNDED_UPGRADE,
       UNDER_REVIEW,
@@ -381,10 +251,9 @@ export const PREVIEW_ORDERS = {
   ordinaryStripe: ORDINARY_STRIPE,
   storeCreditOnly: STORE_CREDIT_ONLY,
   mixedTender: MIXED_TENDER,
-  upgradeNoCredit: UPGRADE_NO_CREDIT,
-  upgradeWithCredit: UPGRADE_WITH_CREDIT,
+  sixMonthMixed: SIX_MONTH_MIXED,
   historicalNoDiscountFields: HISTORICAL_NO_DISCOUNT_FIELDS,
-  refundedUpgrade: REFUNDED_UPGRADE,
+  refunded: REFUNDED_UPGRADE,
   underReview: UNDER_REVIEW,
   pending: PENDING,
   revoked: REVOKED

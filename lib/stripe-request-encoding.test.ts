@@ -32,7 +32,7 @@ const { createStripeCheckout } = await import("./payments.ts")
 const LINE = {
   product: {
     id: "p1",
-    slug: "realvip-permanent",
+    slug: "realvip-3m",
     category: "supporter",
     name: "RealVIP 1 Month",
     description: "Supporter rank",

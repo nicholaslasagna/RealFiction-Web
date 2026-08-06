@@ -1,103 +1,154 @@
-// Storefront presentation invariants.
+// Storefront presentation rules that must hold regardless of who edits the JSX.
 //
-// Source-level assertions: these catch the class of regression that a component
-// unit test misses — a card quietly losing its billing disclosure, gift cards
-// becoming buyable again, or auto-renew language appearing for a pass that does
-// not renew.
+// These are SHAPE assertions over the component source. They exist because the
+// rules they protect are product decisions, not styling: a card that stops
+// saying "does not automatically renew", or starts saying "permanent", is a
+// customer being misled — and that is not something a visual review reliably
+// catches.
+//
+// Behaviour is verified separately: lib/store-catalog.test.ts covers prices and
+// durations, and tests/dom/render-check.mjs asserts on the rendered page.
 import assert from "node:assert/strict"
 import { readFileSync } from "node:fs"
 import path from "node:path"
 import test from "node:test"
 
 const repoRoot = path.resolve(import.meta.dirname, "..")
-const storefront = readFileSync(path.join(repoRoot, "components", "storefront.tsx"), "utf8")
-const comparison = readFileSync(path.join(repoRoot, "components", "store", "rank-comparison.tsx"), "utf8")
-const fairPlay = readFileSync(path.join(repoRoot, "components", "store", "fair-play.tsx"), "utf8")
-const storePage = readFileSync(path.join(repoRoot, "app", "store", "page.tsx"), "utf8")
-const dataSource = readFileSync(path.join(repoRoot, "lib", "data.ts"), "utf8")
+const read = (relative: string) => readFileSync(path.join(repoRoot, relative), "utf8")
 
-test("every product card renders its billing disclosure", () => {
-  assert.match(storefront, /product\.disclosure\.map/, "cards must render the disclosure lines")
-})
+const storefront = read("components/storefront.tsx")
+const productCard = read("components/store/product-card.tsx")
+const storePage = read("app/store/page.tsx")
+const fairPlay = read("components/store/fair-play.tsx")
+const catalog = read("lib/store/catalog.ts")
 
-test("no auto-renew or cancellation language anywhere in the store UI", () => {
-  // Nothing here renews itself. Copy implying otherwise would be a lie, and a
-  // cancel button for a non-recurring pass would be worse.
-  for (const [name, source] of [
-    ["storefront", storefront],
-    ["comparison", comparison],
-    ["store page", storePage]
-  ] as const) {
-    assert.doesNotMatch(source, /auto-?renew/i, `${name} implies automatic renewal`)
-    assert.doesNotMatch(source, /charged monthly/i, `${name} implies recurring billing`)
-    assert.doesNotMatch(source, /cancel (your )?subscription/i, `${name} offers cancellation`)
+const ALL_STORE_UI = [storefront, productCard, storePage, fairPlay, catalog].join("\n")
+
+// -- The product model --------------------------------------------------------
+
+test("no store surface describes anything as permanent or lifetime", () => {
+  for (const phrase of [
+    /permanent unlock/i,
+    /never expires?/i,
+    /lifetime/i,
+    /own it forever/i,
+    /keep forever/i
+  ]) {
+    assert.ok(!phrase.test(ALL_STORE_UI), `store UI still says ${phrase}`)
   }
 })
 
-test("gift cards are presented as coming soon, never purchasable", () => {
-  assert.match(storefront, /Coming soon/i)
-  // The gift-card branch must not wire an add-to-cart action.
-  const giftBranch = storefront.slice(
-    storefront.indexOf("{isGiftCards ? ("),
-    storefront.indexOf(") : (")
-  )
-  assert.doesNotMatch(giftBranch, /addToCart/, "gift cards must have no purchase action")
-  assert.doesNotMatch(giftBranch, /Add to cart/i)
+test("no store surface offers an upgrade, credit, or tier conversion", () => {
+  for (const phrase of [/upgrade to real/i, /upgrade credit/i, /upgrade today/i, /prorat/i]) {
+    assert.ok(!phrase.test(ALL_STORE_UI), `store UI still offers ${phrase}`)
+  }
 })
 
-test("the storefront no longer sells retired term SKUs", () => {
-  // Legacy 1m/3m/6m/12m slugs are inactive server-side; offering them would
-  // produce a checkout that always fails.
-  assert.doesNotMatch(dataSource, /"realvip-1m"/)
-  assert.doesNotMatch(dataSource, /slug: "[a-z-]+-(1m|3m|6m|12m)"/)
-  assert.doesNotMatch(storefront, /DURATION_LABEL/, "tier labels are gone")
+test("no store surface claims one product includes another", () => {
+  for (const phrase of [/includes realvip/i, /everything in realvip/i, /included with real/i]) {
+    assert.ok(!phrase.test(ALL_STORE_UI), `store UI still claims ${phrase}`)
+  }
 })
 
-test("ownership comes from a server-provided prop, never inferred client-side", () => {
-  assert.match(storefront, /ownedProductIds/)
-  assert.match(storePage, /getOwnedProductIds/)
-  // The store page resolves it on the server and passes it down.
-  assert.match(storePage, /ownedProductIds=\{ownedProductIds\}/)
+test("RealFiction+ appears nowhere in the store UI", () => {
+  assert.ok(!/realfiction\s*\+|realfiction-plus/i.test(ALL_STORE_UI))
 })
 
-test("owned or already-included products offer NO purchase control at all", () => {
-  // Stronger than the disabled button this replaced: a greyed-out "Add to cart"
-  // reads as temporarily unavailable, and its label overflowed the button at
-  // 320px. An owned card now renders the ownership badge and nothing to click.
-  assert.match(storefront, /cardLocked \? \(/)
-  assert.ok(!/disabled=\{cardLocked\}/.test(storefront), "an owned card must not render a disabled button")
+test("copy uses US spelling", () => {
+  for (const britishism of [/\bcolour/i, /\bcustomise/i, /\bcatalogue\b/i]) {
+    assert.ok(!britishism.test(ALL_STORE_UI), `store UI contains ${britishism}`)
+  }
 })
 
-test("term products disclose what is retained and what ends", () => {
-  assert.match(storefront, /You keep after it ends/)
-  assert.match(storefront, /Ends with the pass/)
+// -- Required disclosure ------------------------------------------------------
+
+test("every card renders the one-time-payment disclosure", () => {
+  assert.match(productCard, /product\.disclosure\.map/)
+  assert.match(catalog, /"One-time payment"/)
+  assert.match(catalog, /"Does not automatically renew"/)
 })
 
-test("the comparison is a real table with scoped headers", () => {
-  assert.match(comparison, /<table/)
-  assert.match(comparison, /scope="col"/)
-  assert.match(comparison, /scope="row"/)
-  assert.match(comparison, /<caption/, "a data table needs a caption for screen readers")
-  // Wide content scrolls in its own container, not the page body.
-  assert.match(comparison, /overflow-x-auto/)
+test("every card states what the purchase does to existing access", () => {
+  assert.match(productCard, /Adds \{DURATION_LABEL\[selected\.months\]\} to your/)
 })
 
-test("comparison ticks and dashes are not icon-only for screen readers", () => {
-  assert.match(comparison, /sr-only">Included/)
-  assert.match(comparison, /sr-only">Not included/)
+test("the projected expiration is shown, derived from the server's expiry", () => {
+  assert.match(productCard, /projectionSentence\(/)
+  assert.match(productCard, /aria-live="polite"/)
 })
 
-test("the Fair Play Promise is a product promise, not a legal claim", () => {
-  assert.match(fairPlay, /Fair Play Promise/)
-  // Assert on what a customer READS, not on the source comments — a comment
-  // explaining that we avoid legal claims is not itself a legal claim.
-  const copy = fairPlay.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "")
-  assert.doesNotMatch(copy, /complian(t|ce)/i, "do not assert legal compliance")
-  assert.doesNotMatch(copy, /guarantee[sd]? by law/i)
-  assert.doesNotMatch(copy, /legally/i)
+// -- Duration selection -------------------------------------------------------
+
+test("durations are a real radio group, not a row of buttons", () => {
+  assert.match(productCard, /role="radiogroup"/)
+  assert.match(productCard, /type="radio"/)
+  assert.match(productCard, /<fieldset/)
+  assert.match(productCard, /<legend/)
 })
 
-test("store sections are labelled for assistive tech", () => {
-  assert.match(fairPlay, /aria-labelledby="fair-play-heading"/)
-  assert.match(comparison, /aria-labelledby="comparison-heading"/)
+test("the effective monthly price and savings are derived, never hardcoded", () => {
+  assert.match(productCard, /effectiveMonthlyCents\(/)
+  assert.match(productCard, /savingsPercent\(/)
+  assert.ok(!/Save 33%/.test(productCard), "a hardcoded savings claim would go stale")
+})
+
+test("savings say what they are compared against", () => {
+  assert.match(productCard, /compared with buying \{price\.months\} separate months/)
+})
+
+test("Best value is an objective price claim; nothing is called most popular", () => {
+  assert.match(productCard, /Best value/)
+  assert.ok(!/most popular/i.test(ALL_STORE_UI))
+})
+
+test("no duration is preselected at a higher price than the shortest", () => {
+  assert.match(storefront, /product\.prices\[0\]\.slug/)
+})
+
+// -- Access presentation ------------------------------------------------------
+
+test("access state comes from server entitlements, not product duration", () => {
+  assert.match(productCard, /accessStateFor\(product\.id, entitlements\)/)
+  assert.match(storePage, /getStorefrontAccess/)
+  assert.match(storePage, /entitlements=\{ownership\.entitlements\}/)
+})
+
+test("no ownership wording survives that the product model cannot support", () => {
+  for (const phrase of [/Owned permanently/i, /in your collection/i]) {
+    assert.ok(!phrase.test(ALL_STORE_UI), `store UI still says ${phrase}`)
+  }
+})
+
+// -- Gift cards ---------------------------------------------------------------
+
+test("gift cards render as coming soon with no purchase control", () => {
+  assert.match(storefront, /Coming soon/)
+  assert.ok(!/gift-card-\d+/.test(storefront), "a gift-card slug is exposed to the client")
+})
+
+// -- Fair Play ----------------------------------------------------------------
+
+test("the Fair Play Promise names what is never sold, including auto-renewal", () => {
+  assert.match(catalog, /Loot boxes, gambling mechanics/)
+  assert.match(catalog, /Automatic renewals/)
+  assert.match(catalog, /survival, Factions, PvP/)
+})
+
+test("Lobby Flight is scoped to lobbies everywhere it is described", () => {
+  assert.match(catalog, /does not apply to survival, Factions, PvP, BedWars/)
+  assert.match(productCard, /never survival, Factions, PvP, or BedWars/)
+})
+
+// -- Accessibility ------------------------------------------------------------
+
+test("the duration group is labelled for screen readers", () => {
+  assert.match(productCard, /aria-label=\{`\$\{product\.name\} duration`\}/)
+})
+
+test("decorative banner art is hidden from assistive technology", () => {
+  assert.match(productCard, /aria-hidden/)
+})
+
+test("wide content scrolls in its own container, not the page body", () => {
+  assert.match(storefront, /overflow-x-auto/)
 })

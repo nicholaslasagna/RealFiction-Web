@@ -1,295 +1,246 @@
-// The RealFiction store catalog — presentation metadata ONLY.
+// The RealFiction store catalog: seven products, each sold as a fixed period of
+// access, in 1 / 3 / 6 / 12-month durations.
 //
-// ============================================================================
-// THIS FILE IS NOT A PRICING OR ENTITLEMENT AUTHORITY.
-// ============================================================================
-// Checkout resolves price, duration, and fulfillment type from the Supabase
-// `products` table (see lib/store-server.ts `resolveCheckoutLines`). The prices
-// here exist so the storefront can render without a round trip; a mismatch is a
-// display bug, never a billing one, and `lib/store-catalog.test.ts` fails the
-// build if the two drift apart.
+// WHAT "ONE-OFF" MEANS HERE
+// ========================
+// Stripe charges once. Nothing renews automatically. RealFiction grants the
+// selected entitlement for the purchased number of months, RealCore delivers it,
+// and a later purchase EXTENDS the existing access rather than replacing it.
 //
-// Product model
-// -------------
-// RealFiction sells three shapes of thing, and every card must say which:
+// One-off is not permanent. It is a single payment for a bounded period, and the
+// storefront must say so on every card: "One-time payment. Does not
+// automatically renew."
 //
-//   permanent  one-time purchase, never expires        (ranks, cosmetics)
-//   term       one-time purchase, fixed window, NO auto-renew  (RealFiction+)
-//   recurring  charged until cancelled                 (NOT IMPLEMENTED)
+// WHAT THIS FILE IS NOT
+// =====================
+// Not a pricing authority and not an entitlement authority. `public.products` in
+// Supabase holds the prices the server actually charges and the durations it
+// actually grants; this is the presentation layer plus the server's sellable
+// allowlist. A contract test asserts the two agree exactly, so a copy edit here
+// can never change what a customer is charged.
 //
-// `recurring` is deliberately declared and deliberately unused. The repo has no
-// Stripe Billing foundation — no customer/subscription/price ids, no invoice
-// handling, no cancellation flow — so nothing may claim automatic renewal.
-// `lib/store-catalog.test.ts` enforces that no live product uses it.
+// Prices, descriptions, and durations below mirror the existing approved Stripe
+// catalog. Do not invent products, prices, durations, perks, or bundles.
 
-export type BillingType = "permanent" | "term" | "recurring"
+export type DurationMonths = 1 | 3 | 6 | 12
 
 export type StoreCategory =
-  | "ranks"
-  | "membership"
+  | "supporter"
   | "cosmetics"
   | "pets"
-  | "bundles"
+  | "particles"
+  | "identity"
+  | "lobby"
   | "gift-cards"
 
-export type Availability = "available" | "coming-soon" | "unavailable"
+export type Availability = "available" | "coming-soon"
+
+/** One purchasable duration of a product. */
+export type CatalogPrice = {
+  /** `public.products.slug` — the only identifier checkout accepts. */
+  slug: string
+  months: DurationMonths
+  priceCents: number
+  /** The Stripe Price lookup key for this duration. */
+  stripeLookupKey: string
+}
 
 export type CatalogProduct = {
-  /** Stable id. Matches the Supabase `products.slug` for purchasable items. */
+  /** Stable product id, matching `internal_sku` in Stripe metadata. */
   id: string
   name: string
   category: StoreCategory
-  billing: BillingType
-  /** Term products only. Null for permanent. */
-  durationDays: number | null
-  /** `product:<slug>`, matching fulfill_paid_order's key construction. */
-  entitlementKey: string
+  /** The approved store description. Not marketing copy to be rewritten freely. */
+  description: string
   /**
-   * Product ids whose benefits this product also grants. Enforced server-side
-   * at fulfilment (see the rank-inclusion migration), not just displayed.
+   * The entitlement RealCore delivers. Website entitlement rows are keyed
+   * `product:<slug>`; this is the Stripe metadata `entitlement` value, recorded
+   * so the two systems can be reconciled by a human.
    */
-  includes: string[]
-  /** Product id this can be upgraded FROM, with credit for what was paid. */
-  upgradeFrom: string | null
-  /** Display only. The Supabase row is authoritative at checkout. */
-  priceCents: number
-  /** Concrete inclusions. No vague copy — every line is a specific thing. */
-  features: string[]
-  /** What the buyer keeps forever vs loses. Rendered verbatim on the card. */
-  retained: string[]
-  expires: string[]
-  availability: Availability
-  giftable: boolean
+  stripeEntitlement: string
+  prices: CatalogPrice[]
   banner: string | null
-  /** Exactly one product may carry a recommendation badge. */
-  badge: string | null
+  availability: Availability
+  /** Whether a purchase may be sent to another player. */
+  giftable: boolean
+  /** True when the product has no gameplay effect and may say so. */
+  cosmeticOnly: boolean
   sortOrder: number
 }
 
-/** The legally-required billing disclosure for each billing shape. */
-export const BILLING_DISCLOSURE: Record<BillingType, string[]> = {
-  permanent: ["One-time purchase", "Permanent unlock"],
-  term: ["One-time purchase", "Does not automatically renew"],
-  // Only correct once real Stripe Billing exists. No live product uses this.
-  recurring: ["Charged monthly until canceled", "Cancel online"]
-}
-
-const NO_PAY_TO_WIN = "No competitive advantage"
+/**
+ * Disclosure shown on every card and in the cart. Non-negotiable wording: a
+ * customer must never be able to finish checkout believing they bought a
+ * subscription, or that access continues after the period they bought.
+ */
+export const BILLING_DISCLOSURE = [
+  "One-time payment",
+  "Does not automatically renew"
+] as const
 
 export const CATALOG: CatalogProduct[] = [
-  // -- Ranks -----------------------------------------------------------------
   {
-    id: "realvip-permanent",
+    id: "realvip",
     name: "RealVIP",
-    category: "ranks",
-    billing: "permanent",
-    durationDays: null,
-    entitlementKey: "product:realvip-permanent",
-    includes: [],
-    upgradeFrom: null,
-    priceCents: 1299,
-    features: [
-      "Permanent [VIP] chat prefix",
-      "Permanent VIP profile badge",
-      "8 username colours",
-      "3 cosmetic loadout slots",
-      "Lobby cosmetics: basic trails and hats",
-      "Supporter recognition on your profile",
-      NO_PAY_TO_WIN
+    category: "supporter",
+    description:
+      "Cosmetic supporter access for the RealFiction Minecraft network, including supporter profile style, chat flair, and lobby cosmetic perks. No gameplay or competitive advantages.",
+    stripeEntitlement: "rank.realvip",
+    prices: [
+      { slug: "realvip-1m", months: 1, priceCents: 499, stripeLookupKey: "realvip_1m" },
+      { slug: "realvip-3m", months: 3, priceCents: 1299, stripeLookupKey: "realvip_3m" },
+      { slug: "realvip-6m", months: 6, priceCents: 2399, stripeLookupKey: "realvip_6m" },
+      { slug: "realvip-12m", months: 12, priceCents: 3999, stripeLookupKey: "realvip_12m" }
     ],
-    retained: ["Everything above, permanently"],
-    expires: [],
+    banner: "/images/store/realvip.png",
     availability: "available",
     giftable: true,
-    banner: "/images/store/realvip.png",
-    badge: null,
+    cosmeticOnly: true,
     sortOrder: 10
   },
   {
-    id: "real-supporter-permanent",
+    // RealSupporter is the higher-priced supporter product. It is NOT documented
+    // anywhere in RealCore or the entitlement policy as including RealVIP, so
+    // the store treats them as independent products and says nothing about a
+    // relationship between them.
+    id: "realsupporter",
     name: "RealSupporter",
-    category: "ranks",
-    billing: "permanent",
-    durationDays: null,
-    entitlementKey: "product:real-supporter-permanent",
-    includes: ["realvip-permanent"],
-    upgradeFrom: "realvip-permanent",
-    priceCents: 3499,
-    features: [
-      "Everything in RealVIP",
-      "Permanent [SUPPORTER] chat prefix",
-      "Permanent lobby flight",
-      "24 username colours",
-      "8 cosmetic loadout slots",
-      "3 permanent pets",
-      "4 permanent particle effects",
-      "Lobby entrance and celebration effects",
-      NO_PAY_TO_WIN
+    category: "supporter",
+    description:
+      "Top cosmetic supporter access for the RealFiction Minecraft network, including supporter profile styling, Discord supporter synchronization, cosmetic-only perks, and eligible monthly cosmetic drops. No gameplay or competitive advantages.",
+    stripeEntitlement: "rank.realsupporter",
+    prices: [
+      { slug: "real-supporter-1m", months: 1, priceCents: 999, stripeLookupKey: "realsupporter_1m" },
+      { slug: "real-supporter-3m", months: 3, priceCents: 2699, stripeLookupKey: "realsupporter_3m" },
+      { slug: "real-supporter-6m", months: 6, priceCents: 4799, stripeLookupKey: "realsupporter_6m" },
+      { slug: "real-supporter-12m", months: 12, priceCents: 7999, stripeLookupKey: "realsupporter_12m" }
     ],
-    retained: ["Everything above, permanently"],
-    expires: [],
+    banner: "/images/store/real-supporter.png",
     availability: "available",
     giftable: true,
-    banner: "/images/store/real-supporter.png",
-    badge: "Best value",
+    cosmeticOnly: true,
     sortOrder: 20
   },
-
-  // -- Membership ------------------------------------------------------------
   {
-    id: "realfiction-plus-30d",
-    name: "RealFiction+",
-    category: "membership",
-    billing: "term",
-    durationDays: 30,
-    entitlementKey: "product:realfiction-plus-30d",
-    includes: [],
-    upgradeFrom: null,
-    priceCents: 599,
-    features: [
-      "This month's collectible cosmetic — yours to keep",
-      "Rotating cosmetic vault while active",
-      "Animated member profile frame while active",
-      "4 extra cosmetic loadout slots while active",
-      "Lobby flight while active",
-      "A vote on next month's cosmetic theme",
-      "Discord member role while active",
-      NO_PAY_TO_WIN
-    ],
-    retained: ["Every monthly collectible you were a member for"],
-    expires: [
-      "Rotating vault access",
-      "Member profile frame",
-      "Extra loadout slots",
-      "Lobby flight (unless you own RealSupporter)",
-      "Discord member role"
-    ],
-    // NOT purchasable until the benefits exist. RealCore implements none of
-    // them today, so a checkout action here would sell nothing.
-    availability: "coming-soon",
-    giftable: false,
-    banner: null,
-    badge: null,
-    sortOrder: 30
-  },
-
-  // -- Cosmetics -------------------------------------------------------------
-  {
-    id: "username-colors-permanent",
-    name: "Username Colours",
+    id: "cosmetic_atelier",
+    name: "Cosmetic Atelier",
     category: "cosmetics",
-    billing: "permanent",
-    durationDays: null,
-    entitlementKey: "product:username-colors-permanent",
-    includes: [],
-    upgradeFrom: null,
-    priceCents: 499,
-    features: ["16 username colours", "Switch any time", NO_PAY_TO_WIN],
-    retained: ["All 16 colours, permanently"],
-    expires: [],
+    description:
+      "Time-limited access to a curated RealFiction cosmetic collection containing profile effects, lobby entrances, particles, and seasonal badges. Digital delivery only. No gameplay or competitive advantages.",
+    stripeEntitlement: "cosmetic.atelier",
+    prices: [
+      { slug: "cosmetic-atelier-1m", months: 1, priceCents: 699, stripeLookupKey: "cosmetic_atelier_1m" },
+      { slug: "cosmetic-atelier-3m", months: 3, priceCents: 1899, stripeLookupKey: "cosmetic_atelier_3m" },
+      { slug: "cosmetic-atelier-6m", months: 6, priceCents: 3399, stripeLookupKey: "cosmetic_atelier_6m" },
+      { slug: "cosmetic-atelier-12m", months: 12, priceCents: 5599, stripeLookupKey: "cosmetic_atelier_12m" }
+    ],
+    banner: "/images/store/cosmetic-atelier.png",
     availability: "available",
     giftable: true,
-    banner: "/images/store/username-colors.png",
-    badge: null,
+    cosmeticOnly: true,
+    sortOrder: 30
+  },
+  {
+    id: "realpets",
+    name: "RealPets Pack",
+    category: "pets",
+    description:
+      "Time-limited access to a rotating collection of cosmetic pets for RealFiction hubs, lobbies, and social spaces. Includes nameable pet profiles and seasonal skins. Pets provide no combat, gameplay, or competitive advantages.",
+    stripeEntitlement: "cosmetic.pets",
+    prices: [
+      { slug: "realpets-1m", months: 1, priceCents: 299, stripeLookupKey: "realpets_1m" },
+      { slug: "realpets-3m", months: 3, priceCents: 799, stripeLookupKey: "realpets_3m" },
+      { slug: "realpets-6m", months: 6, priceCents: 1399, stripeLookupKey: "realpets_6m" },
+      { slug: "realpets-12m", months: 12, priceCents: 2399, stripeLookupKey: "realpets_12m" }
+    ],
+    banner: "/images/store/realpets.png",
+    availability: "available",
+    giftable: true,
+    cosmeticOnly: true,
     sortOrder: 40
   },
   {
-    id: "particle-vault-permanent",
+    id: "particle_vault",
     name: "Particle Vault",
-    category: "cosmetics",
-    billing: "permanent",
-    durationDays: null,
-    entitlementKey: "product:particle-vault-permanent",
-    includes: [],
-    upgradeFrom: null,
-    priceCents: 899,
-    features: ["12 particle effects", "Lobby and hub only", NO_PAY_TO_WIN],
-    retained: ["All 12 effects, permanently"],
-    expires: [],
+    category: "particles",
+    description:
+      "Time-limited access to cinematic trails, celebration effects, and cosmetic lobby visual effects across the RealFiction Minecraft network. Includes toggleable presets and profile showcase support. No gameplay or competitive advantages.",
+    stripeEntitlement: "cosmetic.particles",
+    prices: [
+      { slug: "particle-vault-1m", months: 1, priceCents: 349, stripeLookupKey: "particle_vault_1m" },
+      { slug: "particle-vault-3m", months: 3, priceCents: 899, stripeLookupKey: "particle_vault_3m" },
+      { slug: "particle-vault-6m", months: 6, priceCents: 1699, stripeLookupKey: "particle_vault_6m" },
+      { slug: "particle-vault-12m", months: 12, priceCents: 2799, stripeLookupKey: "particle_vault_12m" }
+    ],
+    banner: "/images/store/particle-vault.png",
     availability: "available",
     giftable: true,
-    banner: "/images/store/particle-vault.png",
-    badge: null,
+    cosmeticOnly: true,
     sortOrder: 50
   },
-
-  // -- Pets ------------------------------------------------------------------
   {
-    id: "realpets-permanent",
-    name: "RealPets Pack",
-    category: "pets",
-    billing: "permanent",
-    durationDays: null,
-    entitlementKey: "product:realpets-permanent",
-    includes: [],
-    upgradeFrom: null,
-    priceCents: 799,
-    features: ["6 lobby companion pets", "Cosmetic only — pets cannot fight or carry items", NO_PAY_TO_WIN],
-    retained: ["All 6 pets, permanently"],
-    expires: [],
+    id: "username_colors",
+    name: "Username Colors",
+    category: "identity",
+    description:
+      "Time-limited access to approved cosmetic username, chat, and nameplate color styles across the RealFiction Minecraft network. Works with eligible prefixes and profile styling. Does not permit staff impersonation or provide gameplay advantages.",
+    stripeEntitlement: "cosmetic.username_colors",
+    prices: [
+      { slug: "username-colors-1m", months: 1, priceCents: 199, stripeLookupKey: "username_colors_1m" },
+      { slug: "username-colors-3m", months: 3, priceCents: 499, stripeLookupKey: "username_colors_3m" },
+      { slug: "username-colors-6m", months: 6, priceCents: 899, stripeLookupKey: "username_colors_6m" },
+      { slug: "username-colors-12m", months: 12, priceCents: 1599, stripeLookupKey: "username_colors_12m" }
+    ],
+    banner: "/images/store/username-colors.png",
     availability: "available",
     giftable: true,
-    banner: "/images/store/realpets.png",
-    badge: null,
+    cosmeticOnly: true,
     sortOrder: 60
   },
-
-  // -- Bundles ---------------------------------------------------------------
   {
-    id: "cosmetic-atelier-permanent",
-    name: "Cosmetic Atelier",
-    category: "bundles",
-    billing: "permanent",
-    durationDays: null,
-    entitlementKey: "product:cosmetic-atelier-permanent",
-    includes: [
-      "username-colors-permanent",
-      "particle-vault-permanent",
-      "realpets-permanent"
+    // Flight in LOBBIES only. The description is explicit about where it does
+    // not apply, because "flight" in a Minecraft store is exactly the kind of
+    // thing a customer could reasonably read as a gameplay advantage.
+    id: "lobby_flight",
+    name: "Lobby Flight",
+    category: "lobby",
+    description:
+      "Time-limited access to flight in approved RealFiction lobbies, hubs, spawn showcases, and event spaces. Lobby Flight does not apply to survival, Factions, PvP, BedWars, or other competitive gameplay.",
+    stripeEntitlement: "capability.lobby_flight",
+    prices: [
+      { slug: "lobby-flight-1m", months: 1, priceCents: 249, stripeLookupKey: "lobby_flight_1m" },
+      { slug: "lobby-flight-3m", months: 3, priceCents: 649, stripeLookupKey: "lobby_flight_3m" },
+      { slug: "lobby-flight-6m", months: 6, priceCents: 1199, stripeLookupKey: "lobby_flight_6m" },
+      { slug: "lobby-flight-12m", months: 12, priceCents: 1999, stripeLookupKey: "lobby_flight_12m" }
     ],
-    upgradeFrom: null,
-    priceCents: 1799,
-    features: [
-      "Everything in Username Colours, Particle Vault and RealPets Pack",
-      "4 bundle-exclusive cosmetics",
-      NO_PAY_TO_WIN
-    ],
-    retained: ["Every cosmetic in the bundle, permanently"],
-    expires: [],
+    banner: "/images/store/lobby-flight.png",
     availability: "available",
     giftable: true,
-    banner: "/images/store/cosmetic-atelier.png",
-    badge: null,
+    cosmeticOnly: false,
     sortOrder: 70
   },
-
-  // -- Gift cards ------------------------------------------------------------
-  // Deliberately NOT purchasable. The secure issuance/claim/ledger/reversal flow
-  // is unbuilt, and checkout refuses gift-card slugs server-side
-  // (lib/checkout-guard.ts). One honest placeholder beats nine buyable-looking
-  // denominations for a disabled system.
   {
-    id: "gift-cards-placeholder",
+    // Gift cards exist in Stripe and stay there untouched. The website refuses
+    // every gift-card slug because the generation, redemption, balance, refund
+    // and reversal lifecycle is not finished — and RealCore's delivery fails
+    // safely for them, which is a fail-safe worth preserving rather than
+    // routing around.
+    id: "gift_card",
     name: "Gift Cards",
     category: "gift-cards",
-    billing: "permanent",
-    durationDays: null,
-    entitlementKey: "product:gift-cards-placeholder",
-    includes: [],
-    upgradeFrom: null,
-    priceCents: 0,
-    features: ["Send RealFiction credit to a friend"],
-    retained: [],
-    expires: [],
+    description:
+      "Send RealFiction store credit to another player. Not available yet: secure one-time claim codes, partial balances, and refunds are still being built.",
+    stripeEntitlement: "store.credit",
+    prices: [],
+    banner: null,
     availability: "coming-soon",
     giftable: false,
-    banner: null,
-    badge: null,
+    cosmeticOnly: true,
     sortOrder: 90
   }
 ]
 
-// -- Lookups -----------------------------------------------------------------
+// -- Lookups ------------------------------------------------------------------
 
 export const CATALOG_BY_ID = new Map(CATALOG.map((product) => [product.id, product]))
 
@@ -297,63 +248,114 @@ export function getProduct(id: string): CatalogProduct | undefined {
   return CATALOG_BY_ID.get(id)
 }
 
+/** Products a customer may buy today, in display order. */
 export function purchasableProducts(): CatalogProduct[] {
-  return CATALOG.filter((product) => product.availability === "available")
+  return CATALOG.filter((product) => product.availability === "available" && product.prices.length > 0).sort(
+    (a, b) => a.sortOrder - b.sortOrder
+  )
+}
+
+/** Every sellable duration slug. The server's allowlist is built from this. */
+export function purchasableSlugs(): string[] {
+  return purchasableProducts().flatMap((product) => product.prices.map((price) => price.slug))
+}
+
+/** The product and duration a slug refers to, or null. */
+export function findPrice(slug: string): { product: CatalogProduct; price: CatalogPrice } | null {
+  for (const product of CATALOG) {
+    const price = product.prices.find((candidate) => candidate.slug === slug)
+    if (price) {
+      return { product, price }
+    }
+  }
+  return null
+}
+
+// -- Duration presentation ----------------------------------------------------
+
+export const DURATION_LABEL: Record<DurationMonths, string> = {
+  1: "1 month",
+  3: "3 months",
+  6: "6 months",
+  12: "12 months"
 }
 
 /**
- * Every product id whose benefits `id` grants, transitively.
+ * What one month of this duration effectively costs.
  *
- * Display-side mirror of the server-side inclusion grant. Guarded against
- * cycles: a malformed catalog must not hang the storefront.
+ * Rounded to whole cents for display only. The customer is charged the listed
+ * price, never a computed one.
  */
-export function expandIncludes(id: string, seen = new Set<string>()): string[] {
-  if (seen.has(id)) {
-    return []
-  }
-  seen.add(id)
-  const product = CATALOG_BY_ID.get(id)
-  if (!product) {
-    return []
-  }
-  const out: string[] = []
-  for (const included of product.includes) {
-    out.push(included, ...expandIncludes(included, seen))
-  }
-  return [...new Set(out)]
+export function effectiveMonthlyCents(price: CatalogPrice): number {
+  return Math.round(price.priceCents / price.months)
 }
 
-/** True when owning `ownedId` already grants everything in `candidateId`. */
-export function isIncludedIn(candidateId: string, ownedId: string): boolean {
-  return expandIncludes(ownedId).includes(candidateId)
+/**
+ * Savings against buying the same number of MONTHS one month at a time.
+ *
+ * Derived from the authoritative prices, never a hardcoded marketing number. If
+ * a longer duration ever stops being cheaper per month, this returns 0 and the
+ * card simply shows no savings claim.
+ */
+export function savingsPercent(product: CatalogProduct, price: CatalogPrice): number {
+  const monthly = product.prices.find((candidate) => candidate.months === 1)
+  if (!monthly || price.months === 1) {
+    return 0
+  }
+  const baseline = monthly.priceCents * price.months
+  if (baseline <= 0 || price.priceCents >= baseline) {
+    return 0
+  }
+  return Math.round(((baseline - price.priceCents) / baseline) * 100)
+}
+
+/**
+ * The duration with the lowest effective monthly rate.
+ *
+ * "Best value" is an objective, checkable claim about price per month — not a
+ * popularity claim, which we have no analytics to support.
+ */
+export function bestValueSlug(product: CatalogProduct): string | null {
+  if (product.prices.length === 0) {
+    return null
+  }
+  return product.prices.reduce((best, candidate) =>
+    effectiveMonthlyCents(candidate) < effectiveMonthlyCents(best) ? candidate : best
+  ).slug
 }
 
 export const STORE_SECTIONS: Array<{ id: StoreCategory; title: string; blurb: string }> = [
-  { id: "ranks", title: "Ranks", blurb: "Permanent supporter identity. Buy once, keep forever." },
-  { id: "membership", title: "RealFiction+", blurb: "A 30-day pass with a collectible you keep." },
-  { id: "cosmetics", title: "Cosmetics", blurb: "Permanent unlocks for how you look in the lobby." },
-  { id: "pets", title: "Pets", blurb: "Permanent lobby companions." },
-  { id: "bundles", title: "Bundles", blurb: "Several cosmetic packs together, cheaper." },
-  { id: "gift-cards", title: "Gift Cards", blurb: "Coming soon." }
+  {
+    id: "supporter",
+    title: "Supporter access",
+    blurb: "Cosmetic supporter standing for a fixed period. One-time payment, no auto-renewal."
+  },
+  { id: "cosmetics", title: "Cosmetics", blurb: "Curated cosmetic collections for your chosen period." },
+  { id: "pets", title: "Pets", blurb: "Cosmetic companions for hubs, lobbies, and social spaces." },
+  { id: "particles", title: "Particles", blurb: "Trails, celebrations, and lobby visual effects." },
+  { id: "identity", title: "Identity", blurb: "Approved username, chat, and nameplate color styles." },
+  { id: "lobby", title: "Lobby", blurb: "Lobby-only perks. Never survival, Factions, PvP, or BedWars." },
+  { id: "gift-cards", title: "Gift cards", blurb: "Coming soon." }
 ]
 
-/** The Fair Play Promise. A RealFiction product promise, not a legal claim. */
+/**
+ * The Fair Play Promise. A product promise about what RealFiction sells, not a
+ * legal claim about anything else.
+ */
 export const FAIR_PLAY = {
+  title: "Fair Play Promise",
   never: [
-    "Combat strength or better gear",
-    "Kits that outclass free kits",
-    "Paid progression or XP boosts",
-    "Resource-generation advantages",
-    "Competitive multipliers",
-    "Access needed to play any core mode",
-    "Priority moderation or support",
-    "Lootboxes, mystery rewards, or anything gambling-like"
+    "Stat boosts, damage, reach, or any combat advantage",
+    "Economy multipliers, crate odds, or faster progression",
+    "Anything that works in survival, Factions, PvP, or BedWars",
+    "Loot boxes, gambling mechanics, or randomized paid rewards",
+    "Automatic renewals, subscriptions you have to remember to cancel, or hidden charges"
   ],
   sell: [
-    "Cosmetic effects, pets and particles",
-    "Profile and chat presentation",
-    "Lobby-only convenience such as flight",
-    "Supporter recognition",
-    "Non-competitive community participation"
+    "Cosmetic supporter standing: profile style, chat flair, lobby perks",
+    "Cosmetic pets, particles, and approved username colors",
+    "Lobby Flight — in lobbies, hubs, and event spaces only",
+    "A fixed period of access: 1, 3, 6, or 12 months, paid once",
+    "More time whenever you want it, added on top of what you already have"
   ]
 } as const

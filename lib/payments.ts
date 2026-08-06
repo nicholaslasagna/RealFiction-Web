@@ -24,15 +24,6 @@ export const checkoutSchema = z.object({
       /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
       "checkoutAttemptId must be a UUID"
     ),
-  /**
-   * Request an upgrade rather than a fresh purchase.
-   *
-   * This is a REQUEST, never an amount. The server recomputes eligibility and
-   * the discounted price from entitlements and settled orders; a client that
-   * sets this for an ineligible cart is simply charged full price (or refused),
-   * and can never name its own discount.
-   */
-  requestUpgrade: z.boolean().optional().default(false),
   // Gift mode is an explicit flag (a checkbox in the cart). For a normal
   // purchase the delivery target is the buyer's linked account, resolved on the
   // server — the client never sends its own username for non-gift orders.
@@ -73,7 +64,7 @@ type CheckoutOrder = {
   // remainder via a single consolidated line item.
   storeCreditAppliedCents?: number
   paymentDueCents?: number
-  /** Server-computed upgrade discount (cents). Never client-supplied. */
+  /** Server-computed discount (cents). Never client-supplied. */
   discountCents?: number
 }
 
@@ -125,10 +116,10 @@ export async function createStripeCheckout(order: CheckoutOrder, lines: Checkout
   const discountApplied = (order.discountCents ?? 0) > 0
 
   if (storeCreditApplied || discountApplied) {
-    // Store credit and/or an upgrade discount reduce what Stripe charges, so
-    // the session bills ONE consolidated line for the amount actually due.
-    // Per-line pricing here would charge the undiscounted list price. The DB
-    // order_items still carry the real products, so fulfilment is unchanged.
+    // Store credit (or any server-applied discount) reduces what Stripe charges,
+    // so the session bills ONE consolidated line for the amount actually due.
+    // Per-line pricing here would charge the full list price. The DB order_items
+    // still carry the real products, so fulfilment is unchanged.
     const dueCents = order.paymentDueCents ?? lines.reduce((total, item) => total + item.lineTotalCents, 0)
     body.set("metadata[payment_due_cents]", String(dueCents))
     body.set("line_items[0][quantity]", "1")
@@ -136,10 +127,10 @@ export async function createStripeCheckout(order: CheckoutOrder, lines: Checkout
     body.set("line_items[0][price_data][unit_amount]", String(dueCents))
     body.set(
       "line_items[0][price_data][product_data][name]",
-      discountApplied ? "RealFiction upgrade" : "RealFiction order (store credit applied)"
+      "RealFiction order (store credit applied)"
     )
     body.set("line_items[0][price_data][product_data][metadata][store_credit_applied]", String(storeCreditApplied))
-    body.set("line_items[0][price_data][product_data][metadata][upgrade_discount_cents]", String(order.discountCents ?? 0))
+    body.set("line_items[0][price_data][product_data][metadata][discount_cents]", String(order.discountCents ?? 0))
   } else {
     lines.forEach((item, index) => {
       body.set(`line_items[${index}][quantity]`, String(item.quantity))

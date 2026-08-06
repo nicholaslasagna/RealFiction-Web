@@ -15,7 +15,6 @@
 import { notFound } from "next/navigation"
 
 import { Storefront } from "@/components/storefront"
-import { RankComparison } from "@/components/store/rank-comparison"
 import { FairPlayPromise } from "@/components/store/fair-play"
 import { OrderHistoryPreview } from "@/components/dev/order-history-preview"
 import { PREVIEW_STATES, type PreviewStateId } from "@/lib/dev/preview-fixtures"
@@ -49,12 +48,9 @@ export default async function PreviewPage({ params }: { params: Promise<{ state:
           <Storefront
             signedIn={fixture.signedIn}
             linkedUsername={fixture.linkedUsername}
-            ownedProductIds={fixture.ownedProductIds}
             entitlements={fixture.entitlements}
-            upgradeQuote={fixture.upgradeQuote}
           />
-          <div className="mt-10 space-y-10">
-            <RankComparison />
+          <div className="mt-10">
             <FairPlayPromise />
           </div>
         </>

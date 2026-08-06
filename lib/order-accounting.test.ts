@@ -64,9 +64,9 @@ test("a mixed-tender order separates the credit from the charge", () => {
   )
 })
 
-// -- 4. Upgrade with no store credit ------------------------------------------
+// -- 4. Discounted order, no store credit -------------------------------------
 
-test("an upgrade with no store credit reads as subtotal, credit, total", () => {
+test("a discounted order with no store credit reads as subtotal, credit, total", () => {
   assert.deepEqual(
     render({
       subtotalCents: 3499,
@@ -77,16 +77,16 @@ test("an upgrade with no store credit reads as subtotal, credit, total", () => {
     }),
     [
       "Subtotal: $34.99",
-      "RealVIP upgrade credit: -$12.99",
+      "Discount: -$12.99",
       "Order total: $22.00",
       "Paid through Stripe: $22.00"
     ]
   )
 })
 
-// -- 5. Upgrade with store credit — THE ONE THE OWNER ASKED FOR ---------------
+// -- 5. Discounted order with store credit ------------------------------------
 
-const UPGRADE: OrderAccountingInput = {
+const DISCOUNTED: OrderAccountingInput = {
   subtotalCents: 3499,
   discountCents: 1299,
   totalCents: 2200,
@@ -94,10 +94,10 @@ const UPGRADE: OrderAccountingInput = {
   paymentDueCents: 1700
 }
 
-test("an upgrade with store credit renders the full five-line accounting", () => {
-  assert.deepEqual(render(UPGRADE), [
+test("a discounted order with store credit renders the full five-line accounting", () => {
+  assert.deepEqual(render(DISCOUNTED), [
     "Subtotal: $34.99",
-    "RealVIP upgrade credit: -$12.99",
+    "Discount: -$12.99",
     "Order total: $22.00",
     "Store credit: -$5.00",
     "Paid through Stripe: $17.00"
@@ -105,7 +105,7 @@ test("an upgrade with store credit renders the full five-line accounting", () =>
 })
 
 test("the merchandise subtotal is NEVER labelled as an amount paid", () => {
-  for (const line of render(UPGRADE)) {
+  for (const line of render(DISCOUNTED)) {
     if (line.includes("$34.99")) {
       assert.match(line, /^Subtotal:/, `"${line}" presents 3499 as something other than the subtotal`)
     }
@@ -113,24 +113,24 @@ test("the merchandise subtotal is NEVER labelled as an amount paid", () => {
 })
 
 test("the Stripe charge is NEVER labelled as the order total", () => {
-  const lines = render(UPGRADE)
+  const lines = render(DISCOUNTED)
   assert.ok(lines.includes("Order total: $22.00"))
   assert.ok(lines.includes("Paid through Stripe: $17.00"))
   assert.ok(!lines.includes("Order total: $17.00"))
   assert.ok(!lines.includes("Paid through Stripe: $22.00"))
 })
 
-test("upgrade credit and store credit are separate lines, never merged", () => {
-  const lines = render(UPGRADE)
-  assert.equal(lines.filter((line) => line.startsWith("RealVIP upgrade credit")).length, 1)
+test("discount and store credit are separate lines, never merged", () => {
+  const lines = render(DISCOUNTED)
+  assert.equal(lines.filter((line) => line.startsWith("Discount")).length, 1)
   assert.equal(lines.filter((line) => line.startsWith("Store credit")).length, 1)
-  // A merged "-$17.99" credit line would be arithmetically tidy and completely
-  // misleading: one is an entitlement, the other is money.
+  // A merged "-$17.99" line would be arithmetically tidy and misleading: a
+  // discount reduces the price, store credit pays part of it.
   assert.ok(!lines.some((line) => line.includes("$17.99")))
 })
 
 test("the arithmetic a customer can check actually reconciles", () => {
-  const a = buildOrderAccounting(UPGRADE)
+  const a = buildOrderAccounting(DISCOUNTED)
   assert.equal(a.subtotalCents - a.discountCents, a.orderTotalCents)
   assert.equal(a.orderTotalCents - a.storeCreditCents, a.externalPaidCents)
 })
@@ -138,7 +138,7 @@ test("the arithmetic a customer can check actually reconciles", () => {
 // -- 6. Historical order without the newer columns ----------------------------
 
 test("a historical order with no discount or payment_due columns still renders", () => {
-  // Placed before upgrades or store credit existed: only total_cents.
+  // Placed before the discount/payment_due columns existed: only total_cents.
   assert.deepEqual(render({ totalCents: 999 }), ["$9.99"])
 
   // Store credit but no payment_due column: the charge is derived, not blank.
@@ -163,36 +163,36 @@ test("null and undefined columns never become NaN", () => {
   assert.deepEqual(lines, ["$12.99"])
 })
 
-// -- 7. Refunded upgrade order ------------------------------------------------
+// -- 7. Refunded order ---------------------------------------------------------
 
-test("a refunded upgrade order still shows what was originally charged", () => {
+test("a refunded discounted order still shows what was originally charged", () => {
   // Status lives on the badge; the accounting is a record of the purchase and
   // must not silently zero out just because the order was reversed.
-  assert.deepEqual(render(UPGRADE), [
+  assert.deepEqual(render(DISCOUNTED), [
     "Subtotal: $34.99",
-    "RealVIP upgrade credit: -$12.99",
+    "Discount: -$12.99",
     "Order total: $22.00",
     "Store credit: -$5.00",
     "Paid through Stripe: $17.00"
   ])
 })
 
-// -- 8. Pending-review dependency ---------------------------------------------
+// -- 8. Order held for review --------------------------------------------------
 
 test("an order pending review renders normally — review state is not an amount", () => {
-  // A source-refund dependency parks an upgrade reservation for a human. That is
-  // an internal state; it must not leak into, or corrupt, the customer's figures.
-  const lines = render(UPGRADE)
+  // An order held for a human decision is an internal state; it must not leak
+  // into, or corrupt, the customer's figures.
+  const lines = render(DISCOUNTED)
   assert.equal(lines.length, 5)
   for (const line of lines) {
-    assert.ok(!/reservation|review|upgrade_credit_reservations/i.test(line), line)
+    assert.ok(!/reservation|review/i.test(line), line)
   }
 })
 
 // -- Safety -------------------------------------------------------------------
 
 test("no internal identifier can reach the rendered accounting", () => {
-  const body = render(UPGRADE).join("\n")
+  const body = render(DISCOUNTED).join("\n")
   assert.ok(!/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i.test(body))
   assert.ok(!/\bcs_|\bpi_|\bre_|\bch_/.test(body))
 })
@@ -200,12 +200,12 @@ test("no internal identifier can reach the rendered accounting", () => {
 test("a nonsensical stored payment_due can never exceed the order total", () => {
   // Defence in depth: a bad backfill must not tell a customer they paid more
   // than the order was worth.
-  const a = buildOrderAccounting({ ...UPGRADE, paymentDueCents: 999_999 })
+  const a = buildOrderAccounting({ ...DISCOUNTED, paymentDueCents: 999_999 })
   assert.equal(a.externalPaidCents, 2200)
 })
 
 test("a negative stored amount is floored, never rendered as a negative charge", () => {
-  const a = buildOrderAccounting({ ...UPGRADE, storeCreditCents: -500, paymentDueCents: -1 })
+  const a = buildOrderAccounting({ ...DISCOUNTED, storeCreditCents: -500, paymentDueCents: -1 })
   assert.equal(a.storeCreditCents, 0)
   assert.equal(a.externalPaidCents, 0)
 })

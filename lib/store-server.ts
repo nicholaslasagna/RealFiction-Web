@@ -166,9 +166,8 @@ export type OrderDelivery = {
   storeCreditCents: number
   paymentDueCents: number
   /**
-   * Server-computed upgrade discount (cents). The order's total is the
-   * merchandise subtotal MINUS this — never recomputed from line prices, which
-   * carry the undiscounted list value.
+   * Server-computed discount (cents). The order's total is the merchandise
+   * subtotal MINUS this — never recomputed from line prices.
    */
   discountCents: number
   /**
@@ -371,125 +370,6 @@ export async function enqueuePartialRefundOutbox(input: {
   if (error) {
     throw new Error(`enqueue_partial_refund_outbox failed: ${error.message ?? "unknown"}`)
   }
-}
-
-export type UpgradeQuote = {
-  eligible: boolean
-  reason: string
-  targetPriceCents: number
-  creditCents: number
-  upgradePriceCents: number
-  sourceOrderItemId: string | null
-  sourceOrderId: string | null
-  fromSlug: string | null
-}
-
-/** Read-only quote. No side effects, no reservation. */
-export async function getUpgradeQuote(userId: string, toSlug: string): Promise<UpgradeQuote | null> {
-  const supabase = getSupabaseServiceRoleClient()
-  const { data, error } = await supabase.rpc("compute_upgrade_price", {
-    p_user_id: userId,
-    p_to_slug: toSlug
-  })
-
-  if (error) {
-    console.error("upgrade_quote_failed", { to_slug: toSlug })
-    return null
-  }
-
-  const row = (Array.isArray(data) ? data[0] : data) as Record<string, unknown> | null
-  if (!row) {
-    return null
-  }
-
-  return {
-    eligible: row.eligible === true,
-    reason: String(row.reason ?? "unknown"),
-    targetPriceCents: Number(row.target_price_cents ?? 0),
-    creditCents: Number(row.credit_cents ?? 0),
-    upgradePriceCents: Number(row.upgrade_price_cents ?? 0),
-    sourceOrderItemId: (row.source_order_item_id as string | null) ?? null,
-    sourceOrderId: (row.source_order_id as string | null) ?? null,
-    fromSlug: (row.from_slug as string | null) ?? null
-  }
-}
-
-export type UpgradeReservation = {
-  reserved: boolean
-  reason: string
-  reservationId: string | null
-  creditCents: number
-  upgradePriceCents: number
-}
-
-/**
- * RESERVES a credit for a pending order. Does not consume it.
- *
- * The credit is only spent inside the transaction that successfully fulfils the
- * order; every failure path releases it. Idempotent for the same order, so a
- * retried checkout attempt never stacks reservations.
- */
-export async function reserveUpgradeCredit(input: {
-  userId: string
-  toSlug: string
-  orderId: string
-  checkoutAttemptId: string
-}): Promise<UpgradeReservation> {
-  const supabase = getSupabaseServiceRoleClient()
-  const { data, error } = await supabase.rpc("reserve_upgrade_credit", {
-    p_user_id: input.userId,
-    p_to_slug: input.toSlug,
-    p_order_id: input.orderId,
-    p_checkout_attempt_id: input.checkoutAttemptId,
-    p_ttl_seconds: 7200
-  })
-
-  if (error) {
-    // Fail CLOSED: an unreadable reservation must never become a free discount.
-    throw new CheckoutGuardUnavailableError("reserve_upgrade_credit", error.message ?? "unknown")
-  }
-
-  const row = (Array.isArray(data) ? data[0] : data) as Record<string, unknown> | null
-  return {
-    reserved: row?.reserved === true,
-    reason: String(row?.reason ?? "unknown"),
-    reservationId: (row?.reservation_id as string | null) ?? null,
-    creditCents: Number(row?.credit_cents ?? 0),
-    upgradePriceCents: Number(row?.upgrade_price_cents ?? 0)
-  }
-}
-
-/** Returns a reservation to available. Idempotent; never throws. */
-export async function releaseUpgradeCredit(orderId: string, reason: string): Promise<void> {
-  try {
-    const supabase = getSupabaseServiceRoleClient()
-    await supabase.rpc("release_upgrade_credit", { p_order_id: orderId, p_reason: reason })
-  } catch {
-    // A stale reservation self-expires; never fail a cleanup path on this.
-    console.error("release_upgrade_credit_failed", { order_id: orderId })
-  }
-}
-
-/** Product ids in this cart that the account already owns outright. */
-export async function findAlreadyOwned(userId: string, slugs: string[]): Promise<string[]> {
-  if (slugs.length === 0) {
-    return []
-  }
-  const supabase = getSupabaseServiceRoleClient()
-  const { data } = await supabase
-    .from("entitlements")
-    .select("entitlement_key,expires_at")
-    .eq("user_id", userId)
-    .eq("status", "active")
-    .in("entitlement_key", slugs.map((slug) => `product:${slug}`))
-
-  const now = Date.now()
-  return (data ?? [])
-    .filter((row) => {
-      const expiry = row.expires_at as string | null
-      return !expiry || Date.parse(expiry) > now
-    })
-    .map((row) => String(row.entitlement_key).replace(/^product:/, ""))
 }
 
 export async function getStoreCreditBalanceCents(userId: string): Promise<number> {

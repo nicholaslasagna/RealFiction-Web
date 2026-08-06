@@ -1,9 +1,8 @@
 // The Cloudflare scheduled handler, EXECUTED.
 //
 // Reading the source and seeing `ctx.waitUntil(...)` proves the call is written.
-// It does not prove both jobs are registered, that one job's failure does not
-// take the other down, or that the runtime env actually reaches them. These
-// tests run the thing.
+// It does not prove the work is registered, that a failure is contained, or that
+// the runtime env actually reaches it. These tests run the thing.
 import assert from "node:assert/strict"
 import { readFileSync } from "node:fs"
 import { register } from "node:module"
@@ -36,73 +35,38 @@ const ENV = {
   RESEND_API_KEY: "resend-value"
 } as never
 
-test("BOTH jobs are registered with ctx.waitUntil, not merely started", async () => {
+test("the drain is registered with ctx.waitUntil, not merely started", async () => {
   const { ctx, registered } = fakeCtx()
   let emails = 0
-  let upgrades = 0
 
   const returned = runScheduledJobs(CONTROLLER, ENV, ctx, {
     processEmailQueue: async () => {
       emails++
       return { claimed: 0, sent: 0, failed: 0, retried: 0 } as never
-    },
-    reconcileUpgradeReservations: async () => {
-      upgrades++
-      return { claimed: 0, fulfilled: 0, held: 0, released: 0, mismatched: 0, unavailable: 0, escalated: 0 }
     }
   })
 
   // Cloudflare kills the event when the handler returns unless the work is
-  // registered. Two jobs, two registrations.
-  assert.equal(registered.length, 2)
-  assert.equal(returned.length, 2)
+  // registered.
+  assert.equal(registered.length, 1)
+  assert.equal(returned.length, 1)
 
   await Promise.all(registered)
   assert.equal(emails, 1)
-  assert.equal(upgrades, 1)
 })
 
-test("an EMAIL failure does not cancel reconciliation", async () => {
+test("a failing drain is contained, not thrown into the scheduled event", async () => {
   const { ctx, registered } = fakeCtx()
-  let reconciled = false
-
   runScheduledJobs(CONTROLLER, ENV, ctx, {
     processEmailQueue: async () => {
       throw new Error("resend exploded")
-    },
-    reconcileUpgradeReservations: async () => {
-      reconciled = true
-      return { claimed: 3, fulfilled: 1, held: 2, released: 0, mismatched: 0, unavailable: 0, escalated: 0 }
     }
   })
-
   const results = await Promise.all(registered)
-  assert.equal(reconciled, true, "reconciliation must still run")
   assert.equal(results[0], null, "the email job absorbs its own failure")
-  assert.deepEqual((results[1] as { fulfilled: number }).fulfilled, 1)
 })
 
-test("a RECONCILIATION failure does not cancel the email drain", async () => {
-  const { ctx, registered } = fakeCtx()
-  let drained = false
-
-  runScheduledJobs(CONTROLLER, ENV, ctx, {
-    processEmailQueue: async () => {
-      drained = true
-      return { claimed: 5, sent: 5, failed: 0, retried: 0 } as never
-    },
-    reconcileUpgradeReservations: async () => {
-      throw new Error("stripe exploded")
-    }
-  })
-
-  const results = await Promise.all(registered)
-  assert.equal(drained, true, "the email queue must still drain")
-  assert.equal(results[1], null, "the reconciliation job absorbs its own failure")
-  assert.equal((results[0] as { claimed: number }).claimed, 5)
-})
-
-test("neither failure produces an unhandled rejection", async () => {
+test("a failure produces no unhandled rejection", async () => {
   const seen: unknown[] = []
   const onUnhandled = (reason: unknown) => seen.push(reason)
   process.on("unhandledRejection", onUnhandled)
@@ -112,9 +76,6 @@ test("neither failure produces an unhandled rejection", async () => {
     runScheduledJobs(CONTROLLER, ENV, ctx, {
       processEmailQueue: async () => {
         throw new Error("a")
-      },
-      reconcileUpgradeReservations: async () => {
-        throw new Error("b")
       }
     })
     await Promise.all(registered)
@@ -127,44 +88,19 @@ test("neither failure produces an unhandled rejection", async () => {
   assert.deepEqual(seen, [], "a scheduled event with an unhandled rejection is a Worker error")
 })
 
-test("the explicit Worker env reaches BOTH jobs — process.env is empty in scheduled()", async () => {
+test("the explicit Worker env reaches the job — process.env is empty in scheduled()", async () => {
   const { ctx, registered } = fakeCtx()
   let emailEnv: unknown = null
-  let reconcileEnv: unknown = null
 
   runScheduledJobs(CONTROLLER, ENV, ctx, {
     processEmailQueue: async (env) => {
       emailEnv = env
       return { claimed: 0, sent: 0, failed: 0, retried: 0 } as never
-    },
-    reconcileUpgradeReservations: async (env) => {
-      reconcileEnv = env
-      return { claimed: 0, fulfilled: 0, held: 0, released: 0, mismatched: 0, unavailable: 0, escalated: 0 }
     }
   })
 
   await Promise.all(registered)
   assert.equal(emailEnv, ENV)
-  assert.equal(reconcileEnv, ENV)
-})
-
-test("both jobs are given the same scheduled-tick worker id", async () => {
-  const { ctx, registered } = fakeCtx()
-  const ids: string[] = []
-
-  runScheduledJobs(CONTROLLER, ENV, ctx, {
-    processEmailQueue: async (_env, options) => {
-      ids.push(String((options as { workerId?: string }).workerId))
-      return { claimed: 0, sent: 0, failed: 0, retried: 0 } as never
-    },
-    reconcileUpgradeReservations: async (_env, options) => {
-      ids.push(String((options as { workerId?: string })?.workerId))
-      return { claimed: 0, fulfilled: 0, held: 0, released: 0, mismatched: 0, unavailable: 0, escalated: 0 }
-    }
-  })
-
-  await Promise.all(registered)
-  assert.deepEqual(ids, [`cron-${CONTROLLER.scheduledTime}`, `cron-${CONTROLLER.scheduledTime}`])
 })
 
 // -- The deployed entry ------------------------------------------------------

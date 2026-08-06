@@ -24,10 +24,6 @@ import { resolveDeliveryTarget } from "@/lib/store-delivery"
 import { getAuthenticatedUser } from "@/lib/supabase/server"
 import {
   attachCheckoutAttemptOrder,
-  findAlreadyOwned,
-  getUpgradeQuote,
-  releaseUpgradeCredit,
-  reserveUpgradeCredit,
   attachCheckoutSession,
   attachProviderSession,
   cancelOrder,
@@ -44,18 +40,6 @@ import {
   reserveStoreCredit,
   resolveCheckoutLines
 } from "@/lib/store-server"
-
-/** Customer-facing copy for each structured upgrade refusal. */
-const UPGRADE_REFUSAL_COPY: Record<string, string> = {
-  upgrade_target_already_owned: "You already own RealSupporter.",
-  upgrade_credit_unavailable:
-    "We couldn't find a RealVIP purchase to credit. If you bought RealVIP as a gift, or it was granted to you, it can't be used as upgrade credit.",
-  upgrade_credit_already_reserved:
-    "That upgrade is already in progress in another checkout. Finish or cancel it, then try again.",
-  no_upgrade_path: "That product has no upgrade path.",
-  upgrade_target_unavailable: "That product isn't available right now.",
-  default: "We couldn't apply your upgrade. Refresh the store to see your current price."
-}
 
 export async function POST(request: Request) {
   const body = await request.json().catch(() => null)
@@ -168,84 +152,14 @@ export async function POST(request: Request) {
       return safeJsonError(sellableRejection.message, sellableRejection.status)
     }
 
-    // Duplicate-purchase prevention. A permanent product the account already
-    // owns cannot be bought again for itself — there is nothing to grant. Gifts
-    // are exempt: buying a rank for someone else is legitimate.
-    step = "ownership_check"
-    if (!isGift) {
-      const owned = await findAlreadyOwned(user.id, lines.map((line) => line.product.slug))
-      if (owned.length > 0) {
-        console.info("checkout_already_owned", { ...baseLog, owned_count: owned.length })
-        return safeJsonError(
-          "You already own one or more of these. Remove them from your cart, or tick \"Send as a gift\" to buy for someone else.",
-          409
-        )
-      }
-    }
-
-    // Upgrade requests are deliberately NARROW for the first safe version:
-    // your own account, exactly one RealSupporter line, quantity one, not a
-    // gift. Anything else is refused rather than quietly reinterpreted.
-    step = "upgrade_shape"
-    const wantsUpgrade = parsed.data.requestUpgrade === true
-
-    if (wantsUpgrade) {
-      const shapeError = isGift
-        ? "upgrade_gift_not_supported"
-        : lines.length !== 1
-          ? "upgrade_requires_single_line"
-          : lines[0].quantity !== 1
-            ? "upgrade_requires_quantity_one"
-            : null
-
-      if (shapeError) {
-        console.info("checkout_upgrade_refused", { ...baseLog, code: shapeError })
-        return Response.json(
-          {
-            error:
-              "An upgrade must be a single RealSupporter purchase for your own account. Check out the other items separately.",
-            code: shapeError
-          },
-          { status: 409 }
-        )
-      }
-    }
-
-    // Read-only quote. No reservation yet — that needs an order id — but an
-    // ineligible request STOPS here. It must never silently become a full-price
-    // charge: the customer asked to upgrade, not to buy at list price.
-    step = "upgrade_quote"
-    let upgradeQuote: Awaited<ReturnType<typeof getUpgradeQuote>> = null
-
-    if (wantsUpgrade) {
-      upgradeQuote = await getUpgradeQuote(user.id, lines[0].product.slug)
-
-      if (upgradeQuote === null) {
-        throw new CheckoutGuardUnavailableError("compute_upgrade_price", "quote unavailable")
-      }
-
-      if (!upgradeQuote.eligible) {
-        console.info("checkout_upgrade_not_eligible", { ...baseLog, code: upgradeQuote.reason })
-        return Response.json(
-          {
-            error: UPGRADE_REFUSAL_COPY[upgradeQuote.reason] ?? UPGRADE_REFUSAL_COPY.default,
-            code: upgradeQuote.reason
-          },
-          { status: 409 }
-        )
-      }
-    }
-
     // Store credit is always recomputed server-side from the ledger — the
     // client only sends whether to apply it, never an amount or balance.
     step = "compute_credit"
     const applyCredit = parsed.data.applyStoreCredit === true
     const availableCents = applyCredit ? await getStoreCreditBalanceCents(user.id) : 0
-    // An eligible upgrade discounts the subtotal server-side. `subtotalCents` is
-    // what we actually charge; `merchandiseSubtotalCents` stays the list value
-    // and is what the empty/zero-cart guard keys on, so a fully-discounted
-    // upgrade is still a valid purchase rather than an "empty cart".
-    const subtotalCents = upgradeQuote ? upgradeQuote.upgradePriceCents : merchandiseSubtotalCents
+    // What we actually charge. Every price comes from the resolved product rows,
+    // never from the request body.
+    const subtotalCents = merchandiseSubtotalCents
     const { creditCents, dueCents } = computeCreditApplication(subtotalCents, availableCents, applyCredit)
 
     // A card payment is only needed when a balance remains. Gate provider config
@@ -380,8 +294,7 @@ export async function POST(request: Request) {
         isGift,
         source: resolution.source,
         provider: effectiveProvider,
-        // Server-computed. Zero unless an eligible upgrade was quoted.
-        discountCents: merchandiseSubtotalCents - subtotalCents,
+        discountCents: 0,
         buyerEmail: buyerEmail.email,
         storeCreditCents: creditCents,
         paymentDueCents: dueCents
@@ -389,44 +302,6 @@ export async function POST(request: Request) {
       step = "attach_attempt"
       await attachCheckoutAttemptOrder(attempt.claimId, orderId)
 
-      if (upgradeQuote) {
-        // RESERVE — never consume. The credit is only spent inside the
-        // transaction that successfully fulfils this order; until then any
-        // failure path releases it.
-        step = "reserve_upgrade_credit"
-        const reservation = await reserveUpgradeCredit({
-          userId: user.id,
-          toSlug: lines[0].product.slug,
-          orderId,
-          checkoutAttemptId: parsed.data.checkoutAttemptId
-        })
-
-        if (!reservation.reserved) {
-          // Another checkout holds this credit. Cancel rather than sell at a
-          // discount we cannot back.
-          await cancelOrder(orderId)
-          console.warn("checkout_upgrade_reserve_failed", { ...baseLog, code: reservation.reason })
-          return Response.json(
-            {
-              error: UPGRADE_REFUSAL_COPY[reservation.reason] ?? UPGRADE_REFUSAL_COPY.default,
-              code: reservation.reason
-            },
-            { status: 409 }
-          )
-        }
-
-        // The reservation is authoritative. If it disagrees with the quote the
-        // price moved underneath us; refuse rather than charge either number.
-        if (reservation.creditCents !== upgradeQuote.creditCents) {
-          await releaseUpgradeCredit(orderId, "quote_drift")
-          await cancelOrder(orderId)
-          console.warn("checkout_upgrade_quote_drift", { ...baseLog })
-          return Response.json(
-            { error: UPGRADE_REFUSAL_COPY.default, code: "upgrade_quote_drift" },
-            { status: 409 }
-          )
-        }
-      }
     }
 
     const creditLog = { ...baseLog, store_credit_cents: creditCents, payment_due_cents: dueCents }
@@ -436,7 +311,6 @@ export async function POST(request: Request) {
       step = "complete_store_credit"
       const completed = await completeStoreCreditOnlyOrder(orderId, user.id)
       if (!completed) {
-        await releaseUpgradeCredit(orderId, "store_credit_only_failed")
         await cancelOrder(orderId)
         console.error("checkout_delivery", { ...creditLog, order_id: orderId, fulfillment_status: "store_credit_failed" })
         return safeJsonError("We couldn't apply your store credit. Please refresh and try again.", 409)
@@ -459,7 +333,6 @@ export async function POST(request: Request) {
       step = "reserve_credit"
       const reserved = await reserveStoreCredit(orderId, user.id, creditCents)
       if (!reserved) {
-        await releaseUpgradeCredit(orderId, "store_credit_reserve_failed")
         await cancelOrder(orderId)
         console.error("checkout_delivery", { ...creditLog, order_id: orderId, fulfillment_status: "credit_reserve_failed" })
         return safeJsonError("Your store credit balance changed. Please review your cart and try again.", 409)
@@ -490,7 +363,6 @@ export async function POST(request: Request) {
       if (creditCents > 0) {
         await releaseStoreCredit(orderId)
       }
-      await releaseUpgradeCredit(orderId, "provider_no_url")
       await cancelOrder(orderId)
       console.error("checkout_delivery", { ...creditLog, order_id: orderId, fulfillment_status: "provider_no_url" })
       return safeJsonError("We could not start payment yet. Please try again.", 502)

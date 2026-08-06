@@ -1,15 +1,15 @@
 // ONE definition of how an order's money is described to a customer.
 //
-// An upgrade order has three amounts that are easy to confuse and expensive to
-// confuse: the merchandise subtotal (list value), the order total (after the
-// upgrade credit), and the amount actually collected through Stripe (after
-// store credit). Calling any of them "total" is wrong for two of them.
+// An order can carry three amounts that are easy to confuse and expensive to
+// confuse: the merchandise subtotal, the order total (after any server-applied
+// discount), and the amount actually collected through Stripe (after store
+// credit). Calling any of them "total" is wrong for two of them.
 //
-//   RealSupporter permanent rank   $34.99   <- merchandise subtotal
-//   RealVIP upgrade credit        -$12.99   <- an entitlement, not money
-//   Order total                    $22.00
+//   RealVIP · 3 months             $12.99   <- merchandise subtotal
+//   Discount                       -$0.00   <- any server-applied reduction
+//   Order total                    $12.99
 //   Store credit                   -$5.00   <- money the customer already had
-//   Paid through Stripe            $17.00   <- the only external charge
+//   Paid through Stripe             $7.99   <- the only external charge
 //
 // The receipt email and the account page both render from this function, so
 // they cannot drift into telling the customer two different stories about the
@@ -21,9 +21,9 @@
 export type OrderAccountingInput = {
   /** Merchandise list value. Absent on historical orders — falls back to total. */
   subtotalCents?: number | null
-  /** Server-computed upgrade credit. Absent on historical orders. */
+  /** Server-computed discount, if any. Absent on historical orders. */
   discountCents?: number | null
-  /** What the order came to after the upgrade credit. */
+  /** What the order came to after any discount. */
   totalCents: number
   storeCreditCents?: number | null
   /** What Stripe was asked to collect. Absent on historical orders. */
@@ -31,7 +31,7 @@ export type OrderAccountingInput = {
 }
 
 export type AccountingLine = {
-  key: "subtotal" | "upgrade_credit" | "order_total" | "store_credit" | "paid_external" | "paid_credit"
+  key: "subtotal" | "discount" | "order_total" | "store_credit" | "paid_external" | "paid_credit"
   label: string
   /** Always positive. `negative` says how to render the sign. */
   cents: number
@@ -43,7 +43,7 @@ export type AccountingLine = {
 export type OrderAccounting = {
   lines: AccountingLine[]
   /**
-   * True when nothing needed explaining — no upgrade credit, no store credit.
+   * True when nothing needed explaining — no discount, no store credit.
    * Callers render these as a single amount, exactly as they always have.
    */
   simple: boolean
@@ -69,7 +69,7 @@ function whole(value: number | null | undefined, fallback = 0) {
 export function buildOrderAccounting(order: OrderAccountingInput): OrderAccounting {
   const total = Math.max(0, whole(order.totalCents))
   const discount = Math.max(0, whole(order.discountCents))
-  // A missing subtotal means a pre-upgrade order, where subtotal == total.
+  // A missing subtotal means an older order, where subtotal == total.
   const subtotal = Math.max(total, whole(order.subtotalCents, total + discount) || total + discount)
   const storeCredit = Math.max(0, Math.min(whole(order.storeCreditCents), total))
   // Derive rather than trust when the column is absent, and never let a stale
@@ -87,8 +87,8 @@ export function buildOrderAccounting(order: OrderAccountingInput): OrderAccounti
   }
   if (discount > 0) {
     lines.push({
-      key: "upgrade_credit",
-      label: "RealVIP upgrade credit",
+      key: "discount",
+      label: "Discount",
       cents: discount,
       negative: true,
       emphasis: false
