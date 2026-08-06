@@ -5,7 +5,7 @@
 // scheduled(), re-export every Durable Object OpenNext generates, and track its
 // processing with ctx.waitUntil.
 import assert from "node:assert/strict"
-import { readFileSync } from "node:fs"
+import { existsSync, readFileSync } from "node:fs"
 import path from "node:path"
 import test from "node:test"
 
@@ -34,9 +34,16 @@ test("ctx.waitUntil tracks the processing so the event is not cut short", () => 
   assert.match(workerSource, /ctx\.waitUntil\(/)
 })
 
-test("every Durable Object OpenNext generates is re-exported", () => {
+// The generated worker is BUILD OUTPUT, absent in a fresh checkout. These two
+// assertions are only meaningful once `npm run build:cloudflare` has run, so
+// they skip explicitly rather than failing a clean `npm ci && npm test`.
+const generatedWorker = path.join(repoRoot, ".open-next", "worker.js")
+const built = existsSync(generatedWorker)
+const skipUnbuilt = built ? false : "requires `npm run build:cloudflare` output"
+
+test("every Durable Object OpenNext generates is re-exported", { skip: skipUnbuilt }, () => {
   // Missing one silently breaks the deployment's cache/queue bindings.
-  const generated = readFileSync(path.join(repoRoot, ".open-next", "worker.js"), "utf8")
+  const generated = readFileSync(generatedWorker, "utf8")
   const exported = [...generated.matchAll(/export\s*\{\s*(\w+)\s*\}/g)].map((match) => match[1])
 
   assert.ok(exported.length > 0, "expected the generated worker to export Durable Objects")
@@ -49,8 +56,7 @@ test("every Durable Object OpenNext generates is re-exported", () => {
   }
 })
 
-test("the build output contains the custom worker entry's dependencies", () => {
+test("the build output contains the custom worker entry's dependencies", { skip: skipUnbuilt }, () => {
   // The generated worker must exist for the custom entry to import it.
-  const generated = path.join(repoRoot, ".open-next", "worker.js")
-  assert.ok(readFileSync(generated, "utf8").length > 0)
+  assert.ok(readFileSync(generatedWorker, "utf8").length > 0)
 })

@@ -28,7 +28,7 @@
     "zod": "^3.24.2"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20250214.0",
+    "@cloudflare/workers-types": "^5.20260801.1",
     "@opennextjs/cloudflare": "^1.0.0",
     "@tailwindcss/postcss": "^4.0.6",
     "@types/node": "^22.13.4",
