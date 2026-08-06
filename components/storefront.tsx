@@ -65,6 +65,35 @@ for (const product of storeProducts) {
   }
 }
 
+/**
+ * A single payment brand mark.
+ *
+ * Official brand SVGs on a white pill so they stay legible on the dark cart
+ * surface. `alt=""` is deliberate — these are decorative inside a group that
+ * already has an accessible label; announcing each brand individually would
+ * imply a definitive accepted-methods list, which Stripe does not guarantee.
+ */
+function PayMark({ src }: { src: string }) {
+  return (
+    // Pill sized for the WIDEST mark. The wordmarks (Visa 256x83, Apple Pay and
+    // Google Pay ~512x210) are far wider than the square ones, so a narrow pill
+    // silently squeezes them to ~11-14px tall while Amex/Mastercard stay full
+    // size — inconsistent and unreadable. 58px wide with an 18px height cap
+    // renders every mark at 15-18px.
+    <span className="inline-flex h-9 w-[58px] items-center justify-center rounded bg-white px-1.5">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={src}
+        alt=""
+        aria-hidden
+        className="max-h-[18px] max-w-[46px] w-auto object-contain"
+        loading="lazy"
+        decoding="async"
+      />
+    </span>
+  )
+}
+
 function savePercent(product: SubscriptionProduct, priceCents: number, months: DurationMonths) {
   const monthly = product.tiers[0]?.priceCents ?? priceCents
   const full = monthly * months
@@ -725,17 +754,32 @@ export function Storefront({
                     {checkoutBusy ? "Starting checkout…" : creditToApply > 0 ? "Pay the rest" : "Checkout"}
                   </span>
                 </Button>
-                {/* No card-brand logos. Stripe Checkout decides which methods a
-                    given buyer is actually offered, so listing brands here would
-                    either under-sell what is available or promise what is not. */}
-                <div className="space-y-1 text-center">
+                {/* Representative marks, not an accepted-methods list. Stripe
+                    Checkout decides what each buyer is actually offered, so the
+                    row is labelled as examples and always sits next to the
+                    "shown at checkout" copy. PayPal is deliberately absent. */}
+                <div className="space-y-2 text-center">
                   <p className="text-xs font-medium text-slate-200">Secure checkout through Stripe</p>
+                  <div
+                    role="img"
+                    aria-label="Example payment methods including Visa, Mastercard, American Express, Apple Pay and Google Pay. The methods available to you are shown at checkout."
+                    className="flex flex-wrap items-center justify-center gap-1.5"
+                  >
+                    <PayMark src="/images/payments/visa.svg" />
+                    <PayMark src="/images/payments/mastercard.svg" />
+                    <PayMark src="/images/payments/amex.svg" />
+                    <PayMark src="/images/payments/apple-pay.svg" />
+                    <PayMark src="/images/payments/google-pay.svg" />
+                    <span
+                      aria-hidden
+                      className="inline-flex h-9 items-center rounded border border-white/15 px-2 text-[11px] font-medium text-muted-foreground"
+                    >
+                      + more
+                    </span>
+                  </div>
                   <p className="text-xs leading-5 text-muted-foreground">
                     Eligible payment methods are shown at checkout based on your location, device,
                     currency, and purchase amount.
-                  </p>
-                  <p aria-hidden className="text-[11px] text-muted-foreground/80">
-                    Cards · Apple Pay · Google Pay · Link · Cash App Pay · More
                   </p>
                 </div>
                 {isGift && !validRecipient ? (
