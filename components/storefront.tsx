@@ -525,7 +525,7 @@ export function Storefront({
             <div className="grid gap-3">
               {cartLines.length === 0 ? (
                 <div className="rounded-lg border border-dashed border-amber-200/18 bg-black/18 p-5 text-sm text-muted-foreground">
-                  Add a supporter rank, cosmetics, particles, pets, lobby perks, or gift cards.
+                  Add a supporter rank, cosmetics, particles, pets, or lobby perks.
                 </div>
               ) : (
                 cartLines.map((item) => {

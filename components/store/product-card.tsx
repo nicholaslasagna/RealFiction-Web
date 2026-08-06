@@ -196,10 +196,13 @@ function DurationOption({
           <span>{formatCurrency(monthly)}/month</span>
           {savings > 0 ? (
             <span className="text-emerald-200">
-              Save {savings}%
+              {`Save ${savings}% `}
               {/* Says what the comparison IS, so it cannot be read as a discount
-                  off some invented "was" price. */}
-              <span className="sr-only"> compared with buying {price.months} separate months</span>
+                  off some invented "was" price. The trailing space above is
+                  inside the template literal on purpose: JSX collapses a literal
+                  space before an element, so "Save 13%" and the sr-only text ran
+                  together as "Save 13%compared with...". */}
+              <span className="sr-only">compared with buying {price.months} separate months</span>
             </span>
           ) : null}
           {isBestValue ? (
