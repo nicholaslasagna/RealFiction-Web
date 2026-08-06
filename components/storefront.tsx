@@ -15,6 +15,8 @@ import {
   DURATION_LABEL,
   giftCards,
   productCategories,
+  STORE_BANNER_HEIGHT,
+  STORE_BANNER_WIDTH,
   storeProducts,
   type DurationMonths,
   type ProductCategory,
@@ -26,11 +28,6 @@ type CartItem = { slug: string; quantity: number }
 
 /** sessionStorage key for the in-progress checkout attempt (UX only). */
 const CHECKOUT_ATTEMPT_STORAGE_KEY = "rf.checkoutAttempt"
-
-// Intrinsic size of the store banners (public/images/store/*.png). Only the
-// ratio matters — they always render as `h-auto w-full`.
-const BANNER_WIDTH = 1850
-const BANNER_HEIGHT = 400
 
 const accentThemes: Record<string, { surface: string; icon: string }> = {
   cyan: { surface: "border-cyan-300/16 bg-cyan-300/[0.055]", icon: "text-cyan-200" },
@@ -185,7 +182,10 @@ export function Storefront({
   // all of this too — these gates just keep the UI honest.
   const validRecipient = /^[A-Za-z0-9_]{3,16}$/.test(giftRecipient.trim())
   const deliveryReady = isGift ? validRecipient : Boolean(linkedUsername)
-  const canCheckout = signedIn && cartLines.length > 0 && deliveryReady
+  // An empty cart, or one whose total is zero, can never start a checkout.
+  // The server enforces this too — this only keeps the button honest.
+  const hasPayableCart = cartLines.length > 0 && total > 0
+  const canCheckout = signedIn && hasPayableCart && deliveryReady
 
   // Client-side view of the cart, used only to key the persisted attempt id.
   // The server recomputes its own canonical fingerprint and is authoritative.
@@ -432,8 +432,8 @@ export function Storefront({
                               alt=""
                               aria-hidden
                               src={product.banner}
-                              width={BANNER_WIDTH}
-                              height={BANNER_HEIGHT}
+                              width={STORE_BANNER_WIDTH}
+                              height={STORE_BANNER_HEIGHT}
                               className="h-auto w-full"
                             />
                             {product.featured ? (
@@ -589,8 +589,8 @@ export function Storefront({
                           alt=""
                           aria-hidden
                           src={item.art}
-                          width={item.artWide ? BANNER_WIDTH : 384}
-                          height={item.artWide ? BANNER_HEIGHT : 606}
+                          width={item.artWide ? STORE_BANNER_WIDTH : 384}
+                          height={item.artWide ? STORE_BANNER_HEIGHT : 606}
                           className={cn(
                             "shrink-0 rounded border border-white/10 object-cover",
                             item.artWide ? "h-9 w-[74px]" : "h-12 w-8"
@@ -716,8 +716,7 @@ export function Storefront({
             ) : (
               <div className="grid gap-2">
                 <Button
-                  aria-label="Checkout with secure card payment"
-                  className="flex-col"
+                  aria-label="Secure checkout through Stripe"
                   disabled={!canCheckout || checkoutBusy}
                   onClick={() => checkout("stripe")}
                   type="button"
@@ -725,17 +724,20 @@ export function Storefront({
                   <span>
                     {checkoutBusy ? "Starting checkout…" : creditToApply > 0 ? "Pay the rest" : "Checkout"}
                   </span>
-                  {/* Card networks only. Wallet availability is decided by Stripe
-                      Checkout per device/browser, so we do not promise it here. */}
-                  <span className="flex items-center justify-center gap-1.5">
-                    <PayMark src="/images/payments/visa.svg" label="Visa" />
-                    <PayMark src="/images/payments/mastercard.svg" label="Mastercard" />
-                    <PayMark src="/images/payments/amex.svg" label="American Express" />
-                  </span>
                 </Button>
-                <p className="text-center text-xs text-muted-foreground">
-                  Secure payment methods available through Stripe Checkout.
-                </p>
+                {/* No card-brand logos. Stripe Checkout decides which methods a
+                    given buyer is actually offered, so listing brands here would
+                    either under-sell what is available or promise what is not. */}
+                <div className="space-y-1 text-center">
+                  <p className="text-xs font-medium text-slate-200">Secure checkout through Stripe</p>
+                  <p className="text-xs leading-5 text-muted-foreground">
+                    Eligible payment methods are shown at checkout based on your location, device,
+                    currency, and purchase amount.
+                  </p>
+                  <p aria-hidden className="text-[11px] text-muted-foreground/80">
+                    Cards · Apple Pay · Google Pay · Link · Cash App Pay · More
+                  </p>
+                </div>
                 {isGift && !validRecipient ? (
                   <p className="text-xs text-muted-foreground">
                     Enter the recipient&apos;s Minecraft username to continue.
@@ -778,23 +780,3 @@ export function Storefront({
     </div>
   )
 }
-
-/* ============================================================
-   Payment brand marks.
-
-   The accepted-method marks use the real brand logos (official SVGs in
-   /public/images/payments/) inside small white pills so they read clearly
-   on the green Checkout button.
-   ============================================================ */
-
-// Real brand logo on a white pill — uniform height, natural width, so the
-// row reads as a tidy strip of recognizable marks.
-function PayMark({ src, label }: { src: string; label: string }) {
-  return (
-    <span className="inline-flex h-[26px] items-center justify-center rounded bg-white px-2">
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={src} alt={label} className="h-[16px] w-auto" loading="lazy" decoding="async" />
-    </span>
-  )
-}
-

@@ -89,7 +89,7 @@ test("only webhook/capture routes can fulfil an order — never a page or succes
     .filter((file) => file.endsWith(".ts") || file.endsWith(".tsx"))
     .filter((file) => {
       const contents = readFileSync(file, "utf8")
-      return /markOrderPaidAndFulfill|fulfill_paid_order|revoke_order|completeStoreCreditOnlyOrder/.test(contents)
+      return /fulfillPaidOrderWithOutbox|fulfill_paid_order|revoke_order|revokeOrderWithRefundOutbox|completeStoreCreditOnlyOrder/.test(contents)
     })
     .map((file) => path.relative(repoRoot, file))
     .sort()
@@ -107,7 +107,7 @@ test("only webhook/capture routes can fulfil an order — never a page or succes
     const contents = readFileSync(file, "utf8")
     assert.doesNotMatch(
       contents,
-      /markOrderPaidAndFulfill|fulfill_paid_order|revoke_order/,
+      /fulfillPaidOrderWithOutbox|fulfill_paid_order|revoke_order/,
       `${path.relative(repoRoot, file)} must never grant or revoke entitlements`
     )
   }

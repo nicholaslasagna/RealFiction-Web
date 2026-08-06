@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 
 import { isPayPalAllowed } from "@/lib/checkout-guard"
 import { capturePayPalOrder } from "@/lib/payments"
-import { markOrderPaidAndFulfill } from "@/lib/store-server"
+import { fulfillPaidOrderWithOutbox } from "@/lib/store-server"
 
 export async function GET(request: Request) {
   const url = new URL(request.url)
@@ -33,7 +33,9 @@ export async function GET(request: Request) {
       return NextResponse.redirect(`${siteUrl}/store?checkout=paypal-pending&order_id=${encodeURIComponent(localOrderId)}`)
     }
 
-    await markOrderPaidAndFulfill(localOrderId, capture?.id ?? captured.id ?? payPalOrderId)
+    await fulfillPaidOrderWithOutbox(localOrderId, {
+      paymentIntentId: capture?.id ?? captured.id ?? payPalOrderId
+    })
 
     return NextResponse.redirect(`${siteUrl}/account?checkout=success&order_id=${encodeURIComponent(localOrderId)}`)
   } catch (error) {

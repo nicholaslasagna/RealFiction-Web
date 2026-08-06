@@ -48,6 +48,12 @@ export type CheckoutInput = z.infer<typeof checkoutSchema>
 type CheckoutOrder = {
   id: string
   provider: "stripe" | "paypal"
+  /**
+   * The buyer's account email. Passed to Stripe as `receipt_email` so Stripe
+   * sends its own payment receipt on a successful charge — and only then;
+   * Stripe never emails a receipt for an unpaid or failed session.
+   */
+  buyerEmail?: string | null
   // Resolved server-side delivery target (gift recipient for gifts, the buyer's
   // linked Minecraft account otherwise). Non-empty for any valid checkout.
   minecraftUsername?: string | null
@@ -82,6 +88,11 @@ export async function createStripeCheckout(order: CheckoutOrder, lines: Checkout
   const body = new URLSearchParams()
   body.set("mode", "payment")
   body.set("client_reference_id", order.id)
+  if (order.buyerEmail) {
+    // Prefills Checkout AND is the address Stripe sends the receipt to.
+    body.set("customer_email", order.buyerEmail)
+    body.set("payment_intent_data[receipt_email]", order.buyerEmail)
+  }
   // Explicit, bounded session lifetime, matched to the internal attempt TTL.
   // Without this the session would outlive the attempt and could still be paid
   // after we consider the checkout dead. `after_expiration.recovery` is

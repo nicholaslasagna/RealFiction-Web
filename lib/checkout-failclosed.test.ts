@@ -16,10 +16,15 @@ const calls = {
   createPendingOrder: 0,
   reserveStoreCredit: 0,
   stripeFetch: 0,
-  attachAttempt: 0
+  attachAttempt: 0,
+  completeStoreCredit: 0,
+  enqueueConfirmation: 0
 }
 
 let claimShouldThrow = true
+let freeLines = false
+let creditBalanceCents = 0
+let creditCompletionOk = true
 let claimResult: Record<string, unknown> = {
   claimId: "claim-1",
   existingOrderId: null,
@@ -69,7 +74,21 @@ mock.module("@/lib/store-server", {
     },
     resolveCheckoutLines: async () => [
       {
-        product: {
+        product: freeLines
+          ? {
+              id: "p0",
+              slug: "free-thing",
+              category: "supporter",
+              name: "Free",
+              description: "d",
+              price_cents: 0,
+              currency: "USD",
+              fulfillment_type: "subscription",
+              duration_days: 30,
+              metadata: {},
+              active: true
+            }
+          : {
           id: "p1",
           slug: "realvip-1m",
           category: "supporter",
@@ -78,15 +97,15 @@ mock.module("@/lib/store-server", {
           price_cents: 499,
           currency: "USD",
           fulfillment_type: "subscription",
-          duration_days: 30,
-          metadata: {},
-          active: true
-        },
+              duration_days: 30,
+              metadata: {},
+              active: true
+            },
         quantity: 1,
-        lineTotalCents: 499
+        lineTotalCents: freeLines ? 0 : 499
       }
     ],
-    getStoreCreditBalanceCents: async () => 0,
+    getStoreCreditBalanceCents: async () => creditBalanceCents,
     getVerifiedMinecraftLink: async () => ({
       username: "Tester",
       uuid: "00000000-0000-4000-8000-0000000000aa"
@@ -94,14 +113,33 @@ mock.module("@/lib/store-server", {
     getOrderStatus: async () => null,
     attachProviderSession: async () => {},
     cancelOrder: async () => {},
-    completeStoreCreditOnlyOrder: async () => true,
+    completeStoreCreditOnlyOrder: async () => {
+      calls.completeStoreCredit++
+      return creditCompletionOk
+    },
     releaseStoreCredit: async () => {}
+  }
+})
+
+mock.module("@/lib/email-delivery", {
+  namedExports: {
+    enqueueOrderConfirmation: async () => {
+      calls.enqueueConfirmation++
+      return "queued"
+    },
+    enqueueRefundConfirmation: async () => "queued",
+    storeStripePaymentRefs: async () => {}
   }
 })
 
 mock.module("@/lib/supabase/server", {
   namedExports: {
-    getAuthenticatedUser: async () => ({ id: "user-1", email: "t@example.test" })
+    getAuthenticatedUser: async () => ({
+      id: "user-1",
+      email: "t@example.test",
+      // Checkout now requires a verified address before any order exists.
+      email_confirmed_at: "2026-01-01T00:00:00Z"
+    })
   }
 })
 
@@ -333,5 +371,147 @@ test("two tabs with no reusable session get a clear 409, never a second Session"
   assert.equal(response.status, 409)
   assert.equal(body.code, "checkout_already_in_progress")
   assert.equal(calls.createPendingOrder, 0)
+  assert.equal(calls.stripeFetch, 0)
+})
+
+// -- Empty / zero-value cart --------------------------------------------------
+
+test("a zero-value cart creates no order and no Stripe Session", async () => {
+  claimShouldThrow = false
+  calls.createPendingOrder = 0
+  calls.stripeFetch = 0
+
+  // resolveCheckoutLines is mocked to return a free line for this case.
+  freeLines = true
+  const response = await POST(checkoutRequest(VALID_BODY))
+  freeLines = false
+
+  assert.equal(response.status, 400)
+  assert.equal(calls.createPendingOrder, 0, "no order for a zero-value cart")
+  assert.equal(calls.stripeFetch, 0, "no Stripe Session for a zero-value cart")
+})
+
+test("an empty items array is rejected by the schema before any work", async () => {
+  calls.createPendingOrder = 0
+  calls.stripeFetch = 0
+
+  const response = await POST(checkoutRequest({ ...VALID_BODY, items: [] }))
+
+  assert.equal(response.status, 400)
+  assert.equal(calls.createPendingOrder, 0)
+  assert.equal(calls.stripeFetch, 0)
+})
+
+// -- Store credit vs an actually-empty cart ----------------------------------
+//
+// The zero-value guard must key on the MERCHANDISE subtotal, not the post-credit
+// amount. A $12.99 cart fully covered by credit is a real purchase; a $0 cart is
+// not, and the two must never be conflated.
+
+function reset() {
+  claimShouldThrow = false
+  // Earlier tests mutate the shared claim result to exercise attempt states;
+  // restore a fresh attempt so these start from a clean checkout.
+  claimResult = {
+    claimId: "claim-1",
+    existingOrderId: null,
+    storedFingerprint: null,
+    status: "new",
+    attemptExpiresAt: new Date(Date.now() + 3_600_000).toISOString(),
+    sessionId: null,
+    sessionUrl: null,
+    sessionExpiresAt: null
+  }
+  freeLines = false
+  creditBalanceCents = 0
+  creditCompletionOk = true
+  calls.createPendingOrder = 0
+  calls.reserveStoreCredit = 0
+  calls.stripeFetch = 0
+  calls.completeStoreCredit = 0
+  calls.enqueueConfirmation = 0
+}
+
+test("a PARTIALLY credit-funded cart still creates one Stripe Session", async () => {
+  reset()
+  creditBalanceCents = 500 // covers part of the 499? no — cart is 499, so use less
+  creditBalanceCents = 200
+
+  const response = await POST(checkoutRequest({ ...VALID_BODY, applyStoreCredit: true }))
+
+  assert.equal(calls.createPendingOrder, 1)
+  assert.equal(calls.reserveStoreCredit, 1, "the applied credit is reserved")
+  assert.equal(calls.completeStoreCredit, 0, "not a credit-only order")
+  // The Stripe call is attempted (the stub throws, which the route reports as
+  // a 500/502) — what matters is that exactly one Session was attempted.
+  assert.equal(calls.stripeFetch, 1, "exactly one Stripe Session for the remainder")
+  void response
+})
+
+test("a FULLY credit-funded valid cart creates zero Stripe Sessions and fulfils once", async () => {
+  reset()
+  creditBalanceCents = 10_000 // more than the 499 cart
+
+  const response = await POST(checkoutRequest({ ...VALID_BODY, applyStoreCredit: true }))
+  const body = (await response.json()) as { completed?: boolean; orderId?: string }
+
+  assert.equal(response.status, 200)
+  assert.equal(body.completed, true)
+  assert.equal(calls.stripeFetch, 0, "ZERO Stripe API calls for a credit-only order")
+  assert.equal(calls.completeStoreCredit, 1, "credit consumed exactly once")
+  assert.equal(calls.reserveStoreCredit, 0, "no separate reservation — it is consumed atomically")
+})
+
+test("the credit path does NOT enqueue separately — the outbox row is transactional", async () => {
+  reset()
+  creditBalanceCents = 10_000
+
+  await POST(checkoutRequest({ ...VALID_BODY, applyStoreCredit: true }))
+
+  // complete_store_credit_only_order writes the outbox row in the SAME
+  // transaction as the credit spend and fulfilment. A separate best-effort
+  // enqueue here would be exactly the durability hole we removed: if it failed
+  // after fulfilment committed, the confirmation would be lost with nothing to
+  // retry from. (Atomicity is proven in email_outbox_atomicity.test.sql.)
+  assert.equal(calls.completeStoreCredit, 1, "one atomic fulfilment call")
+  assert.equal(calls.enqueueConfirmation, 0, "no separate, losable enqueue")
+  assert.equal(calls.stripeFetch, 0, "and no Stripe receipt promised")
+})
+
+test("insufficient credit can never produce a free order", async () => {
+  reset()
+  creditBalanceCents = 100 // far below the 499 cart
+
+  const response = await POST(checkoutRequest({ ...VALID_BODY, applyStoreCredit: true }))
+
+  // Not credit-only: a balance remains, so it must go to Stripe, never complete free.
+  assert.equal(calls.completeStoreCredit, 0)
+  assert.equal(calls.stripeFetch, 1, "the remainder is charged")
+  void response
+})
+
+test("a failure consuming credit fails closed with no fulfilment", async () => {
+  reset()
+  creditBalanceCents = 10_000
+  creditCompletionOk = false
+
+  const response = await POST(checkoutRequest({ ...VALID_BODY, applyStoreCredit: true }))
+
+  assert.equal(response.status, 409)
+  assert.equal(calls.enqueueConfirmation, 0, "no confirmation for an unfulfilled order")
+  assert.equal(calls.stripeFetch, 0)
+})
+
+test("a zero-value cart is rejected even when the buyer has credit", async () => {
+  reset()
+  creditBalanceCents = 10_000
+  freeLines = true
+
+  const response = await POST(checkoutRequest({ ...VALID_BODY, applyStoreCredit: true }))
+  freeLines = false
+
+  assert.equal(response.status, 400, "a $0 cart is not a purchase")
+  assert.equal(calls.createPendingOrder, 0)
+  assert.equal(calls.completeStoreCredit, 0)
   assert.equal(calls.stripeFetch, 0)
 })

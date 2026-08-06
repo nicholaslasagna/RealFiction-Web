@@ -20,16 +20,16 @@ import {
   type StripeEventLike
 } from "@/lib/stripe-events"
 import {
-  claimPaymentRevocation,
+  enqueuePartialRefundOutbox,
   findOrderIdByPaymentId,
+  fulfillPaidOrderWithOutbox,
   getOrderPaymentContext,
-  markOrderPaidAndFulfill,
   markOrderUnpaidClosed,
   markWebhookEventProcessed,
   persistWebhookEvent,
   recordPaymentReview,
   releaseStoreCredit,
-  revokeOrder
+  revokeOrderWithRefundOutbox
 } from "@/lib/store-server"
 
 function toHex(buffer: ArrayBuffer) {
@@ -107,6 +107,47 @@ async function resolveOrderId(
   return typeof metadata.order_id === "string" && metadata.order_id ? metadata.order_id : null
 }
 
+/**
+ * Stripe puts the hosted receipt URL on the charge, not the session. Snapshot
+ * payloads may inline the latest charge; when they do not, we simply store
+ * nothing and the order page/email omit the receipt link.
+ */
+function readChargeId(object: Record<string, unknown>): string | null {
+  const intent = object.payment_intent
+  if (intent && typeof intent === "object") {
+    const charge = (intent as Record<string, unknown>).latest_charge
+    if (typeof charge === "string" && charge) {
+      return charge
+    }
+    if (charge && typeof charge === "object") {
+      const id = (charge as Record<string, unknown>).id
+      if (typeof id === "string" && id) {
+        return id
+      }
+    }
+  }
+  const direct = object.id
+  return typeof direct === "string" && direct.startsWith("ch_") ? direct : null
+}
+
+function readReceiptUrl(object: Record<string, unknown>): string | null {
+  const direct = object.receipt_url
+  if (typeof direct === "string" && direct) {
+    return direct
+  }
+  const intent = object.payment_intent
+  if (intent && typeof intent === "object") {
+    const charge = (intent as Record<string, unknown>).latest_charge
+    if (charge && typeof charge === "object") {
+      const url = (charge as Record<string, unknown>).receipt_url
+      if (typeof url === "string" && url) {
+        return url
+      }
+    }
+  }
+  return null
+}
+
 export async function POST(request: Request) {
   const payload = await request.text()
   const verified = await verifyStripeSignature(request, payload)
@@ -155,7 +196,15 @@ export async function POST(request: Request) {
 
     switch (action.kind) {
       case "fulfill": {
-        await markOrderPaidAndFulfill(action.orderId, action.paymentIntentId)
+        // ONE transaction: payment refs + fulfilment + the confirmation outbox
+        // row. It throws on failure, which the catch below turns into a 500 so
+        // Stripe redelivers — never a 2xx that silently lost the outbox
+        // operation. No Resend call happens here; a scheduled worker sends.
+        await fulfillPaidOrderWithOutbox(action.orderId, {
+          paymentIntentId: action.paymentIntentId,
+          chargeId: readChargeId(object),
+          receiptUrl: readReceiptUrl(object)
+        })
         break
       }
 
@@ -198,6 +247,18 @@ export async function POST(request: Request) {
           const scope = classifyRefundScope(amount, context?.paidCents ?? null, context?.items ?? [])
 
           if (scope.kind !== "full") {
+            // Partial refund: access is untouched pending human review, and the
+            // customer still gets told their money is coming back.
+            if (action.mode === "refund" && typeof object.id === "string") {
+              await enqueuePartialRefundOutbox({
+                orderId,
+                refundId: object.id,
+                refundedCents: amount,
+                currency: typeof object.currency === "string" ? object.currency.toUpperCase() : "USD",
+                affectedItemName:
+                  scope.kind === "partial" && scope.unambiguousOrderItemId ? null : null
+              })
+            }
             await recordPaymentReview({
               providerEventId: event.id,
               eventType: event.type,
@@ -215,27 +276,30 @@ export async function POST(request: Request) {
           }
         }
 
-        // Durable operation key from the refund/dispute OBJECT id. Stripe sends
-        // several event ids for one refund (created, then updated…), so event-id
-        // dedupe alone would revoke the same order more than once.
-        if (action.operationKey) {
-          const claimed = await claimPaymentRevocation({
-            operationKey: action.operationKey,
-            orderId,
-            mode: action.mode,
-            reason: action.reason
-          })
+        // ONE transaction: claim the revocation (keyed on the refund/dispute
+        // OBJECT id, since Stripe emits several event ids per refund), revoke,
+        // and write the refund outbox row. Chargebacks pass no refund id — that
+        // conversation belongs to the bank, so no customer mail is queued.
+        const revocation = await revokeOrderWithRefundOutbox({
+          orderId,
+          operationKey: action.operationKey ?? `${action.mode}:${orderId}`,
+          mode: action.mode,
+          reason: action.reason,
+          refundId: action.mode === "refund" && typeof object.id === "string" ? object.id : null,
+          refundedCents: Number(object.amount ?? 0),
+          currency: typeof object.currency === "string" ? object.currency.toUpperCase() : "USD",
+          isFullRefund: true,
+          entitlementStatus: "revoked"
+        })
 
-          if (!claimed) {
-            console.info("stripe_revocation_already_applied", {
-              order_id: orderId,
-              operation_key: action.operationKey
-            })
-            break
-          }
+        if (!revocation.claimed) {
+          console.info("stripe_revocation_already_applied", {
+            order_id: orderId,
+            operation_key: action.operationKey
+          })
+          break
         }
 
-        await revokeOrder(orderId, action.mode, action.reason)
         await recordPaymentReview({
           providerEventId: event.id,
           eventType: event.type,

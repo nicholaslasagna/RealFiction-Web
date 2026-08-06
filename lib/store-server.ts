@@ -3,6 +3,7 @@ import "server-only"
 import type { User } from "@supabase/supabase-js"
 
 import type { CheckoutInput } from "@/lib/payments"
+import { sanitizeReceiptUrl } from "@/lib/email/queue"
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role"
 
 const SAFE_PRODUCT_CATEGORIES = new Set([
@@ -163,6 +164,12 @@ export type OrderDelivery = {
   // Store credit applied at creation + the remaining amount to charge (cents).
   storeCreditCents: number
   paymentDueCents: number
+  /**
+   * The buyer's VERIFIED email, snapshotted at checkout. Fulfilment and refund
+   * mail always use this, never the profile's current address — a later email
+   * change must not redirect an existing order's correspondence.
+   */
+  buyerEmail: string
 }
 
 export async function createPendingOrder(
@@ -182,6 +189,7 @@ export async function createPendingOrder(
     .from("orders")
     .insert({
       user_id: user?.id ?? null,
+      buyer_email: delivery.buyerEmail,
       minecraft_username: delivery.minecraftUsername,
       minecraft_uuid: delivery.minecraftUuid,
       provider: delivery.provider,
@@ -258,59 +266,102 @@ export async function cancelOrder(orderId: string) {
   await supabase.from("orders").update({ status: "cancelled" }).eq("id", orderId).eq("status", "pending")
 }
 
-export async function markOrderPaidAndFulfill(orderId: string, providerPaymentId?: string | null) {
+/**
+ * Atomically fulfils a paid Stripe order AND writes its confirmation outbox row.
+ *
+ * THROWS on failure — deliberately. The webhook must return a retryable response
+ * so Stripe redelivers, rather than a 2xx that silently dropped the outbox
+ * operation. No provider HTTP call happens inside the transaction.
+ */
+export async function fulfillPaidOrderWithOutbox(
+  orderId: string,
+  refs: { paymentIntentId?: string | null; chargeId?: string | null; receiptUrl?: string | null } = {}
+): Promise<{ alreadyFulfilled: boolean; emailQueued: boolean }> {
   const supabase = getSupabaseServiceRoleClient()
-
-  const { error: updateError } = await supabase
-    .from("orders")
-    .update({
-      status: "paid",
-      provider_payment_id: providerPaymentId ?? null,
-      paid_at: new Date().toISOString()
-    })
-    .eq("id", orderId)
-    .in("status", ["pending", "paid"])
-
-  if (updateError) {
-    throw new Error("Could not mark order paid.")
-  }
-
-  const { data, error } = await supabase.rpc("fulfill_paid_order", {
-    p_order_id: orderId
+  const { data, error } = await supabase.rpc("fulfill_paid_order_with_outbox", {
+    p_order_id: orderId,
+    p_payment_intent_id: refs.paymentIntentId ?? null,
+    p_charge_id: refs.chargeId ?? null,
+    // Only a provably Stripe-hosted HTTPS URL is ever stored.
+    p_receipt_url: sanitizeReceiptUrl(refs.receiptUrl)
   })
 
   if (error) {
-    throw new Error("Could not fulfill paid order.")
+    throw new Error(`fulfill_paid_order_with_outbox failed: ${error.message ?? "unknown"}`)
   }
 
-  // Mint gift card codes for any gift-card SKUs in this order. Idempotent (one
-  // card per order-item unit), so a webhook retry can't double-mint. Non-fatal:
-  // the order is already fulfilled and a later re-drive will mint any missing
-  // codes.
-  const { error: giftError } = await supabase.rpc("issue_gift_cards_for_order", {
-    p_order_id: orderId
-  })
-  if (giftError) {
-    console.error("issue_gift_cards_error", giftError.message ?? "unknown")
-  }
+  const row = (Array.isArray(data) ? data[0] : data) as
+    | { already_fulfilled?: boolean; email_queued?: boolean }
+    | null
 
-  // Finalise any reserved store credit (idempotent; no-op when none was
-  // applied). Both the Stripe webhook and the PayPal capture path call this, so
-  // a partial-credit order's hold becomes a spend on successful payment.
-  const { error: creditError } = await supabase.rpc("finalize_store_credit_for_order", {
-    p_order_id: orderId
-  })
-  if (creditError) {
-    console.error("finalize_store_credit_error", creditError.message ?? "unknown")
+  return {
+    alreadyFulfilled: row?.already_fulfilled === true,
+    emailQueued: row?.email_queued === true
   }
-
-  return data
 }
 
 /**
- * Server-authoritative USD store-credit balance (cents) for a user. Sums their
- * store_credit_ledger via get_store_credit_balance. Never trusts the client.
+ * Atomically claims the revocation, revokes the order, and writes the refund
+ * confirmation outbox row. Throws so the webhook can ask Stripe to redeliver.
  */
+export async function revokeOrderWithRefundOutbox(input: {
+  orderId: string
+  operationKey: string
+  mode: "refund" | "chargeback"
+  reason: string
+  refundId?: string | null
+  refundedCents?: number
+  currency?: string
+  isFullRefund?: boolean
+  entitlementStatus?: "revoked" | "unchanged" | "under_review"
+  affectedItemName?: string | null
+}): Promise<{ claimed: boolean; emailQueued: boolean }> {
+  const supabase = getSupabaseServiceRoleClient()
+  const { data, error } = await supabase.rpc("revoke_order_with_refund_outbox", {
+    p_order_id: input.orderId,
+    p_operation_key: input.operationKey,
+    p_mode: input.mode,
+    p_reason: input.reason,
+    p_refund_id: input.refundId ?? null,
+    p_refunded_cents: input.refundedCents ?? 0,
+    p_currency: input.currency ?? "USD",
+    p_is_full_refund: input.isFullRefund === true,
+    p_entitlement_status: input.entitlementStatus ?? "revoked",
+    p_affected_item_name: input.affectedItemName ?? null
+  })
+
+  if (error) {
+    throw new Error(`revoke_order_with_refund_outbox failed: ${error.message ?? "unknown"}`)
+  }
+
+  const row = (Array.isArray(data) ? data[0] : data) as
+    | { claimed?: boolean; email_queued?: boolean }
+    | null
+
+  return { claimed: row?.claimed === true, emailQueued: row?.email_queued === true }
+}
+
+/** Partial refunds notify without revoking. Idempotent on the refund id. */
+export async function enqueuePartialRefundOutbox(input: {
+  orderId: string
+  refundId: string
+  refundedCents: number
+  currency: string
+  affectedItemName?: string | null
+}): Promise<void> {
+  const supabase = getSupabaseServiceRoleClient()
+  const { error } = await supabase.rpc("enqueue_partial_refund_outbox", {
+    p_order_id: input.orderId,
+    p_refund_id: input.refundId,
+    p_refunded_cents: input.refundedCents,
+    p_currency: input.currency,
+    p_affected_item_name: input.affectedItemName ?? null
+  })
+  if (error) {
+    throw new Error(`enqueue_partial_refund_outbox failed: ${error.message ?? "unknown"}`)
+  }
+}
+
 export async function getStoreCreditBalanceCents(userId: string): Promise<number> {
   const supabase = getSupabaseServiceRoleClient()
   const { data, error } = await supabase.rpc("get_store_credit_balance", { p_user_id: userId })

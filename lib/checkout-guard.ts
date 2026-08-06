@@ -234,3 +234,71 @@ export function evaluateRateLimit(
   }
   return { allowed: true, retryAfterSeconds: 0 }
 }
+
+// -- Verified buyer email -----------------------------------------------------
+
+/**
+ * Normalises an address for storage/comparison. Lowercases the whole thing:
+ * the local part is technically case-sensitive per RFC 5321, but no real
+ * mailbox provider treats it that way, and consistent storage matters more.
+ */
+export function normalizeEmail(value: string | null | undefined): string {
+  return (value ?? "").trim().toLowerCase()
+}
+
+export function isValidEmailAddress(value: string): boolean {
+  // Deliberately conservative: one @, no whitespace, a dotted domain, and a
+  // length bound. Verification is what actually proves the mailbox exists.
+  return value.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(value)
+}
+
+export type BuyerEmailCheck =
+  | { ok: true; email: string }
+  | { ok: false; code: "email_missing" | "email_invalid" | "email_unverified"; status: number; message: string }
+
+/**
+ * A purchase must be tied to a mailbox the buyer has proven they control.
+ *
+ * Without this, a receipt (and any later refund/gift mail) could be directed at
+ * an address the account holder never confirmed. Runs BEFORE any order, credit
+ * reservation, or Stripe Session is created.
+ */
+export function requireVerifiedBuyerEmail(user: {
+  email?: string | null
+  email_confirmed_at?: string | null
+  confirmed_at?: string | null
+}): BuyerEmailCheck {
+  const email = normalizeEmail(user.email)
+
+  if (!email) {
+    return {
+      ok: false,
+      code: "email_missing",
+      status: 403,
+      message: "Add an email address to your account before checking out."
+    }
+  }
+
+  if (!isValidEmailAddress(email)) {
+    return {
+      ok: false,
+      code: "email_invalid",
+      status: 403,
+      message: "Your account email doesn't look valid. Please update it before checking out."
+    }
+  }
+
+  // Supabase sets email_confirmed_at on verification; confirmed_at is the older
+  // alias. Either proves control of the mailbox.
+  const verifiedAt = user.email_confirmed_at ?? user.confirmed_at ?? null
+  if (!verifiedAt) {
+    return {
+      ok: false,
+      code: "email_unverified",
+      status: 403,
+      message: "Please verify your email address before checking out. Check your inbox for the confirmation link."
+    }
+  }
+
+  return { ok: true, email }
+}

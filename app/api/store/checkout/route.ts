@@ -6,6 +6,7 @@ import {
   isAttemptActive,
   isSessionReusable,
   evaluateRateLimit,
+  requireVerifiedBuyerEmail,
   rejectDisabledProducts,
   rejectDisabledProvider
 } from "@/lib/checkout-guard"
@@ -52,6 +53,14 @@ export async function POST(request: Request) {
   const user = await getAuthenticatedUser().catch(() => null)
   if (!user) {
     return safeJsonError("Sign in to checkout and deliver rewards safely.", 401)
+  }
+
+  // A purchase must be tied to a mailbox the buyer has proven they control.
+  // Checked before ANY order, credit reservation, or Stripe Session exists.
+  const buyerEmail = requireVerifiedBuyerEmail(user)
+  if (!buyerEmail.ok) {
+    console.info("checkout_email_rejected", { reason: buyerEmail.code })
+    return safeJsonError(buyerEmail.message, buyerEmail.status)
   }
 
   const isGift = parsed.data.isGift === true
@@ -111,6 +120,14 @@ export async function POST(request: Request) {
     step = "resolve_products"
     const lines = await resolveCheckoutLines(parsed.data)
     const subtotalCents = lines.reduce((total, item) => total + item.lineTotalCents, 0)
+
+    // A zero-value cart must never reach order creation or Stripe. The schema
+    // already requires at least one item, but a mispriced product could still
+    // total zero — and a zero-amount Session is rejected by Stripe anyway.
+    if (subtotalCents <= 0) {
+      console.warn("checkout_zero_value_rejected", baseLog)
+      return safeJsonError("Your cart is empty.", 400)
+    }
 
     // Gift cards stay out of live checkout until their ledger passes its own
     // audit. Checked against resolved DB rows, not the client's slug strings.
@@ -258,6 +275,7 @@ export async function POST(request: Request) {
         isGift,
         source: resolution.source,
         provider: effectiveProvider,
+        buyerEmail: buyerEmail.email,
         storeCreditCents: creditCents,
         paymentDueCents: dueCents
       })
@@ -276,6 +294,12 @@ export async function POST(request: Request) {
         console.error("checkout_delivery", { ...creditLog, order_id: orderId, fulfillment_status: "store_credit_failed" })
         return safeJsonError("We couldn't apply your store credit. Please refresh and try again.", 409)
       }
+      // The confirmation outbox row is written INSIDE
+      // complete_store_credit_only_order, in the same transaction as the credit
+      // spend and fulfilment. There is no separate enqueue to lose: if the
+      // outbox insert had failed, `completed` would be false and nothing above
+      // would have committed. No Stripe receipt is queued — there was no charge.
+
       console.info("checkout_delivery", { ...creditLog, order_id: orderId, fulfillment_status: "completed_store_credit" })
       return Response.json({ completed: true, orderId })
     }
@@ -298,6 +322,9 @@ export async function POST(request: Request) {
     const order = {
       id: orderId,
       provider: parsed.data.provider,
+      // Authenticated account email -> Stripe `receipt_email`, so Stripe issues
+      // its own payment receipt on a successful charge (and only then).
+      buyerEmail: buyerEmail.email,
       minecraftUsername: resolution.username,
       giftRecipient: isGift ? giftRecipient : null,
       isGift,

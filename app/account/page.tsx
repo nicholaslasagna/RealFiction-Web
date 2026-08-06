@@ -31,7 +31,7 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { voteSites } from "@/lib/data"
+import { STORE_BANNER_HEIGHT, STORE_BANNER_WIDTH, voteSites } from "@/lib/data"
 import { createSupabaseServerClient, getAuthenticatedUser } from "@/lib/supabase/server"
 
 export const dynamic = "force-dynamic"
@@ -554,8 +554,8 @@ async function SignedInAccount() {
                         alt=""
                         aria-hidden
                         src={`/images/store/${perk.slugs[0]}.png`}
-                        width={1850}
-                        height={400}
+                        width={STORE_BANNER_WIDTH}
+                        height={STORE_BANNER_HEIGHT}
                         className={unlocked ? "h-auto w-full" : "h-auto w-full opacity-40 grayscale"}
                       />
                     </div>

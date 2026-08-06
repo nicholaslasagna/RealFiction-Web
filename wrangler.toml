@@ -1,7 +1,12 @@
 name = "realfiction"
-main = ".open-next/worker.js"
+main = "worker/index.ts"
 compatibility_date = "2026-05-20"
 compatibility_flags = ["nodejs_compat", "global_fetch_strictly_public"]
+
+# Drains the transactional email queue. The Stripe webhook only enqueues; this
+# is what actually talks to Resend, so no webhook ever waits on a mail provider.
+[triggers]
+crons = ["*/5 * * * *"]
 
 [build]
 command = "npm run build:cloudflare"

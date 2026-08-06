@@ -6,9 +6,15 @@ let serviceClient: SupabaseClient | null = null
 
 /** Thrown when the service-role env vars are not present at runtime. */
 export class ServiceRoleConfigError extends Error {
-  constructor(public readonly missing: string[]) {
+  // A plain field, not a constructor parameter property: Node's type-stripping
+  // (used by `node --test`) cannot parse parameter properties, which made this
+  // whole module unloadable from any test.
+  readonly missing: string[]
+
+  constructor(missing: string[]) {
     super(`Supabase service-role configuration is missing: ${missing.join(", ")}`)
     this.name = "ServiceRoleConfigError"
+    this.missing = missing
   }
 }
 

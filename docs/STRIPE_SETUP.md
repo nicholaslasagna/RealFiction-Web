@@ -159,6 +159,48 @@ take the released cart lock.
 same checkout. It holds only a random UUID plus the cart shape — no personal data,
 no secrets — and it is **not** the security boundary: the database locks are.
 
+## Receipts vs fulfilment email
+
+Two separate things happen on a successful payment:
+
+1. **Stripe sends the payment receipt.** Checkout is created with
+   `customer_email` and `payment_intent_data[receipt_email]`. In **live mode**
+   the PaymentIntent's `receipt_email` is what causes Stripe to send the
+   successful-payment receipt — it is the mechanism for this flow, not the
+   Dashboard toggle. (`receipt_email` is *not* a valid top-level Checkout
+   Session parameter; sending it there is silently ignored, which is why
+   `lib/stripe-request-encoding.test.ts` asserts the exact form encoding.)
+   Dashboard → Settings → Emails → **Successful payments** may still be enabled
+   as a broad safety net for payments created outside this flow.
+   Dashboard → **Refunds** should be enabled separately; Stripe owns refund
+   receipts.
+2. **RealFiction sends the fulfilment email.** What was bought, where it was
+   delivered in-game, and when it expires. Never card data.
+
+Stripe never emails a receipt for an unpaid or failed session, so "no receipt
+for a failed order" needs no logic on our side.
+
+### Transactional email delivery
+
+The Stripe webhook **never calls Resend**. It writes a durable row to
+`email_deliveries` inside the payment transaction and returns 2xx; a Cloudflare
+Cron Trigger (`*/5 * * * *`, see `wrangler.toml`) drains the queue via the
+`scheduled()` handler in `worker/index.ts`. A mail outage therefore cannot slow
+a webhook, cause Stripe retries, or touch order/entitlement state.
+
+| Cloudflare setting | Name | Notes |
+| --- | --- | --- |
+| **Secret** (runtime) | `RESEND_API_KEY` | Runtime only — **never** a Build variable |
+| Variable (runtime) | `EMAIL_FROM` | `RealFiction <orders@realfiction.live>` |
+| Variable (runtime) | `EMAIL_SUPPORT_ADDRESS` | `support@realfiction.live` |
+
+The sending domain needs **SPF and DKIM** records for realfiction.live in
+Resend, or mail lands in spam.
+
+Without `RESEND_API_KEY` the queue is not lost: deliveries park as
+`unconfigured` without consuming their attempt budget, and send once the binding
+is added.
+
 ### Environment separation
 
 `STRIPE_ENVIRONMENT` must be `live` or `test`. The webhook compares it against

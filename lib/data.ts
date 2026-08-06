@@ -43,6 +43,13 @@ export type SubscriptionTier = {
   priceCents: number
 }
 
+/**
+ * Intrinsic size of the store banners in public/images/store/. Only the ratio
+ * matters — they always render `h-auto w-full` — but next/image needs both.
+ */
+export const STORE_BANNER_WIDTH = 1825
+export const STORE_BANNER_HEIGHT = 414
+
 export type SubscriptionProduct = {
   id: string
   name: string

@@ -3,7 +3,7 @@ import { getPayPalAccessToken, getPayPalBaseUrl } from "@/lib/payments"
 import { safeJsonError } from "@/lib/security"
 import {
   findOrderIdByPaymentId,
-  markOrderPaidAndFulfill,
+  fulfillPaidOrderWithOutbox,
   markWebhookEventProcessed,
   persistWebhookEvent,
   revokeOrder
@@ -155,7 +155,7 @@ export async function POST(request: Request) {
       const orderId = getOrderIdFromPayPalEvent(payload)
 
       if (orderId) {
-        await markOrderPaidAndFulfill(orderId, payload.resource?.id ?? null)
+        await fulfillPaidOrderWithOutbox(orderId, { paymentIntentId: payload.resource?.id ?? null })
       }
     }
 
