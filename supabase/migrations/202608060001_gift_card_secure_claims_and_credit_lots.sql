@@ -676,22 +676,9 @@ grant execute on function public.claim_gift_card(text, uuid, text) to service_ro
 -- writes `gift_cards.code`, and this reports whether any legacy row exists so
 -- the launch runbook can make an explicit decision rather than discovering it.
 
-create or replace function public.gift_card_legacy_code_migration_state()
-returns table(legacy_plaintext_codes integer, legacy_unredeemed integer, legacy_value_cents bigint)
-language sql
-stable
-security definer
-set search_path = public
-as $$
-  select
-    count(*) filter (where code is not null)::integer,
-    count(*) filter (where code is not null and status = 'active')::integer,
-    coalesce(sum(balance_cents) filter (where code is not null and status = 'active'), 0)::bigint
-  from public.gift_cards
-$$;
+-- (Superseded by gift_card_legacy_preflight() in 202608060002, which runs
+-- before the code columns are dropped.)
 
-revoke all on function public.gift_card_legacy_code_migration_state() from public, anon, authenticated;
-grant execute on function public.gift_card_legacy_code_migration_state() to service_role;
 
 -- The purchaser must no longer be able to read a plaintext secret out of the
 -- table. The account page reads through a service-role view that returns

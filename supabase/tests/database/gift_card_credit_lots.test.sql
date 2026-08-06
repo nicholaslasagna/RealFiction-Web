@@ -19,11 +19,11 @@ create or replace function pg_temp.issue(p_card uuid, p_cents integer, p_recipie
 returns void language plpgsql as $$
 begin
   insert into public.gift_cards (
-    id, code_hash, original_balance_cents, balance_cents, currency,
+    id, original_balance_cents, balance_cents, currency,
     purchaser_user_id, status, recipient_email, public_ref
   )
   values (
-    p_card, 'legacy-unused-' || p_card::text, p_cents, p_cents, 'USD',
+    p_card, p_cents, p_cents, 'USD',
     '9a000000-0000-4000-8000-000000000001', 'active', p_recipient,
     'RFG-' || upper(right(replace(p_card::text,'-',''), 10))
   );
@@ -239,8 +239,10 @@ select is((select outcome from public.claim_gift_card('verifier-D',
 select is((select count(*)::integer from public.store_credit_lots
   where gift_card_id='9b000000-0000-4000-8000-000000000004'), 0, 'and creates no value');
 
-select is((select legacy_plaintext_codes from public.gift_card_legacy_code_migration_state()), 0,
-  'a clean-slate database has NO legacy plaintext codes');
+select is((select count(*)::integer from information_schema.columns
+  where table_schema='public' and table_name='gift_cards'
+    and column_name in ('code','code_hash')), 0,
+  'plaintext code storage does not exist at all');
 
 -- ===========================================================================
 -- 8. Nothing is client-reachable
