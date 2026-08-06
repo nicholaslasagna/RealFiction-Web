@@ -23,6 +23,9 @@ import { resolveDeliveryTarget } from "@/lib/store-delivery"
 import { getAuthenticatedUser } from "@/lib/supabase/server"
 import {
   attachCheckoutAttemptOrder,
+  consumeUpgradeCredit,
+  findAlreadyOwned,
+  getUpgradeQuote,
   attachCheckoutSession,
   attachProviderSession,
   cancelOrder,
@@ -119,12 +122,12 @@ export async function POST(request: Request) {
 
     step = "resolve_products"
     const lines = await resolveCheckoutLines(parsed.data)
-    const subtotalCents = lines.reduce((total, item) => total + item.lineTotalCents, 0)
+    const merchandiseSubtotalCents = lines.reduce((total, item) => total + item.lineTotalCents, 0)
 
     // A zero-value cart must never reach order creation or Stripe. The schema
     // already requires at least one item, but a mispriced product could still
     // total zero — and a zero-amount Session is rejected by Stripe anyway.
-    if (subtotalCents <= 0) {
+    if (merchandiseSubtotalCents <= 0) {
       console.warn("checkout_zero_value_rejected", baseLog)
       return safeJsonError("Your cart is empty.", 400)
     }
@@ -136,11 +139,52 @@ export async function POST(request: Request) {
       return safeJsonError(productRejection.message, productRejection.status)
     }
 
+    // Duplicate-purchase prevention. A permanent product the account already
+    // owns cannot be bought again for itself — there is nothing to grant. Gifts
+    // are exempt: buying a rank for someone else is legitimate.
+    step = "ownership_check"
+    if (!isGift) {
+      const owned = await findAlreadyOwned(user.id, lines.map((line) => line.product.slug))
+      if (owned.length > 0) {
+        console.info("checkout_already_owned", { ...baseLog, owned_count: owned.length })
+        return safeJsonError(
+          "You already own one or more of these. Remove them from your cart, or tick \"Send as a gift\" to buy for someone else.",
+          409
+        )
+      }
+    }
+
+    // Upgrade pricing. The client may only REQUEST an upgrade; eligibility and
+    // the amount come from Postgres, computed from entitlements and settled
+    // orders. An ineligible request silently falls through to full price.
+    step = "upgrade_quote"
+    let upgrade: { quote: NonNullable<Awaited<ReturnType<typeof getUpgradeQuote>>>; slug: string } | null = null
+
+    if (parsed.data.requestUpgrade && !isGift && lines.length === 1) {
+      const targetSlug = lines[0].product.slug
+      const quote = await getUpgradeQuote(user.id, targetSlug)
+
+      if (quote === null) {
+        // Quote unreadable -> fail closed rather than guess a discount.
+        throw new CheckoutGuardUnavailableError("compute_upgrade_price", "quote unavailable")
+      }
+      if (quote.eligible && quote.sourceOrderId && quote.fromSlug) {
+        upgrade = { quote, slug: targetSlug }
+      } else {
+        console.info("checkout_upgrade_not_eligible", { ...baseLog, reason: quote.reason })
+      }
+    }
+
     // Store credit is always recomputed server-side from the ledger — the
     // client only sends whether to apply it, never an amount or balance.
     step = "compute_credit"
     const applyCredit = parsed.data.applyStoreCredit === true
     const availableCents = applyCredit ? await getStoreCreditBalanceCents(user.id) : 0
+    // An eligible upgrade discounts the subtotal server-side. `subtotalCents` is
+    // what we actually charge; `merchandiseSubtotalCents` stays the list value
+    // and is what the empty/zero-cart guard keys on, so a fully-discounted
+    // upgrade is still a valid purchase rather than an "empty cart".
+    const subtotalCents = upgrade ? upgrade.quote.upgradePriceCents : merchandiseSubtotalCents
     const { creditCents, dueCents } = computeCreditApplication(subtotalCents, availableCents, applyCredit)
 
     // A card payment is only needed when a balance remains. Gate provider config
@@ -275,12 +319,36 @@ export async function POST(request: Request) {
         isGift,
         source: resolution.source,
         provider: effectiveProvider,
+        // Server-computed. Zero unless an eligible upgrade was quoted.
+        discountCents: upgrade ? merchandiseSubtotalCents - subtotalCents : 0,
         buyerEmail: buyerEmail.email,
         storeCreditCents: creditCents,
         paymentDueCents: dueCents
       })
       step = "attach_attempt"
       await attachCheckoutAttemptOrder(attempt.claimId, orderId)
+
+      if (upgrade) {
+        step = "consume_upgrade_credit"
+        const claimed = await consumeUpgradeCredit({
+          sourceOrderId: upgrade.quote.sourceOrderId as string,
+          upgradeOrderId: orderId,
+          fromSlug: upgrade.quote.fromSlug as string,
+          toSlug: upgrade.slug,
+          creditCents: upgrade.quote.creditCents
+        })
+
+        if (!claimed) {
+          // Another checkout consumed this credit first. Cancel rather than
+          // sell at a discount that no longer exists.
+          await cancelOrder(orderId)
+          console.warn("checkout_upgrade_credit_taken", { ...baseLog, order_id: orderId })
+          return safeJsonError(
+            "That upgrade was already used. Refresh the store to see your current price.",
+            409
+          )
+        }
+      }
     }
 
     const creditLog = { ...baseLog, store_credit_cents: creditCents, payment_due_cents: dueCents }
@@ -329,7 +397,8 @@ export async function POST(request: Request) {
       giftRecipient: isGift ? giftRecipient : null,
       isGift,
       storeCreditAppliedCents: creditCents,
-      paymentDueCents: dueCents
+      paymentDueCents: dueCents,
+      discountCents: upgrade ? merchandiseSubtotalCents - subtotalCents : 0
     }
 
     const result =

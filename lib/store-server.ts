@@ -165,6 +165,12 @@ export type OrderDelivery = {
   storeCreditCents: number
   paymentDueCents: number
   /**
+   * Server-computed upgrade discount (cents). The order's total is the
+   * merchandise subtotal MINUS this — never recomputed from line prices, which
+   * carry the undiscounted list value.
+   */
+  discountCents: number
+  /**
    * The buyer's VERIFIED email, snapshotted at checkout. Fulfilment and refund
    * mail always use this, never the profile's current address — a later email
    * change must not redirect an existing order's correspondence.
@@ -180,6 +186,10 @@ export async function createPendingOrder(
 ) {
   const supabase = getSupabaseServiceRoleClient()
   const subtotalCents = lines.reduce((total, item) => total + item.lineTotalCents, 0)
+  const discountCents = Math.max(0, Math.min(delivery.discountCents ?? 0, subtotalCents))
+  // What we actually bill. Clamped so a discount can never exceed the cart or
+  // produce a negative total.
+  const totalCents = subtotalCents - discountCents
 
   if (user) {
     await ensureProfileForUser(user)
@@ -195,8 +205,8 @@ export async function createPendingOrder(
       provider: delivery.provider,
       status: "pending",
       subtotal_cents: subtotalCents,
-      discount_cents: 0,
-      total_cents: subtotalCents,
+      discount_cents: discountCents,
+      total_cents: totalCents,
       store_credit_applied_cents: delivery.storeCreditCents,
       payment_due_cents: delivery.paymentDueCents,
       currency: "USD",
@@ -360,6 +370,98 @@ export async function enqueuePartialRefundOutbox(input: {
   if (error) {
     throw new Error(`enqueue_partial_refund_outbox failed: ${error.message ?? "unknown"}`)
   }
+}
+
+export type UpgradeQuote = {
+  eligible: boolean
+  reason: string
+  targetPriceCents: number
+  creditCents: number
+  upgradePriceCents: number
+  sourceOrderId: string | null
+  fromSlug: string | null
+}
+
+/**
+ * Authoritative upgrade quote. Computed entirely in Postgres from entitlements
+ * and settled orders — the browser contributes nothing but the intent to
+ * upgrade.
+ */
+export async function getUpgradeQuote(userId: string, toSlug: string): Promise<UpgradeQuote | null> {
+  const supabase = getSupabaseServiceRoleClient()
+  const { data, error } = await supabase.rpc("compute_upgrade_price", {
+    p_user_id: userId,
+    p_to_slug: toSlug
+  })
+
+  if (error) {
+    // Fail CLOSED: an unreadable quote must not silently become a discount.
+    console.error("upgrade_quote_failed", { to_slug: toSlug })
+    return null
+  }
+
+  const row = (Array.isArray(data) ? data[0] : data) as Record<string, unknown> | null
+  if (!row) {
+    return null
+  }
+
+  return {
+    eligible: row.eligible === true,
+    reason: String(row.reason ?? "unknown"),
+    targetPriceCents: Number(row.target_price_cents ?? 0),
+    creditCents: Number(row.credit_cents ?? 0),
+    upgradePriceCents: Number(row.upgrade_price_cents ?? 0),
+    sourceOrderId: (row.source_order_id as string | null) ?? null,
+    fromSlug: (row.from_slug as string | null) ?? null
+  }
+}
+
+/**
+ * Claims the upgrade credit for a specific order. Returns false when the source
+ * purchase was already consumed — the PRIMARY KEY on source_order_id makes this
+ * the race guard, so two concurrent upgrade checkouts cannot both discount.
+ */
+export async function consumeUpgradeCredit(input: {
+  sourceOrderId: string
+  upgradeOrderId: string
+  fromSlug: string
+  toSlug: string
+  creditCents: number
+}): Promise<boolean> {
+  const supabase = getSupabaseServiceRoleClient()
+  const { data, error } = await supabase.rpc("consume_upgrade_credit", {
+    p_source_order_id: input.sourceOrderId,
+    p_upgrade_order_id: input.upgradeOrderId,
+    p_from_slug: input.fromSlug,
+    p_to_slug: input.toSlug,
+    p_credit_cents: input.creditCents
+  })
+  if (error) {
+    throw new CheckoutGuardUnavailableError("consume_upgrade_credit", error.message ?? "unknown")
+  }
+  return data === true
+}
+
+/** Product ids in this cart that the account already owns outright. */
+export async function findAlreadyOwned(userId: string, slugs: string[]): Promise<string[]> {
+  if (slugs.length === 0) {
+    return []
+  }
+  const supabase = getSupabaseServiceRoleClient()
+  const { data } = await supabase
+    .from("entitlements")
+    .select("entitlement_key,expires_at")
+    .eq("user_id", userId)
+    .eq("status", "active")
+    .in("entitlement_key", slugs.map((slug) => `product:${slug}`))
+
+  const now = Date.now()
+  return (data ?? [])
+    .filter((row) => {
+      const expiry = row.expires_at as string | null
+      return !expiry || Date.parse(expiry) > now
+    })
+    .map((row) => String(row.entitlement_key).replace(/^product:/, ""))
 }
 
 export async function getStoreCreditBalanceCents(userId: string): Promise<number> {

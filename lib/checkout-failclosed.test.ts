@@ -12,7 +12,20 @@ import { mock, test } from "node:test"
 register("./test-alias-hook.mjs", import.meta.url)
 
 // Effects we must prove did NOT happen.
+let alreadyOwned: string[] = []
+let upgradeQuote: Record<string, unknown> | null = {
+  eligible: false,
+  reason: "no_eligible_purchase",
+  targetPriceCents: 3499,
+  creditCents: 0,
+  upgradePriceCents: 3499,
+  sourceOrderId: null,
+  fromSlug: null
+}
+let upgradeCreditClaimable = true
+
 const calls = {
+  consumeUpgradeCredit: 0,
   createPendingOrder: 0,
   reserveStoreCredit: 0,
   stripeFetch: 0,
@@ -59,6 +72,14 @@ mock.module("@/lib/store-server", {
       return claimResult
     },
     closeCheckoutAttempt: async () => {},
+    // Upgrade surface. Defaults are the "no upgrade" path; individual tests
+    // override via the mutable holders below.
+    findAlreadyOwned: async () => alreadyOwned,
+    getUpgradeQuote: async () => upgradeQuote,
+    consumeUpgradeCredit: async () => {
+      calls.consumeUpgradeCredit++
+      return upgradeCreditClaimable
+    },
     attachCheckoutSession: async () => true,
     countRecentCheckoutAttempts: async () => 0,
     attachCheckoutAttemptOrder: async () => {
@@ -514,4 +535,103 @@ test("a zero-value cart is rejected even when the buyer has credit", async () =>
   assert.equal(calls.createPendingOrder, 0)
   assert.equal(calls.completeStoreCredit, 0)
   assert.equal(calls.stripeFetch, 0)
+})
+
+// -- Upgrades: the client may request, never price ---------------------------
+
+test("a client cannot invent upgrade eligibility or name its own discount", async () => {
+  claimShouldThrow = false
+  alreadyOwned = []
+  calls.createPendingOrder = 0
+  calls.consumeUpgradeCredit = 0
+  // Server says: not eligible.
+  upgradeQuote = {
+    eligible: false,
+    reason: "no_eligible_purchase",
+    targetPriceCents: 3499,
+    creditCents: 0,
+    upgradePriceCents: 3499,
+    sourceOrderId: null,
+    fromSlug: null
+  }
+
+  await POST(
+    checkoutRequest({ ...VALID_BODY, requestUpgrade: true, items: [{ productId: "realvip-1m", quantity: 1 }] })
+  )
+
+  // The status is not the assertion here — this harness has no network, so any
+  // path that reaches Stripe ends in a 5xx. What matters is that an ineligible
+  // request bought nothing at a discount: an order was created (at full price)
+  // and no upgrade credit was consumed.
+  assert.equal(calls.consumeUpgradeCredit, 0, "an ineligible request must never consume credit")
+  assert.equal(calls.createPendingOrder, 1, "it still proceeds as a normal full-price purchase")
+})
+
+test("an eligible upgrade consumes the credit exactly once", async () => {
+  claimShouldThrow = false
+  alreadyOwned = []
+  upgradeCreditClaimable = true
+  calls.consumeUpgradeCredit = 0
+  upgradeQuote = {
+    eligible: true,
+    reason: "ok",
+    targetPriceCents: 3499,
+    creditCents: 1299,
+    upgradePriceCents: 2200,
+    sourceOrderId: "11111111-1111-4111-8111-111111111111",
+    fromSlug: "realvip-permanent"
+  }
+
+  await POST(checkoutRequest({ ...VALID_BODY, requestUpgrade: true }))
+  assert.equal(calls.consumeUpgradeCredit, 1)
+})
+
+test("losing the upgrade-credit race cancels rather than selling at a stale discount", async () => {
+  claimShouldThrow = false
+  alreadyOwned = []
+  // Another checkout consumed the credit first.
+  upgradeCreditClaimable = false
+  upgradeQuote = {
+    eligible: true,
+    reason: "ok",
+    targetPriceCents: 3499,
+    creditCents: 1299,
+    upgradePriceCents: 2200,
+    sourceOrderId: "11111111-1111-4111-8111-111111111111",
+    fromSlug: "realvip-permanent"
+  }
+
+  const response = await POST(checkoutRequest({ ...VALID_BODY, requestUpgrade: true }))
+  const body = (await response.json()) as { error?: string }
+
+  assert.equal(response.status, 409)
+  assert.match(body.error ?? "", /already used/i)
+  upgradeCreditClaimable = true
+})
+
+test("an already-owned product cannot be re-purchased for yourself", async () => {
+  claimShouldThrow = false
+  alreadyOwned = ["realvip-1m"]
+  calls.createPendingOrder = 0
+
+  const response = await POST(checkoutRequest(VALID_BODY))
+  const body = (await response.json()) as { error?: string }
+
+  assert.equal(response.status, 409)
+  assert.match(body.error ?? "", /already own/i)
+  assert.equal(calls.createPendingOrder, 0, "no order for something already owned")
+  alreadyOwned = []
+})
+
+test("but it CAN be bought as a gift", async () => {
+  claimShouldThrow = false
+  alreadyOwned = ["realvip-1m"]
+  calls.createPendingOrder = 0
+
+  const response = await POST(
+    checkoutRequest({ ...VALID_BODY, isGift: true, giftRecipient: "Friend" })
+  )
+
+  assert.notEqual(response.status, 409, "gifting what you own is legitimate")
+  alreadyOwned = []
 })
