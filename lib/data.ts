@@ -26,6 +26,13 @@ import {
   SwordIcon
 } from "@/components/minecraft-icons"
 
+import {
+  BILLING_DISCLOSURE,
+  purchasableProducts,
+  type BillingType,
+  type StoreCategory
+} from "@/lib/store/catalog"
+
 export type ProductCategory =
   | "supporter"
   | "cosmetics"
@@ -35,38 +42,38 @@ export type ProductCategory =
   | "lobby"
   | "gift-cards"
 
-export type DurationMonths = 1 | 3 | 6 | 12
-
-export type SubscriptionTier = {
-  slug: string
-  months: DurationMonths
-  priceCents: number
-}
 
 /**
- * Intrinsic size of the store banners in public/images/store/. Only the ratio
- * matters — they always render `h-auto w-full` — but next/image needs both.
+ * Storefront product, derived from lib/store/catalog.ts.
+ *
+ * The old shape carried 1m/3m/6m/12m tiers. Those SKUs are retired from sale
+ * (migration 202607230001): ranks and cosmetics are permanent, and the one
+ * fixed-term product is the RealFiction+ pass. Keeping tiers would let the
+ * storefront offer slugs the server now refuses.
  */
-export const STORE_BANNER_WIDTH = 1825
-export const STORE_BANNER_HEIGHT = 414
-
-export type SubscriptionProduct = {
+export type StoreProduct = {
   id: string
   name: string
   category: ProductCategory
   summary: string
   details: string[]
   accent: string
-  /**
-   * Wide store banner, the same artwork uploaded to the Stripe catalog so the
-   * storefront and the Stripe checkout page look like one product. Files live in
-   * public/images/store/<id>.png — see the README there for the export spec.
-   * `lib/store-banners.test.ts` fails the build if one is missing.
-   */
-  banner: string
-  featured?: boolean
-  tiers: SubscriptionTier[]
+  banner: string | null
+  /** Display price. Checkout re-resolves the authoritative price server-side. */
+  priceCents: number
+  billing: BillingType
+  durationDays: number | null
+  /** Rendered verbatim so every card states its billing shape. */
+  disclosure: string[]
+  includes: string[]
+  upgradeFrom: string | null
+  retained: string[]
+  expires: string[]
+  badge: string | null
 }
+
+export const STORE_BANNER_WIDTH = 1825
+export const STORE_BANNER_HEIGHT = 414
 
 export type GiftCard = {
   id: string
@@ -79,13 +86,6 @@ export type GiftCard = {
   featured?: boolean
   accent: string
   image: string
-}
-
-export const DURATION_LABEL: Record<DurationMonths, string> = {
-  1: "1 month",
-  3: "3 months",
-  6: "6 months",
-  12: "1 year"
 }
 
 // "Store" intentionally omitted from the centered nav — there's already a
@@ -172,116 +172,50 @@ export const gamemodes = [
 // Subscription products. Every non-gift product offers 1 / 3 / 6 / 12-month
 // tiers with built-in discounts on the longer terms. Each tier is its own
 // server-authoritative product slug (priced + duration-bound in the database).
-export const storeProducts: SubscriptionProduct[] = [
-  {
-    id: "realvip",
-    banner: "/images/store/realvip.png",
-    name: "RealVIP",
-    category: "supporter",
-    summary: "Supporter rank with profile style, chat flair, and lobby cosmetics.",
-    details: ["No gameplay advantage", "Supporter badge + chat flair", "Lobby cosmetic perks", "Helpful support access"],
-    accent: "cyan",
-    featured: true,
-    tiers: [
-      { slug: "realvip-1m", months: 1, priceCents: 499 },
-      { slug: "realvip-3m", months: 3, priceCents: 1299 },
-      { slug: "realvip-6m", months: 6, priceCents: 2399 },
-      { slug: "realvip-12m", months: 12, priceCents: 3999 }
-    ]
-  },
-  {
-    id: "real-supporter",
-    banner: "/images/store/real-supporter.png",
-    name: "RealSupporter",
-    category: "supporter",
-    summary: "Top supporter status for members who want to back the network in style.",
-    details: ["Supporter profile frame", "Discord supporter sync", "Cosmetic-only perks", "Monthly cosmetic drop"],
-    accent: "amber",
-    featured: true,
-    tiers: [
-      { slug: "real-supporter-1m", months: 1, priceCents: 999 },
-      { slug: "real-supporter-3m", months: 3, priceCents: 2699 },
-      { slug: "real-supporter-6m", months: 6, priceCents: 4799 },
-      { slug: "real-supporter-12m", months: 12, priceCents: 7999 }
-    ]
-  },
-  {
-    id: "realpets",
-    banner: "/images/store/realpets.png",
-    name: "RealPets Pack",
-    category: "pets",
-    summary: "A rotating pet collection for hubs, lobbies, and social spaces.",
-    details: ["Lobby-only pets", "Nameable pet profile", "Seasonal skins", "No combat effects"],
-    accent: "emerald",
-    tiers: [
-      { slug: "realpets-1m", months: 1, priceCents: 299 },
-      { slug: "realpets-3m", months: 3, priceCents: 799 },
-      { slug: "realpets-6m", months: 6, priceCents: 1399 },
-      { slug: "realpets-12m", months: 12, priceCents: 2399 }
-    ]
-  },
-  {
-    id: "particle-vault",
-    banner: "/images/store/particle-vault.png",
-    name: "Particle Vault",
-    category: "particles",
-    summary: "Cinematic trails, celebration effects, and lobby visual effects.",
-    details: ["Lobby and cosmetic-safe effects", "Toggleable presets", "Profile showcase support", "Delivered to your account"],
-    accent: "violet",
-    tiers: [
-      { slug: "particle-vault-1m", months: 1, priceCents: 349 },
-      { slug: "particle-vault-3m", months: 3, priceCents: 899 },
-      { slug: "particle-vault-6m", months: 6, priceCents: 1699 },
-      { slug: "particle-vault-12m", months: 12, priceCents: 2799 }
-    ]
-  },
-  {
-    id: "username-colors",
-    banner: "/images/store/username-colors.png",
-    name: "Username Colors",
-    category: "identity",
-    summary: "Curated chat colors and nameplate identity styles for your in-game look.",
-    details: ["Approved palette", "Works with prefixes", "No staff impersonation colors", "Works with your profile"],
-    accent: "rose",
-    tiers: [
-      { slug: "username-colors-1m", months: 1, priceCents: 199 },
-      { slug: "username-colors-3m", months: 3, priceCents: 499 },
-      { slug: "username-colors-6m", months: 6, priceCents: 899 },
-      { slug: "username-colors-12m", months: 12, priceCents: 1599 }
-    ]
-  },
-  {
-    id: "lobby-flight",
-    banner: "/images/store/lobby-flight.png",
-    name: "Lobby Flight",
-    category: "lobby",
-    summary: "Smooth lobby flight for hubs, spawn showcases, and event spaces.",
-    details: ["Lobby-only convenience", "No survival or PvP impact", "Easy to turn on or off", "Made for hub areas"],
-    accent: "sky",
-    tiers: [
-      { slug: "lobby-flight-1m", months: 1, priceCents: 249 },
-      { slug: "lobby-flight-3m", months: 3, priceCents: 649 },
-      { slug: "lobby-flight-6m", months: 6, priceCents: 1199 },
-      { slug: "lobby-flight-12m", months: 12, priceCents: 1999 }
-    ]
-  },
-  {
-    id: "cosmetic-atelier",
-    banner: "/images/store/cosmetic-atelier.png",
-    name: "Cosmetic Atelier",
-    category: "cosmetics",
-    summary: "A curated bundle of profile effects, lobby entrances, particles, and badges.",
-    details: ["Profile customization", "Lobby entrance effects", "Seasonal badge rotation", "Giftable"],
-    accent: "blue",
-    featured: true,
-    tiers: [
-      { slug: "cosmetic-atelier-1m", months: 1, priceCents: 699 },
-      { slug: "cosmetic-atelier-3m", months: 3, priceCents: 1899 },
-      { slug: "cosmetic-atelier-6m", months: 6, priceCents: 3399 },
-      { slug: "cosmetic-atelier-12m", months: 12, priceCents: 5599 }
-    ]
-  }
-]
+const CATEGORY_FOR: Record<StoreCategory, ProductCategory> = {
+  ranks: "supporter",
+  membership: "supporter",
+  cosmetics: "cosmetics",
+  pets: "pets",
+  bundles: "cosmetics",
+  "gift-cards": "gift-cards"
+}
+
+const ACCENT_FOR: Record<string, string> = {
+  "realvip-permanent": "cyan",
+  "real-supporter-permanent": "emerald",
+  "realfiction-plus-30d": "violet",
+  "username-colors-permanent": "rose",
+  "particle-vault-permanent": "sky",
+  "realpets-permanent": "amber",
+  "cosmetic-atelier-permanent": "blue"
+}
+
+/**
+ * Every purchasable product, in catalog order. Sourced from the catalog so the
+ * storefront and the seed migration cannot disagree about what exists.
+ */
+export const storeProducts: StoreProduct[] = purchasableProducts()
+  .sort((a, b) => a.sortOrder - b.sortOrder)
+  .map((product) => ({
+    id: product.id,
+    name: product.name,
+    category: CATEGORY_FOR[product.category],
+    summary: product.features[0] ?? "",
+    details: product.features,
+    accent: ACCENT_FOR[product.id] ?? "amber",
+    banner: product.banner,
+    priceCents: product.priceCents,
+    billing: product.billing,
+    durationDays: product.durationDays,
+    disclosure: BILLING_DISCLOSURE[product.billing],
+    includes: product.includes,
+    upgradeFrom: product.upgradeFrom,
+    retained: product.retained,
+    expires: product.expires,
+    badge: product.badge
+  }))
+
 
 export const giftCards: GiftCard[] = [
   {

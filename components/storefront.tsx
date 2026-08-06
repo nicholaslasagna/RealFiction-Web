@@ -12,16 +12,14 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import {
-  DURATION_LABEL,
   giftCards,
   productCategories,
   STORE_BANNER_HEIGHT,
   STORE_BANNER_WIDTH,
   storeProducts,
-  type DurationMonths,
-  type ProductCategory,
-  type SubscriptionProduct
+  type ProductCategory
 } from "@/lib/data"
+import { getProduct, isIncludedIn } from "@/lib/store/catalog"
 import { cn, formatCurrency } from "@/lib/utils"
 
 type CartItem = { slug: string; quantity: number }
@@ -42,7 +40,7 @@ const accentThemes: Record<string, { surface: string; icon: string }> = {
 // Flat lookup for every purchasable slug (subscription tiers + gift cards).
 const skuIndex = new Map<
   string,
-  { name: string; priceCents: number; consumable: boolean; art: string; artWide: boolean }
+  { name: string; priceCents: number; consumable: boolean; art: string | null; artWide: boolean }
 >()
 for (const card of giftCards) {
   skuIndex.set(card.id, {
@@ -54,15 +52,13 @@ for (const card of giftCards) {
   })
 }
 for (const product of storeProducts) {
-  for (const tier of product.tiers) {
-    skuIndex.set(tier.slug, {
-      name: `${product.name} · ${DURATION_LABEL[tier.months]}`,
-      priceCents: tier.priceCents,
-      consumable: false,
-      art: product.banner,
-      artWide: true
-    })
-  }
+  skuIndex.set(product.id, {
+    name: product.name,
+    priceCents: product.priceCents,
+    consumable: false,
+    art: product.banner,
+    artWide: true
+  })
 }
 
 /**
@@ -94,25 +90,34 @@ function PayMark({ src }: { src: string }) {
   )
 }
 
-function savePercent(product: SubscriptionProduct, priceCents: number, months: DurationMonths) {
-  const monthly = product.tiers[0]?.priceCents ?? priceCents
-  const full = monthly * months
-  if (full <= 0) {
-    return 0
+/**
+ * Which owned product makes `id` redundant, if any.
+ *
+ * Display only. The server re-checks entitlements at checkout; this exists so a
+ * RealSupporter owner is not invited to buy RealVIP again.
+ */
+function includedByOwned(id: string, ownedIds: Set<string>): string | null {
+  for (const owned of ownedIds) {
+    if (isIncludedIn(id, owned)) {
+      return getProduct(owned)?.name ?? null
+    }
   }
-  return Math.round((1 - priceCents / full) * 100)
+  return null
 }
 
 export function Storefront({
   signedIn,
-  linkedUsername
+  linkedUsername,
+  ownedProductIds = []
 }: {
   signedIn: boolean
   linkedUsername: string | null
+  /** Authoritative, server-resolved. Never derived in the browser. */
+  ownedProductIds?: string[]
 }) {
+  const ownedIds = useMemo(() => new Set(ownedProductIds), [ownedProductIds])
   const [category, setCategory] = useState<ProductCategory | "all">("all")
   const [cart, setCart] = useState<CartItem[]>([])
-  const [selectedMonths, setSelectedMonths] = useState<Record<string, DurationMonths>>({})
   const [isGift, setIsGift] = useState(false)
   const [giftRecipient, setGiftRecipient] = useState("")
   const [applyCredit, setApplyCredit] = useState(false)
@@ -165,10 +170,13 @@ export function Storefront({
         .filter((c) => c.id !== "all" && (category === "all" || category === c.id))
         .map((c) => ({
           meta: c,
+          id: c.id,
           products: c.id === "gift-cards" ? [] : storeProducts.filter((p) => p.category === c.id),
-          cards: c.id === "gift-cards" ? giftCards : []
+          // Deliberately empty: gift cards render as a single coming-soon
+          // panel, never as purchasable cards.
+          cards: []
         }))
-        .filter((s) => s.products.length > 0 || s.cards.length > 0),
+        .filter((s) => s.products.length > 0 || s.id === "gift-cards"),
     [category]
   )
 
@@ -194,7 +202,7 @@ export function Storefront({
     quantity: number
     total: number
     consumable: boolean
-    art: string
+    art: string | null
     artWide: boolean
   }>
 
@@ -416,100 +424,76 @@ export function Storefront({
                 </div>
 
                 {isGiftCards ? (
-                  <div className="grid gap-4 min-[480px]:grid-cols-2 lg:grid-cols-3">
-                    {section.cards.map((card) => (
-                      <Card key={card.id} className="minecraft-card flex flex-col overflow-hidden">
-                        <div className="flex justify-center bg-black/30 px-3 pt-4">
-                          <Image
-                            alt={`${card.name} for RealFiction`}
-                            src={card.image}
-                            width={384}
-                            height={606}
-                            className="h-auto w-[80%] max-w-[170px] rounded-lg drop-shadow-[0_16px_36px_rgba(0,0,0,0.55)]"
-                          />
-                        </div>
-                        <CardContent className="flex flex-1 flex-col gap-2 pt-4">
-                          <div className="flex flex-wrap items-center justify-between gap-2">
-                            <CardTitle className="display-font text-lg">{card.name}</CardTitle>
-                            <span className="font-mono text-base font-semibold text-amber-100">
-                              {formatCurrency(card.priceCents)}
-                            </span>
-                          </div>
-                          <Button className="mt-auto w-full" onClick={() => addToCart(card.id)} type="button">
-                            <Plus className="h-4 w-4" />
-                            Add to cart
-                          </Button>
-                        </CardContent>
-                      </Card>
-                    ))}
-                  </div>
+                  <Card className="minecraft-card">
+                    <CardContent className="flex flex-col items-start gap-3 py-8">
+                      <Badge variant="outline">Coming soon</Badge>
+                      <CardTitle className="display-font text-xl">Gift cards</CardTitle>
+                      <p className="max-w-prose text-sm leading-6 text-muted-foreground">
+                        We&apos;re building gift cards properly — secure one-time claim
+                        links, partial balances, and refunds that actually work. They
+                        aren&apos;t on sale yet, and we&apos;d rather say so than take your
+                        money for something half-finished.
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        Want to gift something today? Every rank and cosmetic can be sent
+                        to another player — tick <span className="text-slate-200">Send as a gift</span> in
+                        the cart.
+                      </p>
+                    </CardContent>
+                  </Card>
                 ) : (
                   <div className="grid gap-5 sm:grid-cols-2">
                     {section.products.map((product) => {
                       const theme = accentThemes[product.accent] ?? accentThemes.amber
-                      const months = selectedMonths[product.id] ?? 1
-                      const tier = product.tiers.find((entry) => entry.months === months) ?? product.tiers[0]
-                      const perMonth = Math.round(tier.priceCents / tier.months)
+                      const owned = ownedIds.has(product.id)
+                      const includedBy = includedByOwned(product.id, ownedIds)
 
                       return (
                         <Card key={product.id} className="minecraft-card flex flex-col overflow-hidden">
                           {/* Same artwork as the Stripe catalog entry, so the
                               storefront and the Stripe checkout page read as one
                               product. */}
-                          <div className="relative overflow-hidden border-b border-white/10">
-                            <Image
-                              alt=""
-                              aria-hidden
-                              src={product.banner}
-                              width={STORE_BANNER_WIDTH}
-                              height={STORE_BANNER_HEIGHT}
-                              className="h-auto w-full"
-                            />
-                            {product.featured ? (
-                              <Badge variant="warning" className="absolute left-3 top-3">
-                                Popular
-                              </Badge>
-                            ) : null}
-                          </div>
+                          {product.banner ? (
+                            <div className="relative overflow-hidden border-b border-white/10">
+                              <Image
+                                alt=""
+                                aria-hidden
+                                src={product.banner}
+                                width={STORE_BANNER_WIDTH}
+                                height={STORE_BANNER_HEIGHT}
+                                className="h-auto w-full"
+                              />
+                              {product.badge ? (
+                                <Badge variant="warning" className="absolute left-3 top-3">
+                                  {product.badge}
+                                </Badge>
+                              ) : null}
+                            </div>
+                          ) : (
+                            <div className={cn("border-b border-white/10 px-4 py-5", theme.surface)}>
+                              {product.badge ? <Badge variant="warning">{product.badge}</Badge> : null}
+                            </div>
+                          )}
                           <CardContent className="flex flex-1 flex-col gap-3 pt-4">
                             <CardTitle className="display-font text-xl">{product.name}</CardTitle>
                             <p className="text-sm leading-6 text-muted-foreground">{product.summary}</p>
 
-                            <div className="grid gap-2 min-[430px]:grid-cols-2">
-                              {product.tiers.map((entry) => {
-                                const selected = entry.months === months
-                                const pct = savePercent(product, entry.priceCents, entry.months)
-                                return (
-                                  <button
-                                    key={entry.slug}
-                                    type="button"
-                                    onClick={() => setSelectedMonths((current) => ({ ...current, [product.id]: entry.months }))}
-                                    className={cn(
-                                      "relative rounded-md border px-3 py-2 text-left transition",
-                                      selected
-                                        ? "border-amber-300/60 bg-amber-200/12"
-                                        : "border-white/10 bg-black/24 hover:border-amber-200/30"
-                                    )}
-                                  >
-                                    <div className="text-xs font-bold text-slate-200">{DURATION_LABEL[entry.months]}</div>
-                                    <div className="font-mono text-sm font-semibold text-amber-100">
-                                      {formatCurrency(entry.priceCents)}
-                                    </div>
-                                    {pct > 0 ? (
-                                      <span className="absolute right-1.5 top-1.5 rounded bg-emerald-400/15 px-1.5 py-0.5 text-[10px] font-bold text-emerald-200">
-                                        -{pct}%
-                                      </span>
-                                    ) : null}
-                                  </button>
-                                )
-                              })}
-                            </div>
-
                             <div>
-                              <div className="font-mono text-2xl font-semibold text-amber-100">{formatCurrency(tier.priceCents)}</div>
-                              <div className="text-xs text-muted-foreground">
-                                {DURATION_LABEL[tier.months]} of access · about {formatCurrency(perMonth)}/mo
+                              <div className="font-mono text-2xl font-semibold text-amber-100">
+                                {formatCurrency(product.priceCents)}
                               </div>
+                              {/* Every card states its billing shape. A fixed
+                                  term must never look like a subscription. */}
+                              <div className="mt-1 flex flex-wrap gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
+                                {product.disclosure.map((line) => (
+                                  <span key={line}>{line}</span>
+                                ))}
+                              </div>
+                              {product.durationDays ? (
+                                <div className="text-xs text-muted-foreground">
+                                  {product.durationDays} days of access
+                                </div>
+                              ) : null}
                             </div>
 
                             <ul className="grid gap-2 text-sm text-muted-foreground">
@@ -521,7 +505,31 @@ export function Storefront({
                               ))}
                             </ul>
 
-                            <Button className="mt-auto w-full" onClick={() => addToCart(tier.slug)} type="button">
+                            {/* Term products must say what survives expiry and
+                                what does not — no vague "benefits end". */}
+                            {product.expires.length > 0 ? (
+                              <div className="rounded-md border border-white/10 bg-black/24 p-3 text-xs leading-5">
+                                <div className="font-semibold text-emerald-200">You keep after it ends</div>
+                                <div className="text-muted-foreground">{product.retained.join(" · ")}</div>
+                                <div className="mt-2 font-semibold text-amber-200">Ends with the pass</div>
+                                <div className="text-muted-foreground">{product.expires.join(" · ")}</div>
+                              </div>
+                            ) : null}
+
+                            {owned ? (
+                              <Badge variant="success" className="w-fit">Owned permanently</Badge>
+                            ) : includedBy ? (
+                              <Badge variant="outline" className="w-fit">
+                                Included with {includedBy}
+                              </Badge>
+                            ) : null}
+
+                            <Button
+                              className="mt-auto w-full"
+                              disabled={owned || Boolean(includedBy)}
+                              onClick={() => addToCart(product.id)}
+                              type="button"
+                            >
                               <Plus className="h-4 w-4" />
                               Add to cart
                             </Button>
@@ -613,7 +621,9 @@ export function Storefront({
                   <div key={item.slug} className="rounded-lg border border-amber-200/14 bg-black/24 p-3">
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex min-w-0 items-start gap-3">
-                        {/* Same artwork as the product card and Stripe checkout. */}
+                        {/* Same artwork as the product card and Stripe checkout.
+                            Some products (RealFiction+) ship no banner. */}
+                        {item.art ? (
                         <Image
                           alt=""
                           aria-hidden
@@ -625,6 +635,7 @@ export function Storefront({
                             item.artWide ? "h-9 w-[74px]" : "h-12 w-8"
                           )}
                         />
+                        ) : null}
                         <div className="min-w-0">
                           <div className="font-semibold">{item.name}</div>
                           <div className="text-sm text-muted-foreground">{formatCurrency(item.total)}</div>

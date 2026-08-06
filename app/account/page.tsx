@@ -199,7 +199,11 @@ function entitlementSlug(row: EntitlementRow) {
 // Subscription SKUs are <base>-1m/-3m/-6m/-12m; collapse to the base so a perk
 // counts as owned regardless of the purchased term.
 function baseSlug(slug: string) {
-  return slug.replace(/-(1m|3m|6m|12m)$/, "")
+  // Legacy term SKUs were <base>-1m/-3m/-6m/-12m. The permanent SKUs that
+  // replaced them are <base>-permanent, and the RealFiction+ pass is
+  // <base>-30d. All collapse to the same base so a perk lights up whichever
+  // generation of the product the customer actually owns.
+  return slug.replace(/-(1m|3m|6m|12m|permanent|30d)$/, "")
 }
 
 function formatDate(value: string | null) {

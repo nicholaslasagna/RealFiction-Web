@@ -14,8 +14,16 @@ import test from "node:test"
 const repoRoot = path.resolve(import.meta.dirname, "..")
 const dataSource = readFileSync(path.join(repoRoot, "lib", "data.ts"), "utf8")
 
-/** Product ids that must have banner art, in lib/data.ts declaration order. */
-const EXPECTED_PRODUCT_IDS = [
+/**
+ * Banner FILES that must exist. Named after the original product ids; the
+ * catalog's permanent SKUs (realvip-permanent, ...) reuse the same artwork, so
+ * the filenames deliberately did not change with the product-model rewrite.
+ *
+ * Not every product has a banner — RealFiction+ ships none — so this asserts
+ * the files exist, while lib/store-catalog.test.ts asserts every DECLARED
+ * banner resolves.
+ */
+const EXPECTED_BANNER_FILES = [
   "realvip",
   "real-supporter",
   "realpets",
@@ -26,20 +34,16 @@ const EXPECTED_PRODUCT_IDS = [
 ]
 
 function bannerPaths(): string[] {
-  return [...dataSource.matchAll(/banner:\s*"([^"]+)"/g)].map((match) => match[1])
+  // The catalog is now the declaration site for banners.
+  const catalog = readFileSync(path.join(repoRoot, "lib", "store", "catalog.ts"), "utf8")
+  return [...catalog.matchAll(/banner:\s*"([^"]+)"/g)].map((match) => match[1])
 }
 
-test("every subscription product declares a banner", () => {
-  const banners = bannerPaths()
-  assert.equal(
-    banners.length,
-    EXPECTED_PRODUCT_IDS.length,
-    `expected ${EXPECTED_PRODUCT_IDS.length} product banners, found ${banners.length}`
-  )
-  for (const id of EXPECTED_PRODUCT_IDS) {
+test("every banner file is present on disk", () => {
+  for (const name of EXPECTED_BANNER_FILES) {
     assert.ok(
-      banners.includes(`/images/store/${id}.png`),
-      `no banner declared for product "${id}"`
+      existsSync(path.join(repoRoot, "public", "images", "store", `${name}.png`)),
+      `missing public/images/store/${name}.png`
     )
   }
 })
@@ -70,8 +74,8 @@ test("account perk banners resolve to the same files as the store", () => {
   assert.ok(primarySlugs.length > 0, "no perk slugs found")
   for (const slug of primarySlugs) {
     assert.ok(
-      EXPECTED_PRODUCT_IDS.includes(slug),
-      `perk primary slug "${slug}" has no matching product banner`
+      existsSync(path.join(repoRoot, "public", "images", "store", `${slug}.png`)),
+      `perk primary slug "${slug}" has no banner file`
     )
   }
 })
