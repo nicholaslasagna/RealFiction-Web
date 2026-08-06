@@ -163,13 +163,18 @@ select is(pg_temp.state('d1000000-0000-4000-8000-000000000021'), 'reserved',
 
 -- With authoritative evidence (Stripe session expired, order still unpaid) it
 -- releases safely.
+-- A configured expiry is NOT terminal evidence (see delayed_webhook_safety).
+-- Only a cancelled order releases a session-backed hold.
 insert into public.checkout_attempts (user_id,attempt_id,cart_fingerprint,order_id,
   stripe_session_id,stripe_session_expires_at)
 values ('c1000000-0000-4000-8000-000000000002',gen_random_uuid(),'cart-sweep',
   'd1000000-0000-4000-8000-000000000021','cs_gone', now() - interval '5 minutes');
-select ok(public.expire_stale_upgrade_reservations() >= 1, 'an expired session releases the hold');
+select public.expire_stale_upgrade_reservations();
+select is(pg_temp.state('d1000000-0000-4000-8000-000000000021'), 'reserved',
+  'a configured expiry alone does not release a session-backed hold');
+update public.orders set status='cancelled' where id='d1000000-0000-4000-8000-000000000021';
 select is(pg_temp.state('d1000000-0000-4000-8000-000000000021'), 'released',
-  'an abandoned checkout with a dead session does not park credit forever');
+  'terminal cancellation releases it');
 
 -- 12. Ineligible sources ------------------------------------------------------
 -- A GIFT purchase grants no upgrade credit.
@@ -197,9 +202,9 @@ insert into public.profiles (id,email) values ('c1000000-0000-4000-8000-00000000
 -- so a store-credit-funded purchase grants the FULL item credit.
 select pg_temp.buy('d1000000-0000-4000-8000-000000000050','c1000000-0000-4000-8000-000000000005',
   'realvip-permanent','fulfilled',null,1299);
-select is((select credit_cents from public.compute_upgrade_price(
-  'c1000000-0000-4000-8000-000000000005','real-supporter-permanent')), 1299::bigint,
-  'a store-credit-funded source grants the full item credit');
+select is((select reason from public.compute_upgrade_price(
+  'c1000000-0000-4000-8000-000000000005','real-supporter-permanent')), 'upgrade_credit_unavailable',
+  'a store-credit-funded source is TEMPORARILY ineligible (no tender provenance)');
 
 select * from finish();
 rollback;

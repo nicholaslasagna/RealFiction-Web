@@ -3,7 +3,7 @@
 
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(24);
+select plan(19);
 
 -- The availability gate ships these INACTIVE on purpose. Enabling them here is
 -- exactly the operator step Nicholas must perform after approving prices, and
@@ -16,7 +16,8 @@ insert into auth.users (id,email) values
   ('f1000000-0000-4000-8000-000000000001','p1@example.test'),
   ('f1000000-0000-4000-8000-000000000002','p2@example.test'),
   ('f1000000-0000-4000-8000-000000000003','p3@example.test'),
-  ('f1000000-0000-4000-8000-000000000004','p4@example.test') on conflict do nothing;
+  ('f1000000-0000-4000-8000-000000000004','p4@example.test'),
+  ('f1000000-0000-4000-8000-000000000005','p5@example.test') on conflict do nothing;
 insert into public.profiles (id,email)
 select id, email from auth.users where id::text like 'f1000000%' on conflict do nothing;
 
@@ -43,20 +44,28 @@ create or replace function pg_temp.st(p_order uuid) returns text language sql as
 $$;
 
 -- ===== POLICY: store-credit-funded RealVIP IS eligible =======================
-select pg_temp.buy('a2000000-0000-4000-8000-000000000001','f1000000-0000-4000-8000-000000000001',
+-- TEMPORARY POLICY: without per-order tender provenance we cannot tell a
+-- promotional manual_grant balance from legitimate refund credit, so ANY store
+-- credit on the source order disqualifies it. Stricter than the intended final
+-- policy, deliberately.
+select pg_temp.buy('a2000000-0000-4000-8000-000000000050','f1000000-0000-4000-8000-000000000005',
   'realvip-permanent', 500);  -- $5 of $12.99 paid with store credit
+select is((select reason from public.compute_upgrade_price(
+  'f1000000-0000-4000-8000-000000000005','real-supporter-permanent')), 'upgrade_credit_unavailable',
+  'a partly store-credit-funded RealVIP is TEMPORARILY ineligible');
+
+-- A fully externally-paid source IS eligible, at the full item value.
+select pg_temp.buy('a2000000-0000-4000-8000-000000000001','f1000000-0000-4000-8000-000000000001',
+  'realvip-permanent', 0);
 select is((select eligible from public.compute_upgrade_price(
   'f1000000-0000-4000-8000-000000000001','real-supporter-permanent')), true,
-  'a partly store-credit-funded RealVIP IS eligible');
+  'a fully externally-paid RealVIP IS eligible');
 select is((select credit_cents from public.compute_upgrade_price(
   'f1000000-0000-4000-8000-000000000001','real-supporter-permanent')), 1299::bigint,
-  'credit is the full ITEM value regardless of tender');
+  'credit is the authoritative ITEM value');
 
 select pg_temp.buy('a2000000-0000-4000-8000-000000000002','f1000000-0000-4000-8000-000000000002',
-  'realvip-permanent', 1299);  -- entirely store credit
-select is((select credit_cents from public.compute_upgrade_price(
-  'f1000000-0000-4000-8000-000000000002','real-supporter-permanent')), 1299::bigint,
-  'an entirely store-credit-funded RealVIP still grants full item credit');
+  'realvip-permanent', 0);
 
 -- Gift source is ineligible.
 select pg_temp.buy('a2000000-0000-4000-8000-000000000003','f1000000-0000-4000-8000-000000000003',
@@ -87,77 +96,34 @@ begin
   values (p_user,gen_random_uuid(),'cart-'||p_order::text,p_order);
 end; $$;
 
--- CASE 1: Checkout COMPLETED but webhook delayed. Order is paid.
-select pg_temp.mk_pending('a3000000-0000-4000-8000-000000000001','f1000000-0000-4000-8000-000000000001');
-select public.reserve_upgrade_credit('f1000000-0000-4000-8000-000000000001','real-supporter-permanent',
-  'a3000000-0000-4000-8000-000000000001', gen_random_uuid());
-update public.upgrade_credit_reservations set expires_at = now() - interval '5 hours'
-where order_id='a3000000-0000-4000-8000-000000000001';
--- Payment succeeded; the webhook has not arrived yet.
-update public.orders set status='paid' where id='a3000000-0000-4000-8000-000000000001';
-select public.expire_stale_upgrade_reservations();
-select is(pg_temp.st('a3000000-0000-4000-8000-000000000001'), 'reserved',
-  'a PAID order keeps its reservation however stale — a delayed webhook cannot lose it');
+-- Sweep behaviour now lives in delayed_webhook_safety.test.sql, which models
+-- the genuinely dangerous state (Stripe paid, order still pending, configured
+-- expiry passed) rather than an order already marked paid.
 
--- ...and fulfilment still consumes it correctly.
-select public.fulfill_paid_order_with_outbox('a3000000-0000-4000-8000-000000000001','pi_d','ch_d',null);
-select is(pg_temp.st('a3000000-0000-4000-8000-000000000001'), 'consumed',
-  'the delayed webhook then consumes it normally');
-
--- CASE 2: Unpaid, Stripe session authoritatively EXPIRED -> safe to release.
-select pg_temp.buy('a2000000-0000-4000-8000-000000000010','f1000000-0000-4000-8000-000000000002','realvip-permanent');
+-- A session-backed hold is never released by the sweep alone.
 select pg_temp.mk_pending('a3000000-0000-4000-8000-000000000002','f1000000-0000-4000-8000-000000000002');
 select public.reserve_upgrade_credit('f1000000-0000-4000-8000-000000000002','real-supporter-permanent',
   'a3000000-0000-4000-8000-000000000002', gen_random_uuid());
 update public.checkout_attempts
-set stripe_session_id='cs_expired', stripe_session_expires_at = now() - interval '10 minutes'
+set stripe_session_id='cs_x', stripe_session_expires_at = now() - interval '10 minutes'
 where order_id='a3000000-0000-4000-8000-000000000002';
 update public.upgrade_credit_reservations set expires_at = now() - interval '1 minute'
 where order_id='a3000000-0000-4000-8000-000000000002';
 select public.expire_stale_upgrade_reservations();
+select is(pg_temp.st('a3000000-0000-4000-8000-000000000002'), 'reserved',
+  'a session-backed hold survives the sweep — only terminal evidence releases it');
+
+-- A cancelled order (terminal evidence) does release.
+update public.orders set status='cancelled' where id='a3000000-0000-4000-8000-000000000002';
 select is(pg_temp.st('a3000000-0000-4000-8000-000000000002'), 'released',
-  'an unpaid order whose Stripe session expired releases safely');
-
--- CASE 3: Unpaid, session still VALID -> must NOT release.
-select pg_temp.buy('a2000000-0000-4000-8000-000000000020','f1000000-0000-4000-8000-000000000003','realvip-permanent');
-update public.orders set gifted_to_minecraft_username = null where id='a2000000-0000-4000-8000-000000000003';
-select pg_temp.mk_pending('a3000000-0000-4000-8000-000000000003','f1000000-0000-4000-8000-000000000003');
-select public.reserve_upgrade_credit('f1000000-0000-4000-8000-000000000003','real-supporter-permanent',
-  'a3000000-0000-4000-8000-000000000003', gen_random_uuid());
-update public.checkout_attempts
-set stripe_session_id='cs_live', stripe_session_expires_at = now() + interval '30 minutes'
-where order_id='a3000000-0000-4000-8000-000000000003';
-update public.upgrade_credit_reservations set expires_at = now() - interval '1 minute'
-where order_id='a3000000-0000-4000-8000-000000000003';
-select public.expire_stale_upgrade_reservations();
-select is(pg_temp.st('a3000000-0000-4000-8000-000000000003'), 'reserved',
-  'a session the customer can still pay keeps its reservation');
-
--- CASE 4: Unknown state (no session, attempt still open) -> not released.
-select pg_temp.buy('a2000000-0000-4000-8000-000000000030','f1000000-0000-4000-8000-000000000004','realvip-permanent');
-select pg_temp.mk_pending('a3000000-0000-4000-8000-000000000004','f1000000-0000-4000-8000-000000000004');
-select public.reserve_upgrade_credit('f1000000-0000-4000-8000-000000000004','real-supporter-permanent',
-  'a3000000-0000-4000-8000-000000000004', gen_random_uuid());
-update public.upgrade_credit_reservations set expires_at = now() - interval '1 minute'
-where order_id='a3000000-0000-4000-8000-000000000004';
-select public.expire_stale_upgrade_reservations();
-select is(pg_temp.st('a3000000-0000-4000-8000-000000000004'), 'reserved',
-  'unknown provider state does NOT release — insufficient evidence');
-
--- ...and after 24h of ambiguity it goes to review, never silently released.
-update public.upgrade_credit_reservations set expires_at = now() - interval '30 hours'
-where order_id='a3000000-0000-4000-8000-000000000004';
-select public.expire_stale_upgrade_reservations();
-select is(pg_temp.st('a3000000-0000-4000-8000-000000000004'), 'needs_review',
-  'long-ambiguous holds go to REVIEW, not to release');
-
--- Repeated sweeps are stable.
-select public.expire_stale_upgrade_reservations();
-select is(pg_temp.st('a3000000-0000-4000-8000-000000000003'), 'reserved',
-  'repeated sweeps do not drift');
+  'a cancelled order releases the hold through the trigger');
 
 -- ===== REFUND POLICY =========================================================
--- Full refund of the upgraded order RESTORES the credit (owner policy).
+select pg_temp.mk_pending('a3000000-0000-4000-8000-000000000001','f1000000-0000-4000-8000-000000000001');
+select public.reserve_upgrade_credit('f1000000-0000-4000-8000-000000000001','real-supporter-permanent',
+  'a3000000-0000-4000-8000-000000000001', gen_random_uuid());
+select public.fulfill_paid_order_with_outbox('a3000000-0000-4000-8000-000000000001',null,null,null);
+
 select is((select outcome from public.restore_upgrade_credit_after_refund(
   'a3000000-0000-4000-8000-000000000001', true, false)), 'target_still_active',
   'restoration waits while the upgraded rank is still active — it does not strand the credit');
