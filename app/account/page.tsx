@@ -32,6 +32,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { STORE_BANNER_HEIGHT, STORE_BANNER_WIDTH, voteSites } from "@/lib/data"
+import { buildOrderAccounting } from "@/lib/store/order-accounting"
 import { createSupabaseServerClient, getAuthenticatedUser } from "@/lib/supabase/server"
 
 export const dynamic = "force-dynamic"
@@ -85,6 +86,10 @@ type OrderRow = {
   gifted_to_minecraft_username?: string | null
   store_credit_applied_cents?: number | null
   payment_due_cents?: number | null
+  // Absent on historical orders placed before upgrades existed. The accounting
+  // helper falls back rather than rendering a blank or a NaN.
+  subtotal_cents?: number | null
+  discount_cents?: number | null
   order_items?: OrderItemRow[] | null
 }
 
@@ -359,7 +364,7 @@ async function getAccountData(): Promise<AccountData> {
       // live).
       supabase
         .from("orders")
-        .select("id,status,total_cents,currency,created_at,paid_at,gifted_to_minecraft_username,store_credit_applied_cents,payment_due_cents,order_items(quantity,product_snapshot)")
+        .select("id,status,total_cents,currency,created_at,paid_at,gifted_to_minecraft_username,store_credit_applied_cents,payment_due_cents,subtotal_cents,discount_cents,order_items(quantity,product_snapshot)")
         .in("status", ["paid", "fulfilled", "refunded", "chargeback"])
         .order("created_at", { ascending: false })
         .limit(50),
@@ -719,24 +724,7 @@ function AllPurchases({ orders }: { orders: OrderRow[] }) {
                     </div>
                     <OrderStatusBadge status={order.status} />
                   </div>
-                  {order.store_credit_applied_cents && order.store_credit_applied_cents > 0 ? (
-                    <div className="mt-3 space-y-0.5 text-sm">
-                      <p className="text-emerald-200">
-                        Store credit applied: -{formatMoney(order.store_credit_applied_cents, order.currency)}
-                      </p>
-                      <p className="font-semibold text-amber-100">
-                        Paid today:{" "}
-                        {formatMoney(
-                          order.payment_due_cents ?? Math.max(0, order.total_cents - order.store_credit_applied_cents),
-                          order.currency
-                        )}
-                      </p>
-                    </div>
-                  ) : (
-                    <p className="mt-3 text-sm font-semibold text-amber-100">
-                      {formatMoney(order.total_cents, order.currency)}
-                    </p>
-                  )}
+                  <OrderAccounting order={order} />
                 </div>
               )
             })}
@@ -746,6 +734,56 @@ function AllPurchases({ orders }: { orders: OrderRow[] }) {
         )}
       </CardContent>
     </Card>
+  )
+}
+
+/**
+ * The money story for one order, from the same function the receipt email uses.
+ *
+ * An order with nothing to explain keeps the single-amount layout it has always
+ * had. An upgrade or store-credit order gets the full breakdown, because the
+ * merchandise subtotal, the order total, and the amount actually charged are
+ * three different numbers and only one of them is what the customer paid.
+ */
+function OrderAccounting({ order }: { order: OrderRow }) {
+  const accounting = buildOrderAccounting({
+    subtotalCents: order.subtotal_cents,
+    discountCents: order.discount_cents,
+    totalCents: order.total_cents,
+    storeCreditCents: order.store_credit_applied_cents,
+    paymentDueCents: order.payment_due_cents
+  })
+
+  if (accounting.simple) {
+    return (
+      <p className="mt-3 text-sm font-semibold text-amber-100">
+        {formatMoney(accounting.orderTotalCents, order.currency)}
+      </p>
+    )
+  }
+
+  return (
+    <dl className="mt-3 space-y-0.5 text-sm">
+      {accounting.lines.map((line) => (
+        <div key={line.key} className="flex items-baseline justify-between gap-3">
+          <dt className={line.emphasis ? "font-semibold text-amber-100" : "text-muted-foreground"}>
+            {line.label}
+          </dt>
+          <dd
+            className={
+              line.negative
+                ? "tabular-nums text-emerald-200"
+                : line.emphasis
+                  ? "tabular-nums font-semibold text-amber-100"
+                  : "tabular-nums text-muted-foreground"
+            }
+          >
+            {line.negative ? "-" : ""}
+            {formatMoney(line.cents, order.currency)}
+          </dd>
+        </div>
+      ))}
+    </dl>
   )
 }
 

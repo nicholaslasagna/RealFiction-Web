@@ -142,6 +142,11 @@ select is((select has_dependency from public.upgrade_dependency_for_order(
 update public.entitlements set status='revoked'
 where user_id='c1000000-0000-4000-8000-000000000001'
   and entitlement_key='product:real-supporter-permanent';
+-- "Fully refunded" is now a MEASURED fact, not a status flag: the money has to
+-- have actually gone back through the tenders that collected it.
+select public.record_order_refund('d1000000-0000-4000-8000-000000000012', 're_lifecycle',
+  (select external_paid_cents from public.order_refund_state('d1000000-0000-4000-8000-000000000012')),
+  'USD', true);
 update public.orders set status='refunded' where id='d1000000-0000-4000-8000-000000000012';
 select is(pg_temp.state('d1000000-0000-4000-8000-000000000012'), 'released',
   'a fully refunded upgrade RESTORES the credit to available');

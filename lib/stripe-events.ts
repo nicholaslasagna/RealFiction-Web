@@ -126,7 +126,15 @@ export function classifyRefundScope(
   if (!Number.isFinite(refundedAmountCents) || refundedAmountCents <= 0 || orderPaidCents === null) {
     return { kind: "unknown" }
   }
-  if (refundedAmountCents >= orderPaidCents) {
+  // EXACTLY what Stripe collected is a full refund. MORE than it is not a
+  // generous full refund — it means the amount we are reading does not describe
+  // the charge we made (a merchandise subtotal mistaken for the payment, a
+  // currency confusion, a refund against the wrong order). That is an
+  // inconsistency, and inconsistencies go to a human rather than auto-revoking.
+  if (refundedAmountCents > orderPaidCents) {
+    return { kind: "unknown" }
+  }
+  if (refundedAmountCents === orderPaidCents) {
     return { kind: "full" }
   }
   const matches = items.filter((item) => item.totalCents === refundedAmountCents)

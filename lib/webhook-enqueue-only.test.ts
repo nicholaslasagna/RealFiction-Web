@@ -8,6 +8,7 @@ register("./test-alias-hook.mjs", import.meta.url)
 
 const calls = { resendFetch: 0, stripeFetch: 0, enqueue: 0, fulfil: 0 }
 let enqueuedKeys: string[] = []
+let reviews: string[] = []
 
 mock.module("server-only", { namedExports: {}, defaultExport: {} })
 
@@ -34,9 +35,25 @@ mock.module("@/lib/store-server", {
     persistWebhookEvent: async () => ({ duplicate: false, alreadyProcessed: false }),
     markWebhookEventProcessed: async () => {},
     findOrderIdByPaymentId: async () => "order-1",
-    getOrderPaymentContext: async () => ({ orderId: "order-1", status: "fulfilled", paidCents: 1299, items: [] }),
+    getOrderPaymentContext: async () => ({
+      orderId: "order-1",
+      status: "fulfilled",
+      paidCents: 1299,
+      currency: "USD",
+      items: []
+    }),
+    getOrderExpectation: async () => ({
+      orderId: "order-1",
+      sessionId: "cs_1",
+      paymentDueCents: 1299,
+      currency: "USD",
+      liveMode: true,
+      status: "pending"
+    }),
     markOrderUnpaidClosed: async () => true,
-    recordPaymentReview: async () => {},
+    recordPaymentReview: async (input: { reason: string }) => {
+      reviews.push(input.reason)
+    },
     releaseStoreCredit: async () => {}
   }
 })
@@ -80,6 +97,7 @@ function reset() {
   calls.enqueue = 0
   calls.fulfil = 0
   enqueuedKeys = []
+  reviews = []
 }
 
 test("a paid checkout fulfils + enqueues atomically and calls Resend ZERO times", async () => {
@@ -89,7 +107,16 @@ test("a paid checkout fulfils + enqueues atomically and calls Resend ZERO times"
       id: "evt_paid_1",
       type: "checkout.session.completed",
       livemode: true,
-      data: { object: { metadata: { order_id: "order-1" }, payment_status: "paid", payment_intent: "pi_1" } }
+      data: {
+        object: {
+          id: "cs_1",
+          metadata: { order_id: "order-1" },
+          payment_status: "paid",
+          payment_intent: "pi_1",
+          amount_total: 1299,
+          currency: "usd"
+        }
+      }
     })
   )
 
@@ -167,7 +194,15 @@ test("a test-mode event in live production does no work at all", async () => {
       id: "evt_testmode",
       type: "checkout.session.completed",
       livemode: false,
-      data: { object: { metadata: { order_id: "order-1" }, payment_status: "paid" } }
+      data: {
+        object: {
+          id: "cs_1",
+          metadata: { order_id: "order-1" },
+          payment_status: "paid",
+          amount_total: 1299,
+          currency: "usd"
+        }
+      }
     })
   )
   assert.equal(response.status, 202)

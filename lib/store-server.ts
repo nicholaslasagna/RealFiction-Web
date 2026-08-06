@@ -3,6 +3,7 @@ import "server-only"
 import type { User } from "@supabase/supabase-js"
 
 import type { CheckoutInput } from "@/lib/payments"
+import type { OrderExpectation } from "@/lib/store/payment-facts"
 import { sanitizeReceiptUrl } from "@/lib/email/queue"
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role"
 
@@ -763,6 +764,8 @@ export type OrderPaymentContext = {
   status: string
   /** What Stripe actually charged (store credit excluded). */
   paidCents: number | null
+  /** The order's currency. A refund in another currency is not this order's. */
+  currency: string
   items: { id: string; totalCents: number }[]
 }
 
@@ -774,7 +777,7 @@ export async function getOrderPaymentContext(orderId: string): Promise<OrderPaym
   const supabase = getSupabaseServiceRoleClient()
   const { data: order } = await supabase
     .from("orders")
-    .select("id, status, payment_due_cents, total_cents")
+    .select("id, status, payment_due_cents, total_cents, currency")
     .eq("id", orderId)
     .maybeSingle()
 
@@ -790,10 +793,44 @@ export async function getOrderPaymentContext(orderId: string): Promise<OrderPaym
     orderId: order.id as string,
     status: order.status as string,
     paidCents: Number.isFinite(due) ? due : null,
+    currency: String(order.currency ?? "USD"),
     items: (items ?? []).map((item) => ({
       id: item.id as string,
       totalCents: Number(item.total_cents ?? 0)
     }))
+  }
+}
+
+/**
+ * OUR record of what an order should be, for the shared fulfilment gate.
+ *
+ * Every expected amount comes from here. A provider payload is only ever
+ * compared against this — never the other way round.
+ */
+export async function getOrderExpectation(orderId: string): Promise<OrderExpectation | null> {
+  const supabase = getSupabaseServiceRoleClient()
+  const { data } = await supabase
+    .from("orders")
+    .select("id,status,payment_due_cents,total_cents,currency,provider_session_id")
+    .eq("id", orderId)
+    .maybeSingle()
+
+  if (!data) {
+    return null
+  }
+
+  const due = Number(data.payment_due_cents ?? data.total_cents)
+  if (!Number.isFinite(due)) {
+    return null
+  }
+
+  return {
+    orderId: data.id as string,
+    sessionId: (data.provider_session_id as string | null) ?? null,
+    paymentDueCents: due,
+    currency: String(data.currency ?? "USD"),
+    liveMode: (process.env.STRIPE_ENVIRONMENT ?? "").trim().toLowerCase() === "live",
+    status: String(data.status)
   }
 }
 

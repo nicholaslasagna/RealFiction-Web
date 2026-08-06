@@ -1,14 +1,17 @@
 import assert from "node:assert/strict"
+import { register } from "node:module"
 import test from "node:test"
 
-import {
-  buildOrderConfirmationEmail,
-  escapeHtml,
-  formatDate,
-  formatMoney,
-  orderNumber,
-  type OrderEmailData
-} from "./email/templates.ts"
+// templates.ts imports the shared accounting module by TypeScript-style
+// extensionless path; the hook resolves those for `node --test`.
+register("./test-alias-hook.mjs", import.meta.url)
+
+import type { OrderEmailData } from "./email/templates.ts"
+
+// Dynamic: static imports hoist above register(), and templates.ts reaches the
+// shared accounting module by an extensionless path the hook has to resolve.
+const { buildOrderConfirmationEmail, escapeHtml, formatDate, formatMoney, orderNumber } =
+  await import("./email/templates.ts")
 
 const BASE: OrderEmailData = {
   orderId: "3f2504e0-4f89-41d3-9a0c-0305e82c3301",

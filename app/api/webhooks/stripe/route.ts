@@ -23,6 +23,7 @@ import {
   enqueuePartialRefundOutbox,
   findOrderIdByPaymentId,
   fulfillPaidOrderWithOutbox,
+  getOrderExpectation,
   getOrderPaymentContext,
   markOrderUnpaidClosed,
   markWebhookEventProcessed,
@@ -31,6 +32,7 @@ import {
   releaseStoreCredit,
   revokeOrderWithRefundOutbox
 } from "@/lib/store-server"
+import { verifyPaymentFacts, type VerifiedPaymentFacts } from "@/lib/store/payment-facts"
 
 function toHex(buffer: ArrayBuffer) {
   return [...new Uint8Array(buffer)].map((byte) => byte.toString(16).padStart(2, "0")).join("")
@@ -196,14 +198,70 @@ export async function POST(request: Request) {
 
     switch (action.kind) {
       case "fulfill": {
+        // Authenticity was settled above by the HMAC signature. What is settled
+        // HERE is whether the money Stripe describes is the money we asked for.
+        // The same gate runs in reconciliation, over facts it established by
+        // pulling the session with our own secret key — neither path can
+        // impersonate the other, and both must clear the same bar.
+        const expectation = await getOrderExpectation(action.orderId)
+
+        if (!expectation) {
+          await recordPaymentReview({
+            providerEventId: event.id,
+            eventType: event.type,
+            reason: "fulfillment_order_not_found",
+            orderId: action.orderId,
+            paymentIntentId: action.paymentIntentId
+          })
+          break
+        }
+
+        const facts: VerifiedPaymentFacts = {
+          orderId: action.orderId,
+          provider: "stripe",
+          sessionId: typeof object.id === "string" && object.id.startsWith("cs_") ? object.id : null,
+          paymentIntentId: action.paymentIntentId,
+          chargeId: readChargeId(object),
+          receiptUrl: readReceiptUrl(object),
+          amountPaidCents: Number(object.amount_total ?? Number.NaN),
+          currency: typeof object.currency === "string" ? object.currency : expectation.currency,
+          paymentStatus: typeof object.payment_status === "string" ? object.payment_status : "",
+          liveMode: environment === "live",
+          evidence: { kind: "webhook", providerEventId: event.id }
+        }
+
+        const gate = verifyPaymentFacts(facts, expectation)
+
+        if (!gate.ok) {
+          // FAIL CLOSED. A signed event that disagrees with our own order about
+          // the amount, currency, session, or environment is a contradiction, not
+          // a payment. Retrying cannot resolve it, so this records a review and
+          // returns 2xx rather than making Stripe redeliver forever. Nothing is
+          // granted and no financial hold is released.
+          console.warn("stripe_fulfillment_facts_rejected", {
+            order_id: action.orderId,
+            reason: gate.reason
+          })
+          await recordPaymentReview({
+            providerEventId: event.id,
+            eventType: event.type,
+            reason: `fulfillment_facts_${gate.reason}`,
+            orderId: action.orderId,
+            paymentIntentId: action.paymentIntentId,
+            detail: { priority: "high", check: gate.reason }
+          })
+          break
+        }
+
         // ONE transaction: payment refs + fulfilment + the confirmation outbox
         // row. It throws on failure, which the catch below turns into a 500 so
         // Stripe redelivers — never a 2xx that silently lost the outbox
         // operation. No Resend call happens here; a scheduled worker sends.
+        // Reconciliation calls this SAME database function, never a copy of it.
         await fulfillPaidOrderWithOutbox(action.orderId, {
-          paymentIntentId: action.paymentIntentId,
-          chargeId: readChargeId(object),
-          receiptUrl: readReceiptUrl(object)
+          paymentIntentId: facts.paymentIntentId,
+          chargeId: facts.chargeId,
+          receiptUrl: facts.receiptUrl
         })
         break
       }
@@ -244,19 +302,41 @@ export async function POST(request: Request) {
           // away access the customer still paid for.
           const context = await getOrderPaymentContext(orderId)
           const amount = Number(object.amount ?? 0)
+          const refundCurrency =
+            typeof object.currency === "string" ? object.currency.toUpperCase() : "USD"
+
+          // A refund denominated in a currency this order was never priced in
+          // cannot be measured against it. Comparing the numbers anyway would
+          // treat 1700 JPY as a full refund of a $17.00 charge.
+          if (context && refundCurrency !== context.currency.toUpperCase()) {
+            await recordPaymentReview({
+              providerEventId: event.id,
+              eventType: event.type,
+              reason: "refund_currency_mismatch",
+              orderId,
+              paymentIntentId: action.paymentIntentId,
+              detail: { priority: "high", refund_currency: refundCurrency, order_currency: context.currency }
+            })
+            break
+          }
+
           const scope = classifyRefundScope(amount, context?.paidCents ?? null, context?.items ?? [])
 
           if (scope.kind !== "full") {
-            // Partial refund: access is untouched pending human review, and the
-            // customer still gets told their money is coming back.
-            if (action.mode === "refund" && typeof object.id === "string") {
+            // A genuine PARTIAL refund: access is untouched pending human
+            // review, and the customer still gets told their money is coming
+            // back. An UNKNOWN scope gets no email at all — the amount is one we
+            // could not reconcile against the charge (above it, zero, negative,
+            // or unmeasurable), and telling a customer "$17.01 is on its way"
+            // on the strength of a number we do not believe is worse than
+            // silence plus a human.
+            if (scope.kind === "partial" && action.mode === "refund" && typeof object.id === "string") {
               await enqueuePartialRefundOutbox({
                 orderId,
                 refundId: object.id,
                 refundedCents: amount,
-                currency: typeof object.currency === "string" ? object.currency.toUpperCase() : "USD",
-                affectedItemName:
-                  scope.kind === "partial" && scope.unambiguousOrderItemId ? null : null
+                currency: refundCurrency,
+                affectedItemName: null
               })
             }
             await recordPaymentReview({

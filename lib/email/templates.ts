@@ -8,6 +8,12 @@
 // receipt (card brand/last4, tax, the legal record). This email says what was
 // bought, where it was delivered in-game, and when it expires. Keeping them
 // separate is why nothing here needs card or payment-instrument data.
+//
+// The money lines come from lib/store/order-accounting.ts, shared with the
+// account page, so a customer is never told two different stories about the
+// same order.
+
+import { buildOrderAccounting } from "../store/order-accounting"
 
 export type OrderEmailItem = {
   name: string
@@ -158,25 +164,18 @@ export function buildOrderConfirmationEmail(data: OrderEmailData): EmailContent 
   // separate lines: one reduces the price of the goods, the other is money the
   // customer already had with us.
   const discountCents = data.upgradeDiscountCents ?? 0
-  const orderTotalCents = data.subtotalCents - discountCents
+  const accounting = buildOrderAccounting({
+    subtotalCents: data.subtotalCents,
+    discountCents,
+    totalCents: data.subtotalCents - discountCents,
+    storeCreditCents: data.storeCreditCents,
+    paymentDueCents: data.totalPaidCents
+  })
 
-  if (discountCents > 0 || data.storeCreditCents > 0) {
-    textLines.push(`Subtotal: ${formatMoney(data.subtotalCents, data.currency)}`)
-    if (discountCents > 0) {
-      textLines.push(`RealVIP upgrade credit: -${formatMoney(discountCents, data.currency)}`)
-      textLines.push(`Order total: ${formatMoney(orderTotalCents, data.currency)}`)
-    }
-    if (data.storeCreditCents > 0) {
-      textLines.push(`Store credit: -${formatMoney(data.storeCreditCents, data.currency)}`)
-    }
+  for (const line of accounting.lines) {
+    const amount = `${line.negative ? "-" : ""}${formatMoney(line.cents, data.currency)}`
+    textLines.push(`${line.label}: ${amount}`)
   }
-  // The externally collected amount is labelled as such — never as the order
-  // total, which it is not once store credit is applied.
-  textLines.push(
-    data.totalPaidCents > 0
-      ? `Paid through Stripe: ${formatMoney(data.totalPaidCents, data.currency)}`
-      : `Paid with store credit: ${formatMoney(orderTotalCents, data.currency)}`
-  )
   textLines.push("")
 
   if (data.stripeReceiptUrl) {
@@ -206,23 +205,17 @@ export function buildOrderConfirmationEmail(data: OrderEmailData): EmailContent 
   const row = (label: string, value: string, strong = false) =>
     `<tr><td style="padding:${strong ? "8px" : "4px"} 0;color:${strong ? "#f6f4ef" : "#9db3c4"};${strong ? "font-weight:600;" : ""}">${escapeHtml(label)}</td><td style="padding:${strong ? "8px" : "4px"} 0;color:${strong ? "#f6f4ef" : "#9db3c4"};text-align:right;${strong ? "font-weight:600;" : ""}">${escapeHtml(value)}</td></tr>`
 
-  const totalsRows = [
-    discountCents > 0 || data.storeCreditCents > 0
-      ? row("Subtotal", formatMoney(data.subtotalCents, data.currency))
-      : "",
-    discountCents > 0
-      ? row("RealVIP upgrade credit", `-${formatMoney(discountCents, data.currency)}`)
-      : "",
-    discountCents > 0
-      ? row("Order total", formatMoney(orderTotalCents, data.currency), true)
-      : "",
-    data.storeCreditCents > 0
-      ? row("Store credit", `-${formatMoney(data.storeCreditCents, data.currency)}`)
-      : "",
-    data.totalPaidCents > 0
-      ? row("Paid through Stripe", formatMoney(data.totalPaidCents, data.currency), true)
-      : row("Paid with store credit", formatMoney(orderTotalCents, data.currency), true)
-  ].join("")
+  // Same lines, same order, same labels as the plain-text part above: both come
+  // from the one accounting function, so they cannot disagree.
+  const totalsRows = accounting.lines
+    .map((line) =>
+      row(
+        line.label,
+        `${line.negative ? "-" : ""}${formatMoney(line.cents, data.currency)}`,
+        line.emphasis
+      )
+    )
+    .join("")
 
   const html = `<!doctype html>
 <html>

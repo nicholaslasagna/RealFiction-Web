@@ -414,14 +414,17 @@ execute function public.close_checkout_attempt_on_terminal_order();
 -- so every server path (old site, new site, direct API, service-role call)
 -- refuses them until an operator explicitly enables them.
 --
--- TO ENABLE SALES, after approving the prices, run:
+-- TO ENABLE SALES: docs/STORE_ENABLEMENT_RUNBOOK.md, which runs
+-- docs/sql/store-permanent-rank-enablement.sql.
 --
---   update public.products set active = true, updated_at = now()
---   where slug in ('realvip-permanent', 'real-supporter-permanent',
---                  'username-colors-permanent', 'particle-vault-permanent',
---                  'realpets-permanent', 'cosmetic-atelier-permanent');
---
--- RealFiction+ and gift cards stay inactive regardless.
+-- A copy-pasteable UPDATE deliberately does NOT live here. It would enable
+-- whatever the pasted slug list happens to contain, would not check that the
+-- prices in the database are the prices that were approved, and has no failure
+-- mode — a partial paste leaves the store in a state nobody chose. The runbook
+-- script verifies the schema version, both prices, the fulfilment types, the
+-- RealSupporter -> RealVIP inclusion, the upgrade path, and that RealFiction+
+-- and every gift card are still inactive, and aborts the whole transaction if
+-- any of it disagrees.
 update public.products
 set active = false, updated_at = now()
 where slug in (

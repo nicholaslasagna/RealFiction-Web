@@ -27,12 +27,11 @@ test("the entry forwards fetch to the generated OpenNext handler", () => {
 test("the entry exposes scheduled() and passes runtime env explicitly", () => {
   assert.match(workerSource, /async scheduled\(/)
   // process.env is not populated in a scheduled invocation, so env must flow in.
-  assert.match(workerSource, /processEmailQueue\(env/)
+  assert.match(workerSource, /runScheduledJobs\(controller, env, ctx\)/)
 })
 
-test("ctx.waitUntil tracks the processing so the event is not cut short", () => {
-  assert.match(workerSource, /ctx\.waitUntil\(/)
-})
+// The waitUntil registration and failure isolation are EXECUTED in
+// lib/worker-scheduled.test.ts. This file only guards the deployed entry's shape.
 
 // The generated worker is BUILD OUTPUT, absent in a fresh checkout. These two
 // assertions are only meaningful once `npm run build:cloudflare` has run, so

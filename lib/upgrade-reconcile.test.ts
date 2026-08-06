@@ -1,9 +1,14 @@
 // Provider-verdict classification. Every branch decides whether a customer who
 // may already have paid keeps their reservation, so each is asserted directly.
 import assert from "node:assert/strict"
+import { register } from "node:module"
 import test from "node:test"
 
-import { classifySession } from "./store/reconcile-upgrades.ts"
+register("./test-alias-hook.mjs", import.meta.url)
+
+// Dynamic: static imports hoist above register(), and reconcile-upgrades.ts
+// reaches the shared facts module by an extensionless path.
+const { classifySession } = await import("./store/reconcile-upgrades.ts")
 
 const EXPECTED = {
   orderId: "order-1",
