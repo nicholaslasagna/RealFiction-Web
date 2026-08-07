@@ -24,7 +24,7 @@ export function HomeLiveMaps() {
 
   return (
     <section className="section-tinted">
-      <h3 className="section-title">Live Maps</h3>
+      <h2 className="section-title">Live Maps</h2>
       <p className="section-kicker">
         Browse every public RealFiction world from above. Live BlueMap renders update with every save.
       </p>

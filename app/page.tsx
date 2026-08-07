@@ -121,7 +121,7 @@ export default function HomePage() {
 
       {/* ─── WHO WE ARE ───────────────────────────────────── */}
       <section className="who">
-        <h3>Who We Are</h3>
+        <h2>Who We Are</h2>
         <p>
           Founded in late 2018,{" "}
           <span className="accent">RealFiction</span>
@@ -139,7 +139,7 @@ export default function HomePage() {
 
       {/* ─── CHOOSE YOUR ADVENTURE — click opens a modal, no navigation ─ */}
       <section className="section-dark">
-        <h3 className="section-title">Choose Your Adventure</h3>
+        <h2 className="section-title">Choose Your Adventure</h2>
         <p className="section-kicker">
           Jump into long-term survival, seasonal competition, quick arcade rounds, party modes,
           and community events built around fair play.
@@ -150,7 +150,7 @@ export default function HomePage() {
 
       {/* ─── SUPPORT — perks-band ─────────────────────────── */}
       <section className="section-deep">
-        <h3 className="section-title">Back the server. Keep the game fair.</h3>
+        <h2 className="section-title">Back the server. Keep the game fair.</h2>
         <p className="section-kicker">
           RealFiction support stays focused on style, identity, lobby fun, and community perks.
           No paid kits, no bought power, no shortcut around the rules.

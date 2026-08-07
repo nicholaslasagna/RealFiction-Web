@@ -27,6 +27,9 @@ const PREVIEW_PORT = 3313
 /** Obviously fake, and never valid anywhere. */
 const TEST_ONLY_ENV = {
   STORE_GIFT_CARDS_ENABLED: "true",
+  // Required by the storefront gate: without it gift cards stay in Coming Soon,
+  // because the checkout route would refuse every submission.
+  ABUSE_SUBJECT_PEPPER: "playwright-pepper-not-a-secret",
   GIFT_CARD_TAX_TREATMENT_REVIEWED: "no_tax_at_sale",
   GIFT_CARD_CLAIM_PEPPER: "a".repeat(64),
   GIFT_CARD_ENCRYPTION_KEY: "0".repeat(64),
@@ -68,7 +71,7 @@ export default defineConfig({
       name: "refund-states",
       // The preview harness serves both the refund/dispute states and the
       // cash-redemption surfaces; they share this server.
-      testMatch: /(refund-states|cash-redemption)\.spec\.ts/,
+      testMatch: /(refund-states|cash-redemption|a11y-authenticated)\.spec\.ts/,
       use: { ...devices["Desktop Chrome"], baseURL: `http://localhost:${PREVIEW_PORT}` }
     }
   ],

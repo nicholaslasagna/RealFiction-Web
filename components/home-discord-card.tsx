@@ -54,7 +54,7 @@ export async function HomeDiscordCard() {
 
   return (
     <section className="section-dark">
-      <h3 className="section-title">Join the Community</h3>
+      <h2 className="section-title">Join the Community</h2>
       <p className="section-kicker">
         Announcements, events, support, screenshots, and voice chat live in the RealFiction
         Discord. The server lives there too.

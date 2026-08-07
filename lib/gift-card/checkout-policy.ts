@@ -233,6 +233,16 @@ export type GiftCardFeatureEnv = {
    *                      Dashboard tax-code decision, so it fails closed here.
    */
   GIFT_CARD_TAX_TREATMENT_REVIEWED?: string
+  /**
+   * Pepper for the abuse counters' hashed subjects.
+   *
+   * Part of THIS gate rather than only the checkout route because the two must
+   * agree. The checkout route fails closed without it (503), so a storefront
+   * that offered a purchase form while the pepper was unset would render a buy
+   * button that could never succeed — the worst of both states, since the
+   * customer only discovers it after filling the form in.
+   */
+  ABUSE_SUBJECT_PEPPER?: string
   [key: string]: string | undefined
 }
 
@@ -270,6 +280,13 @@ export function evaluateGiftCardAvailability(
   // decision, and this code has no basis to assume either answer.
   if ((env.GIFT_CARD_TAX_TREATMENT_REVIEWED ?? "").trim() !== "no_tax_at_sale") {
     return { available: false, reason: "tax_treatment_unreviewed" }
+  }
+  // The abuse controls are MANDATORY and the checkout route fails closed on a
+  // missing pepper. Without this check the storefront would happily render a
+  // purchase form whose every submission returns 503 — the gate and the route
+  // must refuse in the same conditions, or the gate is lying to the customer.
+  if (!env.ABUSE_SUBJECT_PEPPER?.trim()) {
+    return { available: false, reason: "abuse_controls_unconfigured" }
   }
   return { available: true, reason: "available" }
 }

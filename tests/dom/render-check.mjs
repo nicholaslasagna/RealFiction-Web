@@ -118,6 +118,8 @@ const server = reused
         // Production defaults are untouched: with any of these absent the store
         // renders the coming-soon card and checkout refuses before any state.
         STORE_GIFT_CARDS_ENABLED: "true",
+        // Part of the storefront gate — see playwright.config.ts.
+        ABUSE_SUBJECT_PEPPER: "dom-harness-pepper-not-a-secret",
         GIFT_CARD_TAX_TREATMENT_REVIEWED: "no_tax_at_sale",
         GIFT_CARD_CLAIM_PEPPER: "a".repeat(64),
         GIFT_CARD_ENCRYPTION_KEY: "0".repeat(64),

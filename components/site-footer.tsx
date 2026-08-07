@@ -11,9 +11,9 @@ export function SiteFooter() {
       <a className="home-link" href="/">
         realfiction.live
       </a>
-      <h4>Business Inquiries:</h4>
+      <h2>Business Inquiries:</h2>
       <p className="email">business@realfiction.live</p>
-      <h4>General Support:</h4>
+      <h2>General Support:</h2>
       <p className="email">support@realfiction.live</p>
       <nav className="legal-links" aria-label="Legal">
         <a href="/privacy">Privacy Policy</a>

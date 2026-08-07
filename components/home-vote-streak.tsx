@@ -90,7 +90,7 @@ export function HomeVoteStreak() {
 
   return (
     <section className="section-dark">
-      <h3 className="section-title">Vote &amp; Earn Rewards</h3>
+      <h2 className="section-title">Vote &amp; Earn Rewards</h2>
       <p className="section-kicker">
         Vote daily to help RealFiction grow, build streaks, and earn server-safe rewards
         through your linked Minecraft account.

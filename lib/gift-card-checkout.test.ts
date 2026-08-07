@@ -16,6 +16,7 @@ const {
   GIFT_CARD_MESSAGE_MAX,
   GIFT_CARD_SENDER_NAME_MAX,
   evaluateGiftCardAvailability,
+  GIFT_CARD_UNAVAILABLE,
   findDenomination,
   graphemeLength,
   normalizeEmail,
@@ -210,7 +211,12 @@ const FULL_ENV = {
   EMAIL_FROM: "RealFiction <orders@realfiction.live>"
 }
 
-const REVIEWED = { ...FULL_ENV, GIFT_CARD_TAX_TREATMENT_REVIEWED: "no_tax_at_sale" }
+/** Everything a real launch needs: tax reviewed AND the abuse pepper present. */
+const REVIEWED = {
+  ...FULL_ENV,
+  GIFT_CARD_TAX_TREATMENT_REVIEWED: "no_tax_at_sale",
+  ABUSE_SUBJECT_PEPPER: "test-pepper-not-a-secret"
+}
 
 test("gift cards are DISABLED unless every requirement holds", () => {
   assert.equal(evaluateGiftCardAvailability({}, { cryptoConfigured: true }).available, false)
@@ -232,6 +238,96 @@ test("gift cards are DISABLED unless every requirement holds", () => {
     true
   )
   assert.equal(evaluateGiftCardAvailability(REVIEWED, { cryptoConfigured: true }).available, true)
+})
+
+// ===========================================================================
+// The gate and the checkout route must refuse in the SAME conditions
+//
+// A gate that is more permissive than the route renders a purchase form whose
+// every submission fails. The customer discovers it only after filling in a
+// recipient address and a message — strictly worse than Coming Soon, because
+// they have already been told the product is available.
+// ===========================================================================
+
+test("A MISSING ABUSE PEPPER KEEPS THE STOREFRONT UNAVAILABLE", () => {
+  const { ABUSE_SUBJECT_PEPPER: _omitted, ...withoutPepper } = REVIEWED
+
+  const verdict = evaluateGiftCardAvailability(withoutPepper, { cryptoConfigured: true })
+  assert.equal(verdict.available, false, "a purchase form must not render")
+  assert.equal(verdict.reason, "abuse_controls_unconfigured")
+})
+
+test("an EMPTY or whitespace pepper is treated as missing", () => {
+  // A secret set to "" in a dashboard is the commonest way this goes wrong.
+  for (const pepper of ["", "   ", "\t\n"]) {
+    const verdict = evaluateGiftCardAvailability(
+      { ...REVIEWED, ABUSE_SUBJECT_PEPPER: pepper },
+      { cryptoConfigured: true }
+    )
+    assert.equal(verdict.available, false, `pepper ${JSON.stringify(pepper)} was accepted`)
+    assert.equal(verdict.reason, "abuse_controls_unconfigured")
+  }
+})
+
+test("the pepper is the LAST gate, so it never masks another misconfiguration", () => {
+  // Ordering matters for the operator: the reason code should name the first
+  // thing to fix, and a missing feature flag is more informative than a missing
+  // pepper when both are absent.
+  const nothing = evaluateGiftCardAvailability({}, { cryptoConfigured: true })
+  assert.equal(nothing.reason, "feature_disabled")
+
+  const { ABUSE_SUBJECT_PEPPER: _omitted, ...noPepper } = REVIEWED
+  assert.equal(
+    evaluateGiftCardAvailability({ ...noPepper, RESEND_API_KEY: "" }, { cryptoConfigured: true }).reason,
+    "email_unconfigured",
+    "an earlier failure must still be reported first"
+  )
+})
+
+test("EVERY requirement is individually load-bearing", () => {
+  // Removing any one of them must close the gate. This is the check that
+  // catches a future requirement being added to the route but not to the gate.
+  const required = [
+    "STORE_GIFT_CARDS_ENABLED",
+    "RESEND_API_KEY",
+    "EMAIL_FROM",
+    "GIFT_CARD_TAX_TREATMENT_REVIEWED",
+    "ABUSE_SUBJECT_PEPPER"
+  ] as const
+
+  for (const key of required) {
+    const env = { ...REVIEWED, [key]: undefined }
+    assert.equal(
+      evaluateGiftCardAvailability(env, { cryptoConfigured: true }).available,
+      false,
+      `${key} is not enforced by the gate`
+    )
+  }
+
+  // And the complete set really does open it, so the test above is not passing
+  // because everything is broken.
+  assert.equal(evaluateGiftCardAvailability(REVIEWED, { cryptoConfigured: true }).available, true)
+})
+
+test("the reason code never leaks WHICH secret is missing to a customer", () => {
+  // The code goes to a server log. GIFT_CARD_UNAVAILABLE is what a customer
+  // sees, and it must stay uniform across every cause.
+  const causes = [
+    {},
+    { ...REVIEWED, ABUSE_SUBJECT_PEPPER: "" },
+    { ...REVIEWED, RESEND_API_KEY: "" },
+    { ...REVIEWED, GIFT_CARD_TAX_TREATMENT_REVIEWED: "" }
+  ]
+
+  for (const env of causes) {
+    const verdict = evaluateGiftCardAvailability(env, { cryptoConfigured: true })
+    assert.equal(verdict.available, false)
+    assert.doesNotMatch(
+      GIFT_CARD_UNAVAILABLE.message,
+      /pepper|key|resend|tax|abuse|secret|env/i,
+      "the customer-facing message names a configuration value"
+    )
+  }
 })
 
 test("the default posture is OFF", () => {
@@ -350,9 +446,11 @@ test("gift-card checkout FAILS CLOSED until the tax treatment is reviewed", () =
     evaluateGiftCardAvailability({ ...FULL_ENV }, { cryptoConfigured: true }).reason,
     "tax_treatment_unreviewed"
   )
+  // Varied against an otherwise-COMPLETE env, so this measures the tax value
+  // and not some other missing requirement.
   assert.equal(
     evaluateGiftCardAvailability(
-      { ...FULL_ENV, GIFT_CARD_TAX_TREATMENT_REVIEWED: "no_tax_at_sale" },
+      { ...REVIEWED, GIFT_CARD_TAX_TREATMENT_REVIEWED: "no_tax_at_sale" },
       { cryptoConfigured: true }
     ).available,
     true
@@ -360,7 +458,7 @@ test("gift-card checkout FAILS CLOSED until the tax treatment is reviewed", () =
   // An unrecognised value is not an approval.
   assert.equal(
     evaluateGiftCardAvailability(
-      { ...FULL_ENV, GIFT_CARD_TAX_TREATMENT_REVIEWED: "true" },
+      { ...REVIEWED, GIFT_CARD_TAX_TREATMENT_REVIEWED: "true" },
       { cryptoConfigured: true }
     ).available,
     false

@@ -91,7 +91,14 @@
   --ivory-deep: #ebebeb;
 
   --text-dim: #9CB0C3;
-  --text-mute: #6c7d92;
+  /*
+   * WCAG 1.4.3. Was #6c7d92, which gave 4.12:1 on the darkest card background
+   * and 4.39:1 on the page background — both under the 4.5:1 required for the
+   * 11px text this is used for. Lightened along the SAME hue by the minimum
+   * that clears the threshold everywhere it is used (now 4.53:1 and 4.83:1),
+   * so the muted look is preserved rather than redesigned.
+   */
+  --text-mute: #738498;
 
   --gold: #f2c66d;
   --gold-bright: #ffd989;
@@ -423,7 +430,6 @@ select {
   gap: 10px;
   padding: 15px 22px;
   border: 1px solid black;
-  outline: 0;
   background-color: var(--mc-green);
   color: white;
   font-family: "rf-mc", monospace;
@@ -437,6 +443,20 @@ select {
   text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.4);
   border-radius: 0;
 }
+/*
+ * WCAG 2.4.7. This button carried `outline: 0` with nothing to replace it, so a
+ * keyboard user tabbing through the header lost all trace of where they were.
+ *
+ * `:focus-visible` rather than `:focus`, so the ring appears for keyboard
+ * navigation without adding one to every mouse click. The offset keeps it clear
+ * of the 1px black border that is part of the pixel-art styling, and the gold
+ * matches the focus treatment the rest of the site already uses.
+ */
+.mc-button:focus-visible {
+  outline: 3px solid var(--gold);
+  outline-offset: 2px;
+}
+
 .mc-button:hover {
   border-color: rgb(54, 54, 54);
   background-color: var(--mc-green-dark);
@@ -782,7 +802,7 @@ select {
   background-color: var(--navy);
   padding: 90px 0 110px;
 }
-.who h3 {
+.who h2 {
   color: white;
   text-align: center;
   font-size: clamp(32px, 4.6vw, 44px);
@@ -909,7 +929,7 @@ select {
   padding: 0 0 28px;
   text-decoration: none;
 }
-.rf-footer h4 {
+.rf-footer h2 {
   color: white;
   font-family: "rf-light", sans-serif;
   margin: 12px 0 4px;

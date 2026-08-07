@@ -108,16 +108,28 @@ test("keyboard focus is always visible", async ({ page }) => {
 
   for (let i = 0; i < 12; i++) {
     await page.keyboard.press("Tab")
-    const visible = await page.evaluate(() => {
+    const focused = await page.evaluate(() => {
       const el = document.activeElement
-      if (!el || el === document.body) return true
+      if (!el || el === document.body) return { visible: true, what: "(body)" }
       const s = getComputedStyle(el)
-      const ring =
-        s.outlineStyle !== "none" && parseFloat(s.outlineWidth) > 0
-      const shadow = s.boxShadow !== "none"
-      return ring || shadow
+
+      const ring = s.outlineStyle !== "none" && parseFloat(s.outlineWidth) > 0
+      // A FULLY TRANSPARENT box-shadow is not an indicator. The first version of
+      // this check accepted `rgba(0,0,0,0) 0px 0px 0px` and would have passed a
+      // button with no visible focus at all.
+      const shadow =
+        s.boxShadow !== "none" &&
+        !/rgba\(\s*\d+,\s*\d+,\s*\d+,\s*0\s*\)/.test(s.boxShadow)
+
+      return {
+        visible: ring || shadow,
+        what: `<${el.tagName.toLowerCase()}> "${(el.textContent ?? "").trim().slice(0, 30)}"`
+      }
     })
-    expect(visible, `focused element ${i} has no visible focus indicator`).toBe(true)
+    expect(
+      focused.visible,
+      `tab stop ${i} ${focused.what} has no visible focus indicator`
+    ).toBe(true)
   }
 })
 

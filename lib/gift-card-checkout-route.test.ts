@@ -156,6 +156,7 @@ globalThis.fetch = (async (url: unknown, init?: RequestInit) => {
   throw new Error("unexpected network call")
 }) as never as typeof fetch
 
+const { GIFT_CARD_UNAVAILABLE } = await import("./gift-card/checkout-policy.ts")
 const { POST } = await import("../app/api/store/gift-cards/checkout/route.ts")
 
 function reset(overrides: Partial<typeof state> = {}) {
@@ -196,6 +197,23 @@ const VALID = {
 // ===========================================================================
 // The happy path
 // ===========================================================================
+
+test("A MISSING ABUSE PEPPER IS REFUSED BY THE GATE, not by the velocity check", async () => {
+  // The launch-gate regression. Before this, the storefront rendered a purchase
+  // form while the route 503'd on every submission — the customer found out
+  // only after filling it in. Gate and route must now refuse together.
+  reset()
+  delete process.env.ABUSE_SUBJECT_PEPPER
+
+  const response = await post(VALID)
+  const body = (await response.json()) as { error?: string }
+  Object.assign(process.env, ENV)
+
+  assert.equal(response.status, GIFT_CARD_UNAVAILABLE.status, "must be the gate's 503, not a later failure")
+  assert.equal(body.error, GIFT_CARD_UNAVAILABLE.message)
+  assert.deepEqual(state.orders, [], "NO ORDER")
+  assert.deepEqual(state.stripeBodies, [], "NO STRIPE CALL")
+})
 
 test("a valid $25 request returns a Stripe Checkout URL", async () => {
   reset()

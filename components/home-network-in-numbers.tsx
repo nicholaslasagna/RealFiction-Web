@@ -82,7 +82,7 @@ export async function HomeNetworkInNumbers() {
 
   return (
     <section className="section-tinted">
-      <h3 className="section-title">The whole network, in numbers.</h3>
+      <h2 className="section-title">The whole network, in numbers.</h2>
       <p className="section-kicker">
         Totals roll up SMP, Factions, Anarchy, Arcade, and lobby playtime from across the
         RealFiction network.
@@ -122,6 +122,12 @@ export async function HomeNetworkInNumbers() {
                         marginLeft: i ? -8 : 0,
                         imageRendering: "pixelated"
                       }}
+                      // `role="img"` is required, not decorative. ARIA
+                      // prohibits `aria-label` on a generic div, so without a
+                      // role a screen reader DISCARDS the name entirely and the
+                      // avatar is announced as nothing. The skin is painted as
+                      // a CSS background, so there is no <img> to carry alt.
+                      role="img"
                       aria-label={player.name ?? "Unknown player"}
                       title={player.name ?? "Unknown player"}
                     />
