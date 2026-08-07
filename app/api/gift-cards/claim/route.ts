@@ -144,20 +144,14 @@ export async function POST(request: Request) {
     console.info("gift_card_claim", { outcome, user_id_present: true })
 
     if (outcome === "claimed") {
-      // Confirmation goes through the outbox like every other message; this
-      // route never calls Resend.
-      await supabase
-        .from("email_deliveries")
-        .insert({
-          idempotency_key: `gift_card_claimed:${row?.gift_card_id}`,
-          template: "gift_card_claimed",
-          recipient: user.email,
-          params: { amount_cents: amountCents, balance_cents: balanceCents, currency: "USD" }
-        })
-        // A duplicate key means the confirmation is already queued; the claim
-        // itself has committed and must not be reported as failed.
-        .then(undefined, () => undefined)
-
+      // No confirmation insert here, deliberately. `claim_gift_card` creates the
+      // outbox row INSIDE the claim transaction, so by the time this line runs
+      // the confirmation is already durable — and if it could not be written,
+      // the claim rolled back and this branch was never reached.
+      //
+      // Doing it here instead was the previous design and it was wrong: a failed
+      // insert after a committed claim left real credit with no record that it
+      // had been granted, and nothing to retry.
       return reply("claimed", { amountCents, balanceCents })
     }
 

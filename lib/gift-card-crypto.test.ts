@@ -139,8 +139,14 @@ test("TAMPERED ciphertext is rejected, not decrypted to something else", async (
   const sealed = await sealClaimSecret(generateClaimSecret(), ENV)
   const [version, iv, body] = sealed.ciphertext.split(".")
 
-  const flip = (value: string) =>
-    value.slice(0, -1) + (value.at(-1) === "A" ? "B" : "A")
+  // Mutate a MIDDLE character, not the last one. The final base64url character
+  // of a group carries fewer significant bits, so flipping it can decode to
+  // identical bytes — a "tampered" value that is not tampered at all, which
+  // made this test intermittently pass a valid ciphertext.
+  const flip = (value: string) => {
+    const at = Math.floor(value.length / 2)
+    return value.slice(0, at) + (value[at] === "A" ? "B" : "A") + value.slice(at + 1)
+  }
 
   for (const broken of [
     `${version}.${iv}.${flip(body)}`,

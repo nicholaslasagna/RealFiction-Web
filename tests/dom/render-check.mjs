@@ -68,7 +68,21 @@ const reused = await alreadyRunning()
 const server = reused
   ? null
   : spawn("npm", ["run", "dev"], {
-      env: { ...process.env, PORT: String(PORT), NODE_ENV: "development" },
+      env: {
+        ...process.env,
+        PORT: String(PORT),
+        NODE_ENV: "development",
+        // TEST-ONLY gate values, applied to this harness's dev server alone.
+        // Production defaults are untouched: with any of these absent the store
+        // renders the coming-soon card and checkout refuses before any state.
+        STORE_GIFT_CARDS_ENABLED: "true",
+        GIFT_CARD_TAX_TREATMENT_REVIEWED: "no_tax_at_sale",
+        GIFT_CARD_CLAIM_PEPPER: "a".repeat(64),
+        GIFT_CARD_ENCRYPTION_KEY: "0".repeat(64),
+        GIFT_CARD_ENCRYPTION_KEY_VERSION: "1",
+        RESEND_API_KEY: "dom-harness-not-a-real-key",
+        EMAIL_FROM: "RealFiction <orders@realfiction.live>"
+      },
       stdio: ["ignore", "pipe", "pipe"]
     })
 server?.stdout.on("data", () => {})
@@ -315,6 +329,112 @@ try {
     for (const img of [...store.html.matchAll(/<img[^>]*>/g)].map((m) => m[0])) {
       assert.match(img, /alt=/, `image without alt: ${img.slice(0, 90)}`)
     }
+  })
+
+  // =========================================================================
+  // Gift cards
+  // =========================================================================
+  const giftStore = await get("/store")
+  const claimPage = await get("/gift-cards/claim")
+  const terms = await get("/legal/gift-cards")
+
+  check("the gift-card terms page renders and is marked a draft", () => {
+    assert.equal(terms.status, 200)
+    assert.match(text(terms.html), /Draft — not yet in effect/)
+    assert.match(text(terms.html), /not redeemable for cash except where required by law/i)
+    assert.match(text(terms.html), /never expires|do not expire/i)
+  })
+
+  check("the claim page renders without claiming anything", () => {
+    assert.equal(claimPage.status, 200)
+    // A GET must be presentation only. If the page claimed on load, an email
+    // scanner would consume gift cards before anyone read the message.
+    assert.match(text(claimPage.html), /Opening this page does not claim anything/i)
+    assert.match(text(claimPage.html), /Claim your gift card/i)
+  })
+
+  check("the claim page renders NO secret and no claim controls without a fragment", () => {
+    // The secret lives in the URL fragment, which the server never receives, so
+    // a server-rendered page cannot contain it by construction.
+    assert.ok(!/[A-Za-z0-9_-]{43}/.test(text(claimPage.html)), "a 43-char secret-shaped string was rendered")
+    assert.ok(!/claim#/.test(claimPage.html))
+  })
+
+  check("the claim page sets a strict referrer policy", () => {
+    assert.match(claimPage.html, /no-referrer/)
+  })
+
+  check("the claim page LOADS no third-party resource", () => {
+    // `src` only, not `href`. A resource that loads runs in the page and could
+    // read location.hash; a footer link to YouTube cannot, and a fragment is
+    // never transmitted in a Referer header even if one were sent — which the
+    // no-referrer policy asserted above already prevents.
+    for (const src of [...claimPage.html.matchAll(/\bsrc="(https?:\/\/[^"]+)"/g)].map((m) => m[1])) {
+      assert.match(src, /^https?:\/\/(localhost|realfiction\.live)/, `third-party resource: ${src}`)
+    }
+    assert.ok(
+      !/googletagmanager|google-analytics|plausible|segment\.io|hotjar|sentry/i.test(claimPage.html),
+      "an analytics script on the claim page could read the fragment"
+    )
+  })
+
+  check("the store renders all nine gift-card denominations when enabled", () => {
+    const visible = text(giftStore.html)
+    for (const amount of ["$5.00", "$10.00", "$15.00", "$20.00", "$25.00", "$30.00", "$50.00", "$75.00", "$100.00"]) {
+      assert.ok(visible.includes(amount), `missing denomination ${amount}`)
+    }
+  })
+
+  check("the denominations are an accessible radio group", () => {
+    assert.match(giftStore.html, /role="radiogroup"/)
+    assert.match(giftStore.html, /role="radio"[^>]*aria-checked/)
+  })
+
+  check("the gift-card form carries every required disclosure", () => {
+    const visible = text(giftStore.html)
+    assert.match(visible, /Delivered by email immediately after payment/i)
+    assert.match(visible, /Never expires\. No inactivity, maintenance, or service fees/i)
+    assert.match(visible, /Cannot be used to buy another gift card/i)
+    assert.match(visible, /Not redeemable for cash except where required by law/i)
+  })
+
+  check("the gift-card form links to working terms and support", () => {
+    assert.match(giftStore.html, /href="\/legal\/gift-cards"/)
+    assert.match(giftStore.html, /mailto:support@realfiction\.live/)
+  })
+
+  check("NO denomination is labelled popular, and there is no urgency copy", () => {
+    const visible = text(giftStore.html)
+    assert.ok(!/most popular/i.test(visible))
+    assert.ok(!/hurry|limited time|only .* left|ends soon/i.test(visible))
+  })
+
+  check("the gift-card form exposes NO client monetary field", () => {
+    // The browser picks a SKU. Price, currency, and Stripe identifiers are
+    // resolved server-side; none may appear as a form input.
+    const inputs = [...giftStore.html.matchAll(/<input[^>]*>/g)].map((m) => m[0])
+    for (const input of inputs) {
+      assert.ok(
+        !/name="(price|amount|currency|priceId|productId|faceValue)"/i.test(input),
+        `client monetary input: ${input.slice(0, 90)}`
+      )
+    }
+    assert.ok(!/data-price-cents|data-amount-cents/.test(giftStore.html))
+  })
+
+  check("the gift-card fields are labelled and length-limited", () => {
+    const visible = text(giftStore.html)
+    assert.match(visible, /Recipient email/i)
+    assert.match(visible, /Your name/i)
+    // React splits adjacent text nodes, so "0/60 characters" arrives across
+    // several lines; compare with whitespace collapsed.
+    const flat = visible.replace(/\s+/g, " ")
+    assert.match(flat, /0 ?\/ ?60 characters/)
+    assert.match(flat, /0 ?\/ ?500 characters/)
+  })
+
+  check("the checkout action names the selected amount", () => {
+    assert.match(text(giftStore.html), /Buy \$25\.00 gift card/)
   })
 
   // =========================================================================
