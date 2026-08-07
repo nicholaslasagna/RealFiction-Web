@@ -2,36 +2,18 @@ import { activeEntitlementSlugs } from "@/lib/store/access-view"
 import type { Metadata } from "next"
 import Image from "next/image"
 import Link from "next/link"
-import type { ComponentType } from "react"
-import {
-  CalendarDays,
-  Clock,
-  Gift
-} from "lucide-react"
+
+import { ArrowUpRight, Gift } from "lucide-react"
 
 import { AccountAuthCard } from "@/components/account-auth-card"
 import { AccountEconomyCard } from "@/components/account-economy-card"
 import { AccountLinkCard } from "@/components/account-link-card"
 import { AccountSignOutButton } from "@/components/account-sign-out-button"
 import { GiftCardCodes } from "@/components/gift-card-codes"
-import {
-  BoneIcon,
-  CheckIcon,
-  ClockIcon,
-  CompassIcon,
-  DyeIcon,
-  ElytraIcon,
-  EmeraldIcon,
-  FireworkRocketIcon,
-  GearIcon,
-  GrassBlockIcon,
-  NetherStarIcon,
-  SteveHeadIcon,
-  WarningIcon
-} from "@/components/minecraft-icons"
+import { BoneIcon, CheckIcon, ClockIcon, CompassIcon, DyeIcon, ElytraIcon, EmeraldIcon, FireworkRocketIcon, GearIcon, NetherStarIcon, WarningIcon } from "@/components/minecraft-icons"
 import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+
+import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { STORE_BANNER_HEIGHT, STORE_BANNER_WIDTH, voteSites } from "@/lib/data"
 import { PurchaseRowCard, type PurchaseRow } from "@/components/account/purchase-history"
 import { createSupabaseServerClient, getAuthenticatedUser } from "@/lib/supabase/server"
@@ -495,20 +477,21 @@ async function SignedInAccount() {
       <div className="mx-auto max-w-6xl py-6 md:py-10">
         <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
           <section className="space-y-6">
-            <div className="minecraft-panel rounded-lg p-6 md:p-8">
-              <h1 className="display-font text-5xl font-semibold leading-tight text-white md:text-6xl">
-                Welcome back
+            {/* The account's identity is the linked Minecraft account, not a
+                greeting. "Welcome back" occupied a full panel at 6xl to say
+                nothing, and pushed the link state — the thing this page is
+                actually about — below it. */}
+            <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-2">
+              <h1 className="display-font text-3xl font-semibold leading-tight text-white md:text-4xl">
+                Your account
               </h1>
-              <p className="mt-4 max-w-2xl text-base leading-7 text-muted-foreground">
-                Keep track of your Minecraft link, perks, vote streak, and recent rewards in one cozy place.
-              </p>
-              <div className="mt-6 flex flex-wrap gap-3">
-                <Button asChild>
-                  <Link href="/vote">Vote for Rewards</Link>
-                </Button>
-                <Button asChild variant="outline">
-                  <Link href="/store">Visit Store</Link>
-                </Button>
+              <div className="flex flex-wrap gap-x-5 gap-y-1 text-sm">
+                <Link href="/vote" className="text-amber-100 underline underline-offset-4">
+                  Vote for rewards
+                </Link>
+                <Link href="/store" className="text-amber-100 underline underline-offset-4">
+                  Visit store
+                </Link>
               </div>
             </div>
 
@@ -530,51 +513,74 @@ async function SignedInAccount() {
               pendingUsername={pendingLink?.minecraft_username}
             />
 
-            <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-              {perkCards.map((perk) => {
-                const unlocked = perk.slugs.some((slug) => ownedSlugs.has(slug))
-                // Held once, but not now. Worth distinguishing from "Locked":
-                // a lapsed supporter should see that their perk ended, not a
-                // card implying they never bought it.
-                const lapsed = !unlocked && perk.slugs.some((slug) => everSlugs.has(slug))
-                const Icon = perk.icon
+            {/* Perks as a compact list. Six banner cards made the state — the
+                only thing a returning player checks — the smallest element on
+                each card, and cost roughly a screen of height. Active first,
+                so "what do I have right now" is the top of the list. */}
+            <section aria-labelledby="perks-heading">
+              <div className="flex items-baseline justify-between gap-3 border-b border-amber-200/15 pb-1.5">
+                <h2
+                  id="perks-heading"
+                  className="text-xs font-bold uppercase tracking-[0.14em] text-muted-foreground"
+                >
+                  Perks
+                </h2>
+                <span className="font-mono text-xs text-muted-foreground tabular-nums">
+                  {ownedCount}/{perkCards.length}
+                </span>
+              </div>
 
-                return (
-                  <Card
-                    key={perk.key}
-                    className={
-                      unlocked
-                        ? "minecraft-card overflow-hidden border-emerald-300/18"
-                        : "minecraft-card overflow-hidden"
-                    }
-                  >
-                    {/* Same store/Stripe artwork. Locked perks are desaturated so
-                        owned ones read at a glance. */}
-                    <div className="border-b border-white/10">
-                      <Image
-                        alt=""
-                        aria-hidden
-                        src={`/images/store/${perk.slugs[0]}.png`}
-                        width={STORE_BANNER_WIDTH}
-                        height={STORE_BANNER_HEIGHT}
-                        className={unlocked ? "h-auto w-full" : "h-auto w-full opacity-40 grayscale"}
-                      />
-                    </div>
-                    <CardHeader>
-                      <div className="flex items-center justify-between gap-3">
-                        <span className="flex h-11 w-11 items-center justify-center border-2 border-[#00060e] bg-gradient-to-b from-[#1a2638] to-[#0a1424] shadow-[inset_0_2px_0_rgba(255,255,255,0.08),inset_0_-2px_0_rgba(0,0,0,0.3)]">
-                          <Icon size={22} />
+              <ul className="mt-1">
+                {[...perkCards]
+                  .map((perk) => {
+                    const unlocked = perk.slugs.some((slug) => ownedSlugs.has(slug))
+                    // Held once, but not now. Worth distinguishing from
+                    // "Locked": a lapsed supporter should see that their perk
+                    // ended, not a card implying they never bought it.
+                    const lapsed = !unlocked && perk.slugs.some((slug) => everSlugs.has(slug))
+                    return { perk, unlocked, lapsed }
+                  })
+                  .sort((a, b) => Number(b.unlocked) - Number(a.unlocked))
+                  .map(({ perk, unlocked, lapsed }) => {
+                    return (
+                      <li
+                        key={perk.key}
+                        className="flex items-center gap-3 border-b border-white/[0.06] py-2.5"
+                      >
+                        {/* The SAME store artwork, as a thumbnail. Recognisable
+                            art scans faster than a generic icon, and reusing the
+                            store's file keeps account and store visually one
+                            product — an invariant lib/store-banners.test.ts
+                            enforces. */}
+                        <Image
+                          alt=""
+                          aria-hidden
+                          src={`/images/store/${perk.slugs[0]}.png`}
+                          width={STORE_BANNER_WIDTH}
+                          height={STORE_BANNER_HEIGHT}
+                          className={`h-8 w-14 shrink-0 border border-white/10 object-cover ${
+                            unlocked ? "" : "opacity-35 grayscale"
+                          }`}
+                        />
+                        <span className="min-w-0 flex-1">
+                          <span
+                            className={`block truncate text-sm font-semibold ${
+                              unlocked ? "text-white" : "text-muted-foreground"
+                            }`}
+                          >
+                            {perk.title}
+                          </span>
+                          <span className="block truncate text-xs text-muted-foreground">
+                            {perk.text}
+                          </span>
                         </span>
                         <Badge variant={unlocked ? "success" : lapsed ? "warning" : "outline"}>
                           {unlocked ? "Owned" : lapsed ? "Expired" : "Locked"}
                         </Badge>
-                      </div>
-                      <CardTitle className="display-font text-2xl">{perk.title}</CardTitle>
-                      <CardDescription>{perk.text}</CardDescription>
-                    </CardHeader>
-                  </Card>
-                )
-              })}
+                      </li>
+                    )
+                  })}
+              </ul>
             </section>
 
             <GiftCardCodes
@@ -590,61 +596,84 @@ async function SignedInAccount() {
               }))}
             />
 
-            <div className="grid gap-6 xl:grid-cols-2">
+            {/* Everything above is CURRENT state; everything below is history.
+                The rule is the separation — previously both sat in identical
+                panels, so a two-year-old order looked as live as an active
+                perk. */}
+            <div className="grid gap-8 border-t border-white/10 pt-6 xl:grid-cols-2 xl:gap-10">
               <AllPurchases orders={data.orders} />
               <AllRewards rewards={data.rewards} />
             </div>
           </section>
 
-          <aside className="space-y-6">
+          <aside className="space-y-8">
             <AccountEconomyCard />
 
-            <Card className="minecraft-card">
-              <CardHeader>
-                <CardTitle className="display-font text-3xl">Your Streak</CardTitle>
-                <CardDescription>Vote each day to help RealFiction grow.</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-2 gap-3">
-                  <StatTile label="Current" value={data.voteStreak?.current_streak ?? 0} />
-                  <StatTile label="Best" value={data.voteStreak?.longest_streak ?? 0} />
-                  <StatTile label="This month" value={data.voteStreak?.monthly_votes ?? 0} />
-                  <StatTile label="All votes" value={data.voteStreak?.total_votes ?? 0} />
-                </div>
-                <p className="mt-4 text-sm text-muted-foreground">
-                  Last vote: {formatDate(data.voteStreak?.last_vote_at ?? null)}
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card className="minecraft-card">
-              <CardHeader>
-                <CardTitle className="display-font text-3xl">Voting Links</CardTitle>
-                <CardDescription>Pick a site, vote, and keep your streak alive.</CardDescription>
-              </CardHeader>
-              <CardContent className="grid gap-2">
-                {voteSites.map((site) => (
-                  <Button key={site.name} asChild className="justify-between" variant="outline">
-                    <Link href={site.href}>
-                      {site.name}
-                      <CalendarDays className="h-4 w-4" />
-                    </Link>
-                  </Button>
+            {/* Streak: four numbers, not four bordered tiles inside a card.
+                Vote data is real but subordinate to account identity, so it
+                reads as a compact stat row rather than a headline panel. */}
+            <section aria-labelledby="streak-heading">
+              <h2
+                id="streak-heading"
+                className="border-b border-white/10 pb-1.5 text-xs font-bold uppercase tracking-[0.14em] text-muted-foreground"
+              >
+                Vote streak
+              </h2>
+              <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3">
+                {[
+                  { label: "Current", value: data.voteStreak?.current_streak ?? 0 },
+                  { label: "Best", value: data.voteStreak?.longest_streak ?? 0 },
+                  { label: "This month", value: data.voteStreak?.monthly_votes ?? 0 },
+                  { label: "All time", value: data.voteStreak?.total_votes ?? 0 }
+                ].map((stat) => (
+                  <div key={stat.label}>
+                    <dd className="font-mono text-2xl font-semibold leading-none text-amber-100 tabular-nums">
+                      {stat.value}
+                    </dd>
+                    <dt className="mt-1 text-[11px] font-bold uppercase tracking-[0.14em] text-muted-foreground">
+                      {stat.label}
+                    </dt>
+                  </div>
                 ))}
-              </CardContent>
-            </Card>
+              </dl>
+              <p className="mt-3 text-xs text-muted-foreground">
+                Last vote: {formatDate(data.voteStreak?.last_vote_at ?? null)}
+              </p>
+            </section>
 
-            <Card className="minecraft-card">
-              <CardHeader>
-                <CardTitle className="display-font text-3xl">Account Snapshot</CardTitle>
-                <CardDescription>No pay-to-win. Just cosmetics, style, and cozy extras.</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-2.5 text-sm text-muted-foreground">
-                <SnapshotLine icon={SteveHeadIcon} label="Minecraft" value={verifiedLink?.minecraft_username ?? "Not linked yet"} />
-                <SnapshotLine icon={NetherStarIcon} label="Perks owned" value={`${ownedCount} of ${perkCards.length}`} />
-                <SnapshotLine icon={GrassBlockIcon} label="Main server" value="realfiction.live" />
-              </CardContent>
-            </Card>
+            {/* Ten outline buttons became ten rows. The vote page is the place
+                that shows cooldowns; this is a shortcut list, so it stays quiet. */}
+            <section aria-labelledby="vote-links-heading">
+              <div className="flex items-baseline justify-between gap-3 border-b border-white/10 pb-1.5">
+                <h2
+                  id="vote-links-heading"
+                  className="text-xs font-bold uppercase tracking-[0.14em] text-muted-foreground"
+                >
+                  Vote sites
+                </h2>
+                <Link href="/vote" className="text-xs text-amber-100 underline underline-offset-4">
+                  Cooldowns
+                </Link>
+              </div>
+              <ul className="mt-1">
+                {voteSites.map((site) => (
+                  <li key={site.name} className="border-b border-white/[0.06]">
+                    <a
+                      href={site.href}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="group flex items-center justify-between gap-3 py-2 text-sm text-slate-200 transition hover:text-amber-100"
+                    >
+                      <span className="min-w-0 truncate">{site.name}</span>
+                      <ArrowUpRight
+                        className="h-3.5 w-3.5 shrink-0 text-muted-foreground transition group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-amber-100"
+                        aria-hidden
+                      />
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </section>
           </aside>
         </div>
       </div>
@@ -652,105 +681,80 @@ async function SignedInAccount() {
   )
 }
 
-function StatTile({ label, value }: { label: string; value: number }) {
-  return (
-    <div className="rounded-lg border border-amber-200/14 bg-black/24 p-4">
-      <div className="font-mono text-3xl font-semibold text-amber-100">{value}</div>
-      <div className="mt-1 text-xs font-bold uppercase tracking-[0.16em] text-muted-foreground">{label}</div>
-    </div>
-  )
-}
-
-function SnapshotLine({
-  icon: Icon,
-  label,
-  value
-}: {
-  icon: ComponentType<{ className?: string; size?: number }>
-  label: string
-  value: string
-}) {
-  return (
-    <div className="flex items-center justify-between gap-3 rounded-md border border-white/10 bg-white/[0.035] px-3 py-2.5">
-      <span className="flex shrink-0 items-center gap-2.5 font-medium text-slate-200">
-        <span className="flex h-5 w-5 shrink-0 items-center justify-center">
-          <Icon className="h-4 w-4" />
-        </span>
-        {label}
-      </span>
-      <span className="min-w-0 truncate text-right text-slate-300">{value}</span>
-    </div>
-  )
-}
-
+/**
+ * Purchase history as a feed.
+ *
+ * Was a card titled "All Purchases" with the subtitle "Thanks for supporting
+ * RealFiction" — a thank-you occupying the line where a reader looks for what
+ * the section contains. The rows themselves are unchanged: `PurchaseRowCard`
+ * still renders every order exactly as before.
+ */
 function AllPurchases({ orders }: { orders: OrderRow[] }) {
   return (
-    <Card className="minecraft-card">
-      <CardHeader>
-        <CardTitle className="display-font text-3xl">All Purchases</CardTitle>
-        <CardDescription>Thanks for supporting RealFiction.</CardDescription>
-      </CardHeader>
-      <CardContent>
+    <section aria-labelledby="purchases-heading" className="min-w-0">
+      <div className="flex items-baseline justify-between gap-3 border-b border-white/10 pb-1.5">
+        <h2
+          id="purchases-heading"
+          className="text-xs font-bold uppercase tracking-[0.14em] text-muted-foreground"
+        >
+          Purchases
+        </h2>
         {orders.length ? (
-          <div className="max-h-[24rem] space-y-3 overflow-y-auto pr-1">
-            {orders.map((order) => (
-              <PurchaseRowCard key={order.id} order={order} />
-            ))}
-          </div>
-        ) : (
-          <EmptyState icon={Gift} title="No purchases yet" text="Cosmetics and supporter perks will show here." />
-        )}
-      </CardContent>
-    </Card>
+          <span className="font-mono text-xs text-muted-foreground tabular-nums">{orders.length}</span>
+        ) : null}
+      </div>
+      {orders.length ? (
+        <div className="mt-3 max-h-[24rem] space-y-3 overflow-y-auto pr-1">
+          {orders.map((order) => (
+            <PurchaseRowCard key={order.id} order={order} />
+          ))}
+        </div>
+      ) : (
+        <p className="mt-3 text-sm text-muted-foreground">
+          No purchases yet. Cosmetics and supporter perks will show here.
+        </p>
+      )}
+    </section>
   )
 }
 
+/** Reward history as a feed. Same rows, hairlines instead of boxes. */
 function AllRewards({ rewards }: { rewards: RewardRow[] }) {
   return (
-    <Card className="minecraft-card">
-      <CardHeader>
-        <CardTitle className="display-font text-3xl">All Rewards</CardTitle>
-        <CardDescription>Rewards from voting and the store appear here.</CardDescription>
-      </CardHeader>
-      <CardContent>
+    <section aria-labelledby="rewards-heading" className="min-w-0">
+      <div className="flex items-baseline justify-between gap-3 border-b border-white/10 pb-1.5">
+        <h2
+          id="rewards-heading"
+          className="text-xs font-bold uppercase tracking-[0.14em] text-muted-foreground"
+        >
+          Rewards
+        </h2>
         {rewards.length ? (
-          <div className="max-h-[24rem] space-y-3 overflow-y-auto pr-1">
-            {rewards.map((reward) => (
-              <div key={reward.id} className="rounded-lg border border-white/10 bg-black/24 p-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="font-semibold text-white">{rewardTitle(reward)}</p>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      {rewardDetail(reward)} · {formatDate(reward.created_at)}
-                    </p>
-                  </div>
-                  <RewardStatusBadge status={reward.status} />
-                </div>
+          <span className="font-mono text-xs text-muted-foreground tabular-nums">{rewards.length}</span>
+        ) : null}
+      </div>
+      {rewards.length ? (
+        <ul className="mt-1 max-h-[24rem] overflow-y-auto pr-1">
+          {rewards.map((reward) => (
+            <li
+              key={reward.id}
+              className="flex items-start justify-between gap-3 border-b border-white/[0.06] py-2.5"
+            >
+              <div className="min-w-0">
+                <p className="truncate text-sm font-semibold text-white">{rewardTitle(reward)}</p>
+                <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                  {rewardDetail(reward)} · {formatDate(reward.created_at)}
+                </p>
               </div>
-            ))}
-          </div>
-        ) : (
-          <EmptyState icon={Clock} title="No rewards yet" text="Vote or visit the store to start earning rewards." />
-        )}
-      </CardContent>
-    </Card>
-  )
-}
-
-function EmptyState({
-  icon: Icon,
-  title,
-  text
-}: {
-  icon: typeof Gift
-  title: string
-  text: string
-}) {
-  return (
-    <div className="rounded-lg border border-white/10 bg-white/[0.035] p-5 text-center">
-      <Icon className="mx-auto h-8 w-8 text-amber-200" />
-      <p className="mt-3 font-semibold text-white">{title}</p>
-      <p className="mt-1 text-sm text-muted-foreground">{text}</p>
-    </div>
+              <RewardStatusBadge status={reward.status} />
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="mt-3 text-sm text-muted-foreground">
+          No rewards yet. Vote or visit the store to start earning rewards.
+        </p>
+      )}
+    </section>
   )
 }
