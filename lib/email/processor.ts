@@ -22,6 +22,9 @@ import {
   buildGiftCardDeliveryEmail,
   buildGiftCardFrozenRecipientEmail,
   buildGiftCardPurchaseEmail,
+  buildCashRedemptionClosedEmail,
+  buildCashRedemptionCompletedEmail,
+  buildCashRedemptionReceivedEmail,
   buildGiftCardRefundReviewEmail,
   buildGiftCardRefundedEmail,
   buildGiftCardRefundedRecipientEmail,
@@ -218,6 +221,22 @@ async function renderDelivery(
       supportEmail,
       siteUrl
     })
+  }
+
+  // -- Cash-redemption review ------------------------------------------------
+  //
+  // Takes NO params: there is deliberately nothing to render but the fixed
+  // wording, so a queue row cannot carry an amount into an email about a
+  // possible payout.
+  const CASH_REDEMPTION_TEMPLATES = {
+    cash_redemption_received: buildCashRedemptionReceivedEmail,
+    cash_redemption_closed: buildCashRedemptionClosedEmail,
+    cash_redemption_completed: buildCashRedemptionCompletedEmail
+  } as const
+
+  const cashBuilder = CASH_REDEMPTION_TEMPLATES[row.template as keyof typeof CASH_REDEMPTION_TEMPLATES]
+  if (cashBuilder) {
+    return cashBuilder({ supportEmail, siteUrl })
   }
 
   if (row.template === "gift_card_claimed") {

@@ -26,6 +26,8 @@ const ENV = {
   // the gate fails closed without it.
   GIFT_CARD_TAX_TREATMENT_REVIEWED: "no_tax_at_sale",
   STRIPE_SECRET_KEY: "stripe-secret-value",
+  // The abuse controls are mandatory; checkout 503s without this.
+  ABUSE_SUBJECT_PEPPER: "test-pepper-not-a-secret",
   NEXT_PUBLIC_SITE_URL: "https://realfiction.live"
 }
 
@@ -52,6 +54,14 @@ mock.module("@/lib/supabase/server", {
 mock.module("@/lib/supabase/service-role", {
   namedExports: {
     getSupabaseServiceRoleClient: () => ({
+      // The velocity counters. This suite is about checkout branching, so they
+      // answer "allow" — the controls have their own suite. What matters here
+      // is that they answer AT ALL: an absent `rpc` is indistinguishable from
+      // a broken database, and checkout now correctly refuses in that state.
+      rpc: async (fn: string) =>
+        fn === "evaluate_gift_card_velocity"
+          ? { data: [{ decision: "allow", rule: null }], error: null }
+          : { data: null, error: null },
       from: () => ({
         select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { metadata: {} } }) }) }),
         update: (values: Record<string, unknown>) => ({

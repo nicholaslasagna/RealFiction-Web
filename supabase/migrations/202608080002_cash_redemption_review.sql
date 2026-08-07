@@ -179,7 +179,7 @@ grant execute on function public.gift_lot_provenance(uuid) to service_role;
  * Idempotent per claimant: a live request is returned as-is rather than
  * freezing a second time.
  */
-create or replace function public.request_cash_redemption(
+create or replace function public.request_cash_redemption_core(
   p_claimant uuid,
   p_lot_id uuid default null
 )
@@ -244,12 +244,17 @@ begin
 
   -- ---- The eligible amount, computed HERE ---------------------------------
   -- `remaining_cents` is already net of every reservation and every spend, and
-  -- `frozen_cents` covers disputes and in-flight refunds. Prior redemptions are
-  -- subtracted so a second request cannot re-freeze value the first one holds.
-  v_eligible := greatest(
-    0,
-    v_lot.remaining_cents - v_lot.frozen_cents - coalesce(v_prov.prior_redeemed_cents, 0)
-  );
+  -- `frozen_cents` covers disputes, in-flight refunds, AND any live redemption
+  -- freeze. That is the whole answer.
+  --
+  -- `prior_redeemed_cents` is deliberately NOT subtracted here, even though it
+  -- is reported to the reviewer. Subtracting it double-counts: a live request's
+  -- value sits in `frozen_cents` (already removed by the line below), and a
+  -- COMPLETED one already had `remaining_cents` decremented when it completed.
+  -- Doing both left a customer who had redeemed part of a card unable to redeem
+  -- the rest — under-redeeming, so never unsafe, but wrong, and wrong in a
+  -- direction that quietly denies people money the law may owe them.
+  v_eligible := greatest(0, v_lot.remaining_cents - v_lot.frozen_cents);
 
   if v_eligible <= 0 then
     request_id := null; state := 'ineligible'; reason := 'no_eligible_value';
@@ -303,8 +308,8 @@ begin
 end;
 $$;
 
-revoke all on function public.request_cash_redemption(uuid, uuid) from public, anon, authenticated;
-grant execute on function public.request_cash_redemption(uuid, uuid) to service_role;
+revoke all on function public.request_cash_redemption_core(uuid, uuid) from public, anon, authenticated;
+grant execute on function public.request_cash_redemption_core(uuid, uuid) to service_role;
 
 -- ===========================================================================
 -- 4. Staff transitions
@@ -392,6 +397,15 @@ begin
       completed_at = case when p_state = 'completed' then now() else completed_at end
   where id = p_request_id;
 
+  -- Only the states a customer should hear about. `eligibility_review`,
+  -- `eligible`, and `manual_payout_required` are internal progress and send
+  -- nothing — see the notification note at the end of this file.
+  if p_state in ('ineligible', 'rejected') then
+    perform public.enqueue_cash_redemption_email(p_request_id, 'cash_redemption_closed');
+  elsif p_state = 'completed' then
+    perform public.enqueue_cash_redemption_email(p_request_id, 'cash_redemption_completed');
+  end if;
+
   outcome := p_state; released_cents := v_release;
   return next;
 end;
@@ -444,3 +458,77 @@ $$;
 
 revoke all on function public.has_gift_origin_credit(uuid) from public, anon, authenticated;
 grant execute on function public.has_gift_origin_credit(uuid) to service_role;
+
+-- ===========================================================================
+-- 6. Notifications
+-- ===========================================================================
+--
+-- Outbox rows only. Nothing here sends: the scheduled processor drains
+-- `email_deliveries`, exactly as it does for every other transactional message,
+-- and a review that cannot be emailed must not be a review that fails to exist.
+--
+-- Only three moments produce a message, and only when they actually happen:
+--
+--   requested   the customer asked, and needs to know we have it
+--   rejected /
+--   ineligible  the review closed with no payout, and their credit is back
+--   completed   a person paid them, by hand, and recorded it here
+--
+-- The intermediate states (`eligibility_review`, `eligible`,
+-- `manual_payout_required`) send NOTHING. They are internal progress, and
+-- "you are eligible" in a customer's inbox is a promise we have not made.
+
+create or replace function public.enqueue_cash_redemption_email(
+  p_request_id uuid,
+  p_template text
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  -- No amount in the params, for the same reason no amount is on the account
+  -- page: a number in an email about a possible payout reads as the payout.
+  insert into public.email_deliveries (idempotency_key, template, recipient, order_id, params)
+  select
+    p_template || ':' || p_request_id::text, p_template, p.email, null, '{}'::jsonb
+  from public.cash_redemption_requests r
+  join public.profiles p on p.id = r.claimant_user_id
+  where r.id = p_request_id and coalesce(p.email, '') <> ''
+  on conflict (idempotency_key) do nothing;
+end;
+$$;
+
+revoke all on function public.enqueue_cash_redemption_email(uuid, text) from public, anon, authenticated;
+grant execute on function public.enqueue_cash_redemption_email(uuid, text) to service_role;
+
+-- Queued INSIDE the request transaction, so a customer whose value we froze is
+-- never left without the message saying we did.
+create or replace function public.request_cash_redemption(
+  p_claimant uuid,
+  p_lot_id uuid default null
+)
+returns table(request_id uuid, state text, reason text)
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_result record;
+begin
+  select * into v_result from public.request_cash_redemption_core(p_claimant, p_lot_id);
+
+  if v_result.request_id is not null and v_result.reason is distinct from 'already_open' then
+    perform public.enqueue_cash_redemption_email(v_result.request_id, 'cash_redemption_received');
+  end if;
+
+  request_id := v_result.request_id;
+  state := v_result.state;
+  reason := v_result.reason;
+  return next;
+end;
+$$;
+
+revoke all on function public.request_cash_redemption(uuid, uuid) from public, anon, authenticated;
+grant execute on function public.request_cash_redemption(uuid, uuid) to service_role;

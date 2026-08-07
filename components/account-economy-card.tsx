@@ -7,7 +7,12 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
-import { recipientBadge, recipientCreditState } from "@/lib/gift-card/customer-state"
+import {
+  canRequestCashRedemption,
+  cashRedemptionBadge,
+  recipientBadge,
+  recipientCreditState
+} from "@/lib/gift-card/customer-state"
 
 /**
  * "Your Balance" card on the account page.
@@ -29,6 +34,9 @@ type StoreCreditPayload = {
   /** Part of the balance that cannot be spent right now. */
   holdCents: number
   restoredRecently: boolean
+  /** Whether any of the balance came from a gift card. Never an amount. */
+  hasGiftOriginCredit: boolean
+  cashRedemptionState: string | null
 }
 
 type LoadState =
@@ -135,6 +143,111 @@ export function CreditHoldNotice({
   )
 }
 
+/**
+ * Cash-redemption review: the entry point and the status.
+ *
+ * WHAT THIS DELIBERATELY DOES NOT SAY
+ * ==================================
+ * No amount, no estimate, no eligibility. The button asks for a REVIEW, and the
+ * copy says so in the button itself — a customer who clicks it must not come
+ * away believing a payout has been agreed. The server computes the amount under
+ * a lock at request time and never sends it back, so there is no number here to
+ * render even if someone wanted to.
+ *
+ * Nothing about which states qualify, which balances are excluded, or why a
+ * request was closed appears here. That reasoning is on the review record.
+ */
+export function CashRedemptionPanel({
+  hasGiftOriginCredit,
+  state,
+  onRequested
+}: {
+  hasGiftOriginCredit: boolean
+  state: string | null
+  onRequested?: () => void
+}) {
+  const [status, setStatus] = useState<"idle" | "submitting" | "done" | "error">("idle")
+  const [message, setMessage] = useState<string | null>(null)
+
+  const badge = cashRedemptionBadge(state)
+  const canRequest = canRequestCashRedemption({ hasGiftOriginCredit, currentState: state })
+
+  if (!badge && !canRequest) {
+    return null
+  }
+
+  async function submit() {
+    setStatus("submitting")
+    try {
+      const response = await fetch("/api/store/gift-cards/cash-redemption", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{}"
+      })
+      const body = (await response.json().catch(() => null)) as
+        | { status?: string; message?: string; error?: string }
+        | null
+
+      // The server's message is the ONLY wording shown. Composing our own here
+      // would eventually drift into promising something the server did not.
+      setMessage(body?.message ?? body?.error ?? "We could not start that review.")
+      setStatus(response.ok ? "done" : "error")
+      if (response.ok) {
+        onRequested?.()
+      }
+    } catch {
+      setMessage("We could not start that review. Please try again later.")
+      setStatus("error")
+    }
+  }
+
+  return (
+    <div
+      className="rounded-lg border border-white/10 bg-black/16 p-4"
+      data-testid="cash-redemption"
+    >
+      {badge ? (
+        <div data-testid="cash-redemption-status" role="status">
+          <Badge variant={badge.tone}>{badge.label}</Badge>
+          <p className="mt-2 text-sm text-muted-foreground">{badge.detail}</p>
+        </div>
+      ) : null}
+
+      {canRequest ? (
+        <div className={badge ? "mt-4" : undefined}>
+          <p className="text-sm text-muted-foreground">
+            Some US states allow a gift-card balance to be redeemed for cash. If you think that
+            applies to you, our team can review your account.
+          </p>
+          <Button
+            type="button"
+            variant="outline"
+            className="mt-3"
+            disabled={status === "submitting"}
+            onClick={() => void submit()}
+            data-testid="cash-redemption-request"
+          >
+            {status === "submitting" ? "Sending…" : "Request cash redemption review"}
+          </Button>
+          <p className="mt-2 text-xs text-muted-foreground">
+            Requesting a review does not guarantee a payout.
+          </p>
+        </div>
+      ) : null}
+
+      {message ? (
+        <p
+          className="mt-3 text-sm text-muted-foreground"
+          role="status"
+          data-testid="cash-redemption-message"
+        >
+          {message}
+        </p>
+      ) : null}
+    </div>
+  )
+}
+
 export function AccountEconomyCard() {
   const [state, setState] = useState<LoadState>({ status: "loading" })
   const [showRedeem, setShowRedeem] = useState(false)
@@ -179,7 +292,10 @@ export function AccountEconomyCard() {
             typeof body?.holdCents === "number" && Number.isFinite(body.holdCents)
               ? Math.max(0, Math.trunc(body.holdCents))
               : 0,
-          restoredRecently: body?.restoredRecently === true
+          restoredRecently: body?.restoredRecently === true,
+          hasGiftOriginCredit: body?.hasGiftOriginCredit === true,
+          cashRedemptionState:
+            typeof body?.cashRedemptionState === "string" ? body.cashRedemptionState : null
         }
       })
     } catch {
@@ -289,6 +405,14 @@ export function AccountEconomyCard() {
           <CreditHoldNotice
             holdCents={state.data.holdCents}
             restoredRecently={state.data.restoredRecently}
+          />
+        ) : null}
+
+        {state.status === "ready" ? (
+          <CashRedemptionPanel
+            hasGiftOriginCredit={state.data.hasGiftOriginCredit}
+            state={state.data.cashRedemptionState}
+            onRequested={() => void loadBalance()}
           />
         ) : null}
 

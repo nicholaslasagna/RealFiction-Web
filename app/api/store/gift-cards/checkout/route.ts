@@ -44,7 +44,13 @@ import {
   parseGiftCardCheckout
 } from "@/lib/gift-card/checkout-policy"
 import { createGiftCardCheckoutSession } from "@/lib/gift-card/stripe-request"
-import { ABUSE_BLOCKED_MESSAGE, evaluateGiftCardPurchase, resolveSubjects } from "@/lib/abuse/guard"
+import {
+  ABUSE_BLOCKED_MESSAGE,
+  ABUSE_UNAVAILABLE_MESSAGE,
+  AbuseControlsUnavailableError,
+  evaluateGiftCardPurchase,
+  resolveSubjects
+} from "@/lib/abuse/guard"
 
 export const dynamic = "force-dynamic"
 
@@ -109,13 +115,28 @@ export async function POST(request: Request) {
   // A refusal here leaves nothing to clean up, and the attempt is still counted,
   // so hammering the endpoint makes the next decision stricter rather than
   // resetting anything.
-  const subjects = await resolveSubjects({
-    actor: user.id,
-    request,
-    email: user.email,
-    recipientEmail: intent.recipientEmail
-  })
-  const velocity = await evaluateGiftCardPurchase(subjects, intent.faceValueCents)
+  //
+  // FAILS CLOSED. If the controls cannot decide — unconfigured pepper, database
+  // down, unrecognised answer — this returns 503 and stops. Selling stored value
+  // with the velocity limits, the value ceilings, and the recipient checks all
+  // silently off is not an acceptable degraded mode.
+  let velocity: { decision: string; rule: string | null }
+  try {
+    const subjects = await resolveSubjects({
+      actor: user.id,
+      request,
+      email: user.email,
+      recipientEmail: intent.recipientEmail
+    })
+    velocity = await evaluateGiftCardPurchase(subjects, intent.faceValueCents)
+  } catch (error) {
+    if (error instanceof AbuseControlsUnavailableError) {
+      // Nothing exists yet: no order, no attempt claim, no Stripe session.
+      console.error("gift_card_checkout_controls_unavailable", { reason: error.reason })
+      return safeJsonError(ABUSE_UNAVAILABLE_MESSAGE, 503)
+    }
+    throw error
+  }
 
   if (velocity.decision === "block") {
     // One flat message. Naming the rule, the count, or the window would hand

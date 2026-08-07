@@ -42,6 +42,8 @@ globalThis.fetch = (async (url: unknown, init?: RequestInit) => {
 }) as never as typeof fetch
 
 process.env.STRIPE_SECRET_KEY = "sk_test_not_a_real_key"
+// The route refuses outright without this. A test-only value, never a secret.
+process.env.ABUSE_SUBJECT_PEPPER = "test-pepper-not-a-secret"
 
 const { POST, GET } = await import("../app/api/store/gift-cards/refund/route.ts")
 

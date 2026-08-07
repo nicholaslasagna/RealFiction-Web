@@ -66,7 +66,9 @@ export default defineConfig({
     },
     {
       name: "refund-states",
-      testMatch: /refund-states\.spec\.ts/,
+      // The preview harness serves both the refund/dispute states and the
+      // cash-redemption surfaces; they share this server.
+      testMatch: /(refund-states|cash-redemption)\.spec\.ts/,
       use: { ...devices["Desktop Chrome"], baseURL: `http://localhost:${PREVIEW_PORT}` }
     }
   ],

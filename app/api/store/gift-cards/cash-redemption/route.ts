@@ -23,6 +23,8 @@ import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role"
 import { safeJsonError } from "@/lib/security"
 import {
   ABUSE_BLOCKED_MESSAGE,
+  ABUSE_UNAVAILABLE_MESSAGE,
+  areAbuseControlsConfigured,
   checkActorRule,
   recordAbuseEvent,
   resolveSubjects
@@ -79,6 +81,12 @@ export async function POST(request: Request) {
   const lotId = payload.lotId
   if (lotId !== undefined && (typeof lotId !== "string" || !UUID.test(lotId))) {
     return safeJsonError("Something in your request does not look right.", 400)
+  }
+
+  if (!areAbuseControlsConfigured()) {
+    // Before anything is frozen and before a review is opened.
+    console.error("cash_redemption_controls_unconfigured")
+    return safeJsonError(ABUSE_UNAVAILABLE_MESSAGE, 503)
   }
 
   // Each request opens work for a person, so the throttle here is tight and

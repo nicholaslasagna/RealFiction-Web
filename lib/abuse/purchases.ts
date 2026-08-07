@@ -41,5 +41,9 @@ export async function recordGiftCardPurchase(orderId: string): Promise<void> {
     )
   } catch {
     // Deliberately silent. See the contract above.
+    //
+    // `resolveSubjects` now throws when the pepper is unconfigured, but that is
+    // unreachable here: checkout refuses in that state, so no gift-card order
+    // ever reaches fulfilment without it.
   }
 }

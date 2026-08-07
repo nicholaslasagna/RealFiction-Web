@@ -71,9 +71,21 @@ grant all on sequence public.abuse_events_id_seq to service_role;
 -- ===========================================================================
 
 /**
- * Defaults for owner review. Every number is a deliberate product decision, so
- * they live together and are read by both the evaluator and its tests — a test
- * that hard-codes 5 somewhere else would silently stop testing the real limit.
+ * STAGING DEFAULTS — NOT PRODUCTION-PROVEN VALUES.
+ * ===============================================
+ * Every number below was chosen by reasoning about what a plausible customer
+ * does, NOT from observed traffic. None of them has been validated against real
+ * purchase behaviour, because gift cards have never been enabled. They are safe
+ * starting points for staging and a starting point for the owner's judgment;
+ * they are not calibrated limits.
+ *
+ * Expect to tune them once real traffic exists. The two things to watch are
+ * legitimate customers hitting `block_at` (too tight) and a `review_at` tier
+ * producing more items than a person can work (too loose).
+ *
+ * They live together, in one function, read by both the evaluator and its
+ * tests — a test that hard-coded 5 somewhere else would silently stop testing
+ * the real limit, and tuning would then quietly break a proof.
  *
  * Two tiers per rule:
  *   review_at  the action proceeds, and a human is asked to look

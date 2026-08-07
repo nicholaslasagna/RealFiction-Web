@@ -44,6 +44,8 @@ type RefundFixture = {
   cards: GiftCardEntry[]
   /** What the RECIPIENT of a gift card sees about their own credit. */
   hold: { holdCents: number; restoredRecently: boolean } | null
+  /** The cash-redemption review entry point and status, when either applies. */
+  cashRedemption: { hasGiftOriginCredit: boolean; state: string | null } | null
 }
 
 export type PreviewFixture = StoreFixture | AccountFixture | RefundFixture
@@ -321,7 +323,8 @@ export const PREVIEW_STATES = {
     title: "Purchaser refund states",
     note: "Every state, plus one card with nothing to report.",
     cards: REFUND_CARDS,
-    hold: null
+    hold: null,
+    cashRedemption: null
   },
 
   "credit-frozen": {
@@ -329,7 +332,8 @@ export const PREVIEW_STATES = {
     title: "Recipient credit frozen during payment review",
     note: "Part of the balance cannot be spent while the payment is under review.",
     cards: [],
-    hold: { holdCents: 2500, restoredRecently: false }
+    hold: { holdCents: 2500, restoredRecently: false },
+    cashRedemption: null
   },
 
   "credit-restored": {
@@ -337,7 +341,46 @@ export const PREVIEW_STATES = {
     title: "Recipient credit released",
     note: "The hold is lifted and nothing is frozen.",
     cards: [],
-    hold: { holdCents: 0, restoredRecently: true }
+    hold: { holdCents: 0, restoredRecently: true },
+    cashRedemption: null
+  },
+
+  // -- Cash-redemption review -------------------------------------------------
+
+  "cash-redemption-offer": {
+    surface: "refunds",
+    title: "Cash-redemption review offered",
+    note: "Gift-origin credit on the account and no review open.",
+    cards: [],
+    hold: null,
+    cashRedemption: { hasGiftOriginCredit: true, state: null }
+  },
+
+  "cash-redemption-open": {
+    surface: "refunds",
+    title: "Cash-redemption review in progress",
+    note: "A request is open, so no second button is offered.",
+    cards: [],
+    hold: null,
+    cashRedemption: { hasGiftOriginCredit: true, state: "requested" }
+  },
+
+  "cash-redemption-eligible": {
+    surface: "refunds",
+    title: "Cash-redemption marked eligible internally",
+    note: "A reviewer agreed. The customer must NOT read this as approved.",
+    cards: [],
+    hold: null,
+    cashRedemption: { hasGiftOriginCredit: true, state: "eligible" }
+  },
+
+  "cash-redemption-closed": {
+    surface: "refunds",
+    title: "Cash-redemption review closed",
+    note: "Closed without a payout. No reason is shown.",
+    cards: [],
+    hold: null,
+    cashRedemption: { hasGiftOriginCredit: true, state: "rejected" }
   }
 } as const satisfies Record<string, PreviewFixture>
 

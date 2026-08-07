@@ -18,7 +18,7 @@ import { Storefront } from "@/components/storefront"
 import { FairPlayPromise } from "@/components/store/fair-play"
 import { OrderHistoryPreview } from "@/components/dev/order-history-preview"
 import { GiftCardCodes } from "@/components/gift-card-codes"
-import { CreditHoldNotice } from "@/components/account-economy-card"
+import { CashRedemptionPanel, CreditHoldNotice } from "@/components/account-economy-card"
 import { PREVIEW_STATES, type PreviewStateId } from "@/lib/dev/preview-fixtures"
 
 export const dynamic = "force-dynamic"
@@ -49,6 +49,12 @@ export default async function PreviewPage({ params }: { params: Promise<{ state:
         <div className="space-y-6">
           <GiftCardCodes cards={fixture.cards} />
           {fixture.hold ? <CreditHoldNotice {...fixture.hold} /> : null}
+          {fixture.cashRedemption ? (
+            <CashRedemptionPanel
+              hasGiftOriginCredit={fixture.cashRedemption.hasGiftOriginCredit}
+              state={fixture.cashRedemption.state}
+            />
+          ) : null}
         </div>
       ) : fixture.surface === "store" ? (
         <>

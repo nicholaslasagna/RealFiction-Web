@@ -627,3 +627,78 @@ test("all five survive a missing currency and a missing amount without throwing"
     assert.doesNotMatch(mail.text, /NaN|undefined|null/)
   }
 })
+
+// ===========================================================================
+// Cash-redemption review
+//
+// These render from NO params at all. That is the safety property: a queue row
+// physically cannot carry an amount into an email about a possible payout.
+// ===========================================================================
+
+const cashRow = (template: string) =>
+  row({ template, recipient: "claimant@example.com", order_id: null, params: {} })
+
+test("the REQUEST RECEIVED email confirms receipt and promises nothing", async () => {
+  reset()
+  db.queue = [cashRow("cash_redemption_received")]
+
+  const result = await processEmailQueue(ENV, { fetchImpl: fakeTransport() })
+
+  assert.equal(result.sent, 1)
+  assert.equal(db.sent[0].to, "claimant@example.com")
+  assert.match(db.sent[0].text, /received your cash-redemption request/i)
+  assert.match(db.sent[0].text, /does not guarantee a payout/i)
+  assert.match(db.sent[0].text, /held/i, "and explains why the balance will not spend")
+})
+
+test("NO cash-redemption email carries an amount, a date, or a legal reason", async () => {
+  for (const template of [
+    "cash_redemption_received",
+    "cash_redemption_closed",
+    "cash_redemption_completed"
+  ]) {
+    reset()
+    db.queue = [cashRow(template)]
+    await processEmailQueue(ENV, { fetchImpl: fakeTransport() })
+
+    const body = `${db.sent[0].subject} ${db.sent[0].text}`
+    assert.doesNotMatch(body, /\$\d/, `${template} quoted an amount`)
+    assert.doesNotMatch(body, /within \d|business days|\d+ weeks/i, `${template} promised a timeframe`)
+    assert.doesNotMatch(
+      body,
+      /state law|jurisdiction|threshold|promotional|because your/i,
+      `${template} published the legal reasoning`
+    )
+  }
+})
+
+test("the CLOSED email says the credit is untouched, without saying why", async () => {
+  reset()
+  db.queue = [cashRow("cash_redemption_closed")]
+  await processEmailQueue(ENV, { fetchImpl: fakeTransport() })
+
+  assert.match(db.sent[0].text, /not able to redeem this balance for cash/i)
+  assert.match(db.sent[0].text, /store credit is unchanged/i)
+  // A person, not a form letter, explains a compliance determination.
+  assert.match(db.sent[0].text, /reply to this email/i)
+})
+
+test("the COMPLETED email records a payout made elsewhere, with no payment details", async () => {
+  reset()
+  db.queue = [cashRow("cash_redemption_completed")]
+  await processEmailQueue(ENV, { fetchImpl: fakeTransport() })
+
+  assert.match(db.sent[0].text, /has been completed/i)
+  assert.match(db.sent[0].text, /paid out separately/i)
+  assert.doesNotMatch(db.sent[0].text, /bank|account number|routing|card ending|transfer id/i)
+})
+
+test("an unknown cash-redemption template is parked, not sent blank", async () => {
+  reset()
+  db.queue = [cashRow("cash_redemption_invented")]
+
+  const result = await processEmailQueue(ENV, { fetchImpl: fakeTransport() })
+
+  assert.equal(result.sent, 0)
+  assert.equal(db.sent.length, 0)
+})

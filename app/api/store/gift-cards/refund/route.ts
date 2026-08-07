@@ -19,6 +19,8 @@ import { safeJsonError } from "@/lib/security"
 import { giftCardForOrder, requestGiftCardRefund } from "@/lib/gift-card/refunds"
 import {
   ABUSE_BLOCKED_MESSAGE,
+  ABUSE_UNAVAILABLE_MESSAGE,
+  areAbuseControlsConfigured,
   checkActorRule,
   recordAbuseEvent,
   resolveSubjects
@@ -102,6 +104,12 @@ export async function POST(request: Request) {
     // orders exist, and before any Stripe call, so a throttled request costs
     // nothing externally. Fails closed: repeated refunding is the abuse this
     // exists to stop, and one refused retry is a cheap price.
+    if (!areAbuseControlsConfigured()) {
+      // Before any Stripe refund and before any internal reversal.
+      console.error("gift_card_refund_controls_unconfigured")
+      return safeJsonError(ABUSE_UNAVAILABLE_MESSAGE, 503)
+    }
+
     const refundVelocity = await checkActorRule(
       "refund_requests_24h",
       "gift_card_refund_request",

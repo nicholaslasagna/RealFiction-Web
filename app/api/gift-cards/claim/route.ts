@@ -19,7 +19,12 @@
 import { getAuthenticatedUser } from "@/lib/supabase/server"
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role"
 import { safeJsonError } from "@/lib/security"
-import { checkActorRule, recordAbuseEvent, resolveSubjects } from "@/lib/abuse/guard"
+import {
+  areAbuseControlsConfigured,
+  checkActorRule,
+  recordAbuseEvent,
+  resolveSubjects
+} from "@/lib/abuse/guard"
 import {
   computeClaimVerifier,
   isCanonicalClaimSecret,
@@ -58,8 +63,14 @@ type ClaimResult =
  * trustworthy, a peppered hash of the client IP — never the address itself.
  */
 async function recordFailure(userId: string, request: Request) {
-  const subjects = await resolveSubjects({ actor: userId, request })
-  await recordAbuseEvent("gift_card_claim_failure", subjects)
+  try {
+    const subjects = await resolveSubjects({ actor: userId, request })
+    await recordAbuseEvent("gift_card_claim_failure", subjects)
+  } catch {
+    // The route refuses BEFORE this point when the controls are unconfigured,
+    // so this is unreachable in practice. Contained anyway: a counter write is
+    // never worth turning a handled outcome into a 500.
+  }
 }
 
 /** Fails CLOSED: if we cannot count, we do not let the guessing continue. */
@@ -92,6 +103,14 @@ export async function POST(request: Request) {
     null
   if (!verifiedAt || !user.email) {
     return reply("email_not_verified")
+  }
+
+  // FAIL CLOSED before the guessing surface exists at all. Without the pepper
+  // there is no per-IP counting, so a distributed brute force would face only
+  // a per-account limit it defeats by making accounts.
+  if (!areAbuseControlsConfigured()) {
+    console.error("gift_card_claim_controls_unconfigured")
+    return reply("temporarily_unavailable", {}, 503)
   }
 
   if (await tooManyFailures(user.id)) {

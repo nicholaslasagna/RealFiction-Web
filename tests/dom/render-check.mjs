@@ -527,8 +527,81 @@ try {
     }
   })
 
+  // =========================================================================
+  // Cash-redemption review
+  //
+  // The risk this section guards is a customer reading the page as a promise to
+  // pay them. Every check below is a way that could happen.
+  // =========================================================================
+  const offer = await get("/dev/preview/cash-redemption-offer")
+  const offerText = text(offer.html)
+
+  check("the entry point asks for a REVIEW, not a payout", () => {
+    assert.match(offer.html, /data-testid="cash-redemption-request"/)
+    assert.ok(offerText.includes("Request cash redemption review"))
+    assert.match(offerText, /does not guarantee a payout/i)
+  })
+
+  check("NO PAYOUT ESTIMATE AND NO AMOUNT ANYWHERE on the entry point", () => {
+    assert.ok(!/\$\d/.test(offerText), "an amount was rendered")
+    assert.ok(!/estimate|you will receive|we will pay|payout of/i.test(offerText))
+  })
+
+  check("no eligibility is promised or implied", () => {
+    assert.ok(!/you (are|qualify)|approved|eligible for/i.test(offerText))
+  })
+
+  const openReview = await get("/dev/preview/cash-redemption-open")
+  const openText = text(openReview.html)
+
+  check("an open review shows a status and withdraws the button", () => {
+    assert.match(openReview.html, /data-testid="cash-redemption-status"/)
+    assert.ok(openText.includes("Review requested"))
+    assert.ok(
+      !openReview.html.includes('data-testid="cash-redemption-request"'),
+      "a second button while one is open reads as the first having failed"
+    )
+  })
+
+  const eligible = await get("/dev/preview/cash-redemption-eligible")
+  // Scoped to the COMPONENT, not the page: the preview harness prints its own
+  // fixture note above it, and that note is allowed to say what the component
+  // must not.
+  const eligibleText = text(
+    eligible.html.slice(eligible.html.indexOf('data-testid="cash-redemption"'))
+  )
+
+  check("an INTERNALLY ELIGIBLE review still reads as under review", () => {
+    // The dangerous one: internally a reviewer agreed, but a customer reading
+    // "approved" and later being refused has been misled by us.
+    assert.ok(eligibleText.includes("Under review"))
+    assert.ok(!/approved|eligible/i.test(eligibleText))
+  })
+
+  const closed = await get("/dev/preview/cash-redemption-closed")
+  const closedText = text(closed.html)
+
+  check("a closed review gives NO REASON and no legal reasoning", () => {
+    assert.ok(closedText.includes("Review closed"))
+    assert.ok(!/state law|jurisdiction|threshold|promotional|because|not eligible/i.test(closedText))
+    assert.match(closedText, /store credit is unchanged/i)
+  })
+
+  check("the cash-redemption surfaces expose no internal identifier or rule", () => {
+    for (const body of [offer.html, openReview.html, eligible.html, closed.html]) {
+      assert.ok(!/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i.test(body), "raw UUID")
+      assert.ok(!/cash_redemption_requests|store_credit_lots|abuse_events|velocity/i.test(body))
+      assert.ok(!/manual_payout_required|eligibility_review/.test(body), "a raw state value")
+    }
+  })
+
+  check("the status block is announced, not just colored", () => {
+    const block = openReview.html.slice(openReview.html.indexOf('data-testid="cash-redemption-status"'))
+    assert.match(block.slice(0, 400), /role="status"/)
+  })
+
   check("American English throughout the refund and dispute states", () => {
-    for (const body of [refundText, frozenText, restoredText]) {
+    for (const body of [refundText, frozenText, restoredText, offerText, openText, closedText]) {
       assert.ok(!/colour|authorise|cancelled|recognise|apologise/i.test(body))
     }
   })

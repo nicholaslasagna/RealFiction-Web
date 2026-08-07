@@ -13,10 +13,11 @@
 import { processEmailQueue, type ProcessorEnv } from "./email/processor"
 import { reconcilePendingStripeOrders, type ReconcileEnv } from "./store/reconcile-pending"
 import { reconcileGiftCardRefunds, type RefundReconcileEnv } from "./gift-card/reconcile-refunds"
+import { purgeAbuseEvents, type RetentionEnv } from "./abuse/retention"
 
 export type ScheduledController = { scheduledTime: number; cron: string }
 export type ScheduledCtx = { waitUntil(promise: Promise<unknown>): void }
-export type ScheduledEnv = ProcessorEnv & ReconcileEnv & RefundReconcileEnv
+export type ScheduledEnv = ProcessorEnv & ReconcileEnv & RefundReconcileEnv & RetentionEnv
 
 /**
  * Registers the scheduled work for the Worker's lifetime.
@@ -34,6 +35,7 @@ export function runScheduledJobs(
     processEmailQueue?: typeof processEmailQueue
     reconcilePendingStripeOrders?: typeof reconcilePendingStripeOrders
     reconcileGiftCardRefunds?: typeof reconcileGiftCardRefunds
+    purgeAbuseEvents?: typeof purgeAbuseEvents
     /**
      * The shared fulfilment dispatch. Injected because it is `server-only` and
      * this module is executed directly by tests; the Worker entry supplies the
@@ -48,6 +50,7 @@ export function runScheduledJobs(
   const drainEmails = deps.processEmailQueue ?? processEmailQueue
   const reconcile = deps.reconcilePendingStripeOrders ?? reconcilePendingStripeOrders
   const reconcileRefunds = deps.reconcileGiftCardRefunds ?? reconcileGiftCardRefunds
+  const purge = deps.purgeAbuseEvents ?? purgeAbuseEvents
 
   // `env` is passed explicitly: `process.env` is not populated in a scheduled
   // invocation, so anything reading it there sees undefined.
@@ -103,7 +106,22 @@ export function runScheduledJobs(
       return null
     })
 
-  const registered = [emails, reconciliation, refunds]
+  // A FOURTH isolated job, still on the same Cron. Retention is the one job
+  // whose failure is invisible to customers, which is exactly why it gets its
+  // own promise rather than being appended to another job's success path.
+  const retention = purge(env)
+    .then((result) => {
+      if (result.ipRows > 0 || result.otherRows > 0) {
+        console.info("abuse_events_purged", result)
+      }
+      return result
+    })
+    .catch((error) => {
+      console.error("abuse_purge_failed", error instanceof Error ? error.message : "unknown")
+      return null
+    })
+
+  const registered = [emails, reconciliation, refunds, retention]
   for (const promise of registered) {
     ctx.waitUntil(promise)
   }

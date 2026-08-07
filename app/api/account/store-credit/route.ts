@@ -68,13 +68,28 @@ export async function GET() {
     const holdRow = Array.isArray(hold.data) ? hold.data[0] : null
     const holdCents = hold.error ? 0 : Math.max(0, Math.trunc(Number(holdRow?.hold_cents ?? 0)) || 0)
 
+    // Cash-redemption review: a BOOLEAN and a STATE, nothing else. Sending an
+    // eligible amount here would put a number on the account page that reads as
+    // a promise to pay, and the amount is only ever computed under a lock at
+    // request time anyway — a number returned now would already be stale.
+    const [giftOrigin, redemption] = await Promise.all([
+      callServiceRoleRpc<boolean | null>("has_gift_origin_credit", { p_user_id: user.id }),
+      callServiceRoleRpc<{ state?: string }[] | null>("my_cash_redemption_status", {
+        p_user_id: user.id
+      })
+    ])
+    const redemptionRow = Array.isArray(redemption.data) ? redemption.data[0] : null
+
     return Response.json({
       balanceCents: safeCents,
       currency: "USD",
       updatedAt: row?.updated_at ?? null,
       holdCents,
       // Only meaningful once nothing is frozen; the UI decides which to show.
-      restoredRecently: hold.error ? false : holdRow?.restored_recently === true
+      restoredRecently: hold.error ? false : holdRow?.restored_recently === true,
+      // Best-effort, like the hold: neither may blank out a visible balance.
+      hasGiftOriginCredit: giftOrigin.error ? false : giftOrigin.data === true,
+      cashRedemptionState: redemption.error ? null : (redemptionRow?.state ?? null)
     })
   } catch (error) {
     console.error("account_store_credit_error", describeError(error))

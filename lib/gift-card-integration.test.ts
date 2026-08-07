@@ -88,6 +88,9 @@ for (const level of ["info", "warn", "error"] as const) {
 
 /** Test-only key material and gate values. Never real keys. */
 Object.assign(process.env, {
+  // Gift-card paths refuse outright without this: the abuse controls are
+  // mandatory, not best-effort. A test-only value, never a secret.
+  ABUSE_SUBJECT_PEPPER: "test-pepper-not-a-secret",
   SUPABASE_URL: "https://project.supabase.co",
   SUPABASE_SERVICE_ROLE_KEY: "service-role-not-a-real-key",
   STRIPE_SECRET_KEY: "sk_test_not_a_real_key_for_tests",

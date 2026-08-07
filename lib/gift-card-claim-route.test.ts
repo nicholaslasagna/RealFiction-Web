@@ -23,8 +23,19 @@ const state = {
   amountCents: 2500,
   balanceCents: 2500,
   rpcError: null as { code?: string; message: string } | null,
-  logs: [] as string[]
+  logs: [] as string[],
+  /**
+   * The DURABLE failure counter, modelled here the way Postgres holds it.
+   *
+   * Kept separate from `rpcCalls` on purpose: the assertions below are about
+   * whether a malformed secret reached the CLAIM transaction, and a counter
+   * write is not that.
+   */
+  abuseEvents: [] as { kind: string; actor: string }[]
 }
+
+/** Mirrors public.gift_card_abuse_limits() for the two claim rules. */
+const CLAIM_BLOCK_AT = 6
 
 mock.module("server-only", { namedExports: {}, defaultExport: {} })
 
@@ -36,6 +47,24 @@ mock.module("@/lib/supabase/service-role", {
   namedExports: {
     getSupabaseServiceRoleClient: () => ({
       rpc: async (fn: string, args: Record<string, unknown>) => {
+        // -- The abuse counters, which live in the same client. --------------
+        if (fn === "record_abuse_event") {
+          state.abuseEvents.push({ kind: String(args.p_kind), actor: String(args.p_actor) })
+          return { data: null, error: null }
+        }
+        if (fn === "evaluate_abuse_rule_for_actor") {
+          const observed = state.abuseEvents.filter(
+            (event) => event.kind === args.p_kind && event.actor === args.p_actor
+          ).length
+          return {
+            data: [{ decision: observed >= CLAIM_BLOCK_AT ? "block" : "allow", observed }],
+            error: null
+          }
+        }
+        if (fn === "record_velocity_review") {
+          return { data: null, error: null }
+        }
+
         state.rpcCalls.push({ fn, args })
         if (state.rpcError) {
           return { data: null, error: state.rpcError }
@@ -62,6 +91,9 @@ mock.module("@/lib/supabase/service-role", {
   }
 })
 
+// Gift-card paths refuse outright without this: the abuse controls are
+// mandatory, not best-effort. A test-only value, never a secret.
+process.env.ABUSE_SUBJECT_PEPPER = "test-pepper-not-a-secret"
 process.env.GIFT_CARD_CLAIM_PEPPER = PEPPER
 process.env.GIFT_CARD_ENCRYPTION_KEY = "0".repeat(64)
 process.env.GIFT_CARD_ENCRYPTION_KEY_VERSION = "1"
@@ -72,8 +104,8 @@ const { computeClaimVerifier } = await import("./gift-card/crypto.ts")
 let userSeq = 0
 
 function reset(overrides: Partial<typeof state> = {}) {
-  // A FRESH account id per test. The route's failure counter is module-level
-  // and per-account by design, so reusing one id would let earlier tests'
+  // A FRESH account id per test. The failure counter is durable and
+  // per-account by design, so reusing one id would let earlier tests'
   // deliberate failures rate-limit later ones.
   state.user = {
     id: `recipient-${++userSeq}`,
@@ -81,6 +113,7 @@ function reset(overrides: Partial<typeof state> = {}) {
     email_confirmed_at: "2026-01-01T00:00:00Z"
   }
   state.rpcCalls = []
+  state.abuseEvents = []
   state.outbox = []
   state.outcome = "claimed"
   state.amountCents = 2500

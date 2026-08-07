@@ -101,3 +101,98 @@ export function recipientCreditState(input: {
   }
   return input.restoredRecently ? "restored" : null
 }
+
+// ---------------------------------------------------------------------------
+// Cash-redemption review
+// ---------------------------------------------------------------------------
+
+/** Exactly the states public.cash_redemption_requests can hold. */
+export type CashRedemptionState =
+  | "requested"
+  | "eligibility_review"
+  | "eligible"
+  | "ineligible"
+  | "manual_payout_required"
+  | "completed"
+  | "rejected"
+
+/**
+ * THE RULE FOR THESE STRINGS
+ * ==========================
+ * Not one of them promises a payout, quotes an amount, or gives a reason.
+ *
+ * "Eligible" is the dangerous one: internally it means a reviewer decided the
+ * balance qualifies, but to a customer it reads as "you are getting paid", and
+ * a customer who reads that and is later refused has been misled by us. So the
+ * eligible and payout-required states say the same neutral thing as the rest —
+ * a person is handling it, and we will email.
+ *
+ * Reasons are absent for the same purpose. `ineligible_reason` records the legal
+ * reasoning for our review record; publishing it would turn the account page
+ * into an explanation of which jurisdictions and which balances qualify, which
+ * is both a compliance answer we are not making by API and a map of the rules.
+ */
+const CASH_REDEMPTION_BADGES: Record<CashRedemptionState, StateBadge> = {
+  requested: {
+    label: "Review requested",
+    tone: "outline",
+    detail: "We have your request. A member of our team will review it and email you."
+  },
+  eligibility_review: {
+    label: "Under review",
+    tone: "outline",
+    detail: "A member of our team is reviewing your request. We will email you with the outcome."
+  },
+  eligible: {
+    // Deliberately NOT "Approved". See the rule above.
+    label: "Under review",
+    tone: "outline",
+    detail: "A member of our team is reviewing your request. We will email you with the outcome."
+  },
+  manual_payout_required: {
+    label: "Under review",
+    tone: "outline",
+    detail: "A member of our team is reviewing your request. We will email you with the outcome."
+  },
+  ineligible: {
+    label: "Review closed",
+    tone: "outline",
+    detail: "We have emailed you about this request. Your store credit is unchanged."
+  },
+  rejected: {
+    label: "Review closed",
+    tone: "outline",
+    detail: "We have emailed you about this request. Your store credit is unchanged."
+  },
+  completed: {
+    label: "Review completed",
+    tone: "success",
+    detail: "We have emailed you about this request."
+  }
+}
+
+export function cashRedemptionBadge(state: string | null | undefined): StateBadge | null {
+  return lookup(CASH_REDEMPTION_BADGES, state)
+}
+
+/**
+ * Whether the entry point should be offered.
+ *
+ * Offered only when there is gift-origin credit AND no review is already open:
+ * a second button while the first request is being worked would invite a
+ * customer to think the first one failed.
+ */
+export function canRequestCashRedemption(input: {
+  hasGiftOriginCredit: boolean
+  currentState: string | null | undefined
+}): boolean {
+  if (!input.hasGiftOriginCredit) {
+    return false
+  }
+  return !(
+    input.currentState === "requested" ||
+    input.currentState === "eligibility_review" ||
+    input.currentState === "eligible" ||
+    input.currentState === "manual_payout_required"
+  )
+}
