@@ -1,3 +1,4 @@
+import { DISCORD_INVITE_URL, fetchDiscordCounts } from "@/lib/discord/counts"
 import Link from "next/link"
 
 /**
@@ -10,36 +11,6 @@ import Link from "next/link"
  * If Discord is down or the invite isn't resolvable, we drop to a
  * neutral copy line instead of showing a hardcoded number.
  */
-
-const DISCORD_INVITE_CODE = "JkPpmzn"
-const DISCORD_INVITE_URL = `https://discord.com/invite/${DISCORD_INVITE_CODE}`
-
-type DiscordInvite = {
-  memberCount: number | null
-  onlineCount: number | null
-}
-
-async function fetchDiscordCounts(): Promise<DiscordInvite> {
-  try {
-    const response = await fetch(
-      `https://discord.com/api/v10/invites/${DISCORD_INVITE_CODE}?with_counts=true`,
-      { next: { revalidate: 300 } }
-    )
-    if (!response.ok) {
-      return { memberCount: null, onlineCount: null }
-    }
-    const json = (await response.json()) as {
-      approximate_member_count?: number
-      approximate_presence_count?: number
-    }
-    return {
-      memberCount: typeof json.approximate_member_count === "number" ? json.approximate_member_count : null,
-      onlineCount: typeof json.approximate_presence_count === "number" ? json.approximate_presence_count : null
-    }
-  } catch {
-    return { memberCount: null, onlineCount: null }
-  }
-}
 
 function DiscordWordmark({ size = 56, color = "#5865f2" }: { size?: number; color?: string }) {
   return (

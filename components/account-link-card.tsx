@@ -1,6 +1,6 @@
 "use client"
 
-import { Copy, RefreshCw, Unlink } from "lucide-react"
+import { Check, Copy, Eye, EyeOff, RefreshCw, Unlink } from "lucide-react"
 import { FormEvent, useEffect, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 
@@ -54,6 +54,98 @@ type LinkStartResponse = {
     expiresAt?: string
   }
   error?: string
+}
+
+/** A UUID with every hex digit replaced, keeping the dash positions. */
+function maskUuid(uuid: string): string {
+  return uuid.replace(/[0-9a-f]/gi, "\u2022")
+}
+
+/**
+ * The player's Minecraft UUID, masked by default.
+ *
+ * WHY MASKED
+ * ==========
+ * The account page is the one people screenshot for support and share on
+ * stream. A UUID is not a secret — it is public in most Minecraft APIs — but it
+ * is a durable identifier that links this person across servers, so showing it
+ * unprompted is a privacy default nobody asked for.
+ *
+ * WHAT MASKING DOES AND DOES NOT DO
+ * =================================
+ * This defends against SHOULDER-SURFING: screenshots, screen shares, someone
+ * glancing over. It is NOT a secrecy boundary. The value is a prop on a client
+ * component, so it is present in the RSC payload and readable in view-source
+ * whether or not it is revealed. Hiding it from the payload would mean fetching
+ * it from an endpoint on reveal, which is a lot of machinery for an identifier
+ * the player can also read off their own profile.
+ *
+ * The state is NOT persisted: there is no existing preference store to put it
+ * in, and defaulting to masked on every load is the safer behaviour anyway.
+ */
+function PlayerId({ uuid }: { uuid: string }) {
+  const [revealed, setRevealed] = useState(false)
+  const [copied, setCopied] = useState(false)
+
+  async function copyId() {
+    try {
+      await navigator.clipboard.writeText(uuid)
+      setCopied(true)
+      window.setTimeout(() => setCopied(false), 2000)
+    } catch {
+      // Clipboard denied or unavailable. The id is on screen to copy by hand.
+    }
+  }
+
+  return (
+    <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1">
+      <span className="text-sm text-muted-foreground">Player ID:</span>
+
+      {/* `tabular-nums` + the mask keeping dash positions means the string is
+          the same width either way, so nothing on the card moves when toggled. */}
+      <code
+        data-testid="player-id"
+        data-revealed={revealed}
+        className="break-all font-mono text-sm tabular-nums text-slate-200"
+      >
+        {revealed ? uuid : maskUuid(uuid)}
+      </code>
+
+      <button
+        type="button"
+        onClick={() => setRevealed((value) => !value)}
+        aria-pressed={revealed}
+        aria-label={revealed ? "Hide Player ID" : "Show Player ID"}
+        data-testid="player-id-toggle"
+        className="inline-flex h-7 w-7 items-center justify-center rounded border border-white/12 text-muted-foreground transition hover:border-amber-200/40 hover:text-amber-100"
+      >
+        {revealed ? <EyeOff className="h-3.5 w-3.5" aria-hidden /> : <Eye className="h-3.5 w-3.5" aria-hidden />}
+      </button>
+
+      {/* Copy is offered only while revealed: a button that silently copies
+          something the player cannot see is a worse experience than no button. */}
+      {revealed ? (
+        <button
+          type="button"
+          onClick={copyId}
+          aria-label="Copy Player ID"
+          data-testid="player-id-copy"
+          className="inline-flex h-7 w-7 items-center justify-center rounded border border-white/12 text-muted-foreground transition hover:border-amber-200/40 hover:text-amber-100"
+        >
+          {copied ? (
+            <Check className="h-3.5 w-3.5 text-emerald-300" aria-hidden />
+          ) : (
+            <Copy className="h-3.5 w-3.5" aria-hidden />
+          )}
+        </button>
+      ) : null}
+
+      {/* Announced politely so a screen-reader user learns the copy worked. */}
+      <span role="status" aria-live="polite" className="sr-only">
+        {copied ? "Player ID copied to clipboard" : ""}
+      </span>
+    </div>
+  )
 }
 
 export function AccountLinkCard({
@@ -184,9 +276,7 @@ export function AccountLinkCard({
           <div className="min-w-0 flex-1">
             <p className="text-sm font-bold uppercase tracking-[0.18em] text-emerald-200">Minecraft linked</p>
             <h2 className="display-font mt-2 text-3xl font-semibold text-white">{minecraftUsername}</h2>
-            {minecraftUuid ? (
-              <p className="mt-2 break-all text-sm text-muted-foreground">Player ID: {minecraftUuid}</p>
-            ) : null}
+            {minecraftUuid ? <PlayerId uuid={minecraftUuid} /> : null}
             <p className="mt-4 text-sm leading-6 text-muted-foreground">
               Your rewards and cosmetics can now find you in-game.
             </p>

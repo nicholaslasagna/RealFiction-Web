@@ -18,6 +18,7 @@ import { Storefront } from "@/components/storefront"
 import { FairPlayPromise } from "@/components/store/fair-play"
 import { OrderHistoryPreview } from "@/components/dev/order-history-preview"
 import { GiftCardCodes } from "@/components/gift-card-codes"
+import { AccountLinkCard } from "@/components/account-link-card"
 import { CashRedemptionPanel, CreditHoldNotice } from "@/components/account-economy-card"
 import { PREVIEW_STATES, type PreviewStateId } from "@/lib/dev/preview-fixtures"
 
@@ -67,6 +68,12 @@ export default async function PreviewPage({ params }: { params: Promise<{ state:
             <FairPlayPromise />
           </div>
         </>
+      ) : fixture.surface === "identity" ? (
+        <AccountLinkCard
+          linked
+          minecraftUsername={fixture.minecraftUsername}
+          minecraftUuid={fixture.minecraftUuid}
+        />
       ) : (
         <OrderHistoryPreview orders={fixture.orders} />
       )}

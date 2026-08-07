@@ -1,4 +1,3 @@
-import { CheckIcon, WarningIcon } from "@/components/minecraft-icons"
 import { FAIR_PLAY } from "@/lib/store/catalog"
 
 /**
@@ -7,50 +6,70 @@ import { FAIR_PLAY } from "@/lib/store/catalog"
  * Phrased as a RealFiction product commitment, deliberately NOT as a legal or
  * compliance claim — every line is something a player can check against the
  * store rather than an assertion about law.
+ *
+ * WHY THIS IS NOT TWO COLORED COLUMNS ANY MORE
+ * =============================================
+ * It used to be a red panel headed "We never sell" beside a green panel headed
+ * "We do sell" — the shape of a comparison widget, which is the shape of a
+ * marketing table. That framing works against the message: a promise read as a
+ * sales chart is a promise nobody believes, and color-coded good-versus-bad
+ * columns are the single most generated-looking pattern on the site.
+ *
+ * So it reads as a statement now. One strong claim, then the specifics as a
+ * plain list under a quiet heading, with the negative commitments FIRST because
+ * those are the ones that cost us money and are therefore the ones worth
+ * saying. Color carries no meaning here — the words do — which also removes a
+ * color-only distinction a colorblind reader could not see.
+ *
+ * The policy text itself is unchanged: it comes from FAIR_PLAY in the catalog,
+ * and this component only decides how it is presented.
  */
 export function FairPlayPromise() {
   return (
-    <section
-      aria-labelledby="fair-play-heading"
-      className="minecraft-panel rounded-lg p-6 md:p-8"
-    >
-      <h2 id="fair-play-heading" className="display-font text-3xl text-white md:text-4xl">
-        Our Fair Play Promise
-      </h2>
-      <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground">
-        Everything in this store changes how you look, not how you play. Nothing here
-        makes you stronger, faster, or richer than someone who never spends a penny.
-      </p>
-
-      <div className="mt-6 grid gap-5 md:grid-cols-2">
-        <div className="rounded-lg border border-rose-300/20 bg-rose-300/[0.045] p-5">
-          <h3 className="flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-rose-200">
-            <WarningIcon size={16} aria-hidden />
-            We never sell
-          </h3>
-          <ul className="mt-3 grid gap-2 text-sm leading-6 text-muted-foreground">
-            {FAIR_PLAY.never.map((line) => (
-              <li key={line} className="flex gap-2">
-                <span aria-hidden className="mt-2 h-1 w-1 shrink-0 rounded-full bg-rose-300/70" />
-                <span>{line}</span>
-              </li>
-            ))}
-          </ul>
+    <section aria-labelledby="fair-play-heading" className="border-y border-amber-200/15 py-8 md:py-10">
+      <div className="grid gap-8 md:grid-cols-[minmax(0,1fr)_minmax(0,1.25fr)] md:gap-12">
+        <div>
+          <h2
+            id="fair-play-heading"
+            className="display-font text-2xl leading-tight text-white md:text-3xl"
+          >
+            Everything here changes
+            <br className="hidden md:block" /> how you look.
+            <br className="hidden md:block" />{" "}
+            <span className="text-amber-100">Never how you play.</span>
+          </h2>
+          <p className="mt-4 max-w-sm text-sm leading-6 text-muted-foreground">
+            Nothing in this store makes you stronger, faster, or richer than someone who never
+            spends a penny. That is the whole policy — the rest is detail.
+          </p>
         </div>
 
-        <div className="rounded-lg border border-emerald-300/20 bg-emerald-300/[0.045] p-5">
-          <h3 className="flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-emerald-200">
-            <CheckIcon size={16} aria-hidden />
-            We do sell
-          </h3>
-          <ul className="mt-3 grid gap-2 text-sm leading-6 text-muted-foreground">
-            {FAIR_PLAY.sell.map((line) => (
-              <li key={line} className="flex gap-2">
-                <CheckIcon size={14} aria-hidden className="mt-1.5 shrink-0 text-emerald-300/80" />
-                <span>{line}</span>
-              </li>
-            ))}
-          </ul>
+        <div className="grid gap-6 sm:grid-cols-2 md:gap-8">
+          <div>
+            <h3 className="border-b border-white/10 pb-1.5 text-xs font-bold uppercase tracking-[0.14em] text-muted-foreground">
+              We never sell
+            </h3>
+            <ul className="mt-3 space-y-2.5">
+              {FAIR_PLAY.never.map((line) => (
+                <li key={line} className="text-sm leading-6 text-slate-200">
+                  {line}
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          <div>
+            <h3 className="border-b border-amber-200/25 pb-1.5 text-xs font-bold uppercase tracking-[0.14em] text-amber-100">
+              We do sell
+            </h3>
+            <ul className="mt-3 space-y-2.5">
+              {FAIR_PLAY.sell.map((line) => (
+                <li key={line} className="text-sm leading-6 text-slate-200">
+                  {line}
+                </li>
+              ))}
+            </ul>
+          </div>
         </div>
       </div>
     </section>

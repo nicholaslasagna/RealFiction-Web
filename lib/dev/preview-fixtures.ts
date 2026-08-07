@@ -37,6 +37,14 @@ type AccountFixture = {
   orders: PurchaseRow[]
 }
 
+type IdentityFixture = {
+  surface: "identity"
+  title: string
+  note: string
+  minecraftUsername: string
+  minecraftUuid: string
+}
+
 type RefundFixture = {
   surface: "refunds"
   title: string
@@ -48,7 +56,7 @@ type RefundFixture = {
   cashRedemption: { hasGiftOriginCredit: boolean; state: string | null } | null
 }
 
-export type PreviewFixture = StoreFixture | AccountFixture | RefundFixture
+export type PreviewFixture = StoreFixture | AccountFixture | IdentityFixture| RefundFixture
 
 // -- Refund and dispute states ------------------------------------------------
 //
@@ -210,6 +218,14 @@ const REVOKED: PurchaseRow = {
 // -- States -------------------------------------------------------------------
 
 export const PREVIEW_STATES = {
+  "player-id": {
+    surface: "identity",
+    title: "Linked account — Player ID privacy",
+    note: "The Player ID is masked by default and revealed only on request.",
+    minecraftUsername: "LittleNicholas",
+    // Obviously fake, and not a real player's UUID.
+    minecraftUuid: "00000000-1111-4222-8333-444444444444"
+  },
   "signed-out": {
     surface: "store",
     title: "Signed out",
