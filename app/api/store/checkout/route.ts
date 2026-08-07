@@ -103,6 +103,12 @@ export async function POST(request: Request) {
   }
 
   let step = "init"
+  // Hoisted so the outer catch can clean up. `sessionAttached` is the safety
+  // interlock: once a Stripe session is persisted, money may already have
+  // moved and the reservation must NOT be released on our say-so.
+  let createdOrderId: string | null = null
+  let reservedCreditCents = 0
+  let sessionAttached = false
 
   try {
     // Durable, user-scoped rate limit. Counting lives in Postgres because
@@ -304,6 +310,8 @@ export async function POST(request: Request) {
 
     }
 
+    createdOrderId = orderId
+    reservedCreditCents = creditCents
     const creditLog = { ...baseLog, store_credit_cents: creditCents, payment_due_cents: dueCents }
 
     // Full coverage: complete internally with no payment provider.
@@ -370,6 +378,7 @@ export async function POST(request: Request) {
 
     step = "attach_session"
     await attachProviderSession(orderId, result.providerSessionId)
+    sessionAttached = true
 
     // Compare-and-set onto the attempt. If a DIFFERENT session is already bound
     // (an ambiguous first response that actually succeeded, then a retry that
@@ -415,6 +424,23 @@ export async function POST(request: Request) {
         { error: "Checkout is temporarily unavailable. Please try again in a moment." },
         { status: 503, headers: { "Retry-After": "30" } }
       )
+    }
+
+    // A THROW after the order exists — most often Stripe returning a non-2xx,
+    // which `createStripeCheckout` raises rather than returning. Without this,
+    // the customer's store credit stayed reserved (already removed from their
+    // balance) against a pending order that would never be paid, with nothing
+    // to release it. Found by driving the real route with a failing Stripe.
+    //
+    // Only safe because no session was persisted: `sessionAttached` is false on
+    // every path that reaches here, so Stripe cannot have collected anything.
+    // The existing evidence-based rule is unchanged — a session-backed
+    // reservation is still never released here.
+    if (createdOrderId && !sessionAttached) {
+      if (reservedCreditCents > 0) {
+        await releaseStoreCredit(createdOrderId).catch(() => undefined)
+      }
+      await cancelOrder(createdOrderId).catch(() => undefined)
     }
 
     console.error("checkout_failed", {
