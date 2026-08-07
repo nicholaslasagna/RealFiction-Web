@@ -231,6 +231,36 @@ export function createPgSupabaseClient(database, { onQuery } = {}) {
         },
 
         async run() {
+          // PostgREST embedded resources: `select("products(category)")`. The
+          // checkout and fulfilment paths genuinely use these, so stripping
+          // them silently returned rows with the embed missing — which made
+          // `isGiftCardOrder` answer false and route a gift card through
+          // ordinary product fulfilment. Resolved as a correlated json subquery
+          // on the foreign key, which is what PostgREST does.
+          const embeds = [...String(state.columns).matchAll(/(\w+)\(([^)]*)\)/g)]
+          if (embeds.length > 0) {
+            const where = state.filters.length ? `where ${state.filters.join(" and ")}` : ""
+            const plain = columns(state.columns)
+            const selects = embeds.map(([, child, childCols]) => {
+              const cols = childCols
+                .split(",")
+                .map((c) => c.trim())
+                .filter(Boolean)
+              const json = cols.map((c) => `'${c}', c.${c}`).join(", ")
+              // Convention in this schema: the child is referenced by
+              // `<singular>_id` on the parent row.
+              const fk = `${child.replace(/s$/, "")}_id`
+              return `(select json_build_object(${json}) from public.${child} c where c.id = public.${state.table}.${fk}) as ${child}`
+            })
+            const list = [plain === "*" ? null : plain, ...selects].filter(Boolean).join(", ")
+            record("select", { table, embeds: embeds.length })
+            try {
+              return { data: rows(database, `select ${list} from public.${state.table} ${where}`), error: null }
+            } catch (error) {
+              return { data: [], error: { message: String(error.stderr ?? error.message).slice(0, 300) } }
+            }
+          }
+
           const where = state.filters.length ? `where ${state.filters.join(" and ")}` : ""
           const order = state.order ? `order by ${state.order}` : ""
           const cap = state.limit ? `limit ${state.limit}` : ""
