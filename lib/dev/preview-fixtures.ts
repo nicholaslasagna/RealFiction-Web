@@ -10,6 +10,7 @@
 // the account page selects. If those shapes change, this file stops compiling,
 // which is the point.
 
+import type { GiftCardEntry } from "@/components/gift-card-codes"
 import type { PurchaseRow } from "@/components/account/purchase-history"
 import type { EntitlementView } from "@/lib/store/access-view"
 
@@ -36,7 +37,77 @@ type AccountFixture = {
   orders: PurchaseRow[]
 }
 
-export type PreviewFixture = StoreFixture | AccountFixture
+type RefundFixture = {
+  surface: "refunds"
+  title: string
+  note: string
+  cards: GiftCardEntry[]
+  /** What the RECIPIENT of a gift card sees about their own credit. */
+  hold: { holdCents: number; restoredRecently: boolean } | null
+}
+
+export type PreviewFixture = StoreFixture | AccountFixture | RefundFixture
+
+// -- Refund and dispute states ------------------------------------------------
+//
+// One card per customer-visible state, so the DOM tests can assert that a
+// purchaser sees four distinguishable words and NOTHING about what the
+// recipient did with the money.
+
+const REFUND_CARDS: GiftCardEntry[] = [
+  {
+    id: "aaaaaaaa-0000-4000-8000-000000000001",
+    code: null,
+    balanceCents: 0,
+    originalCents: 2500,
+    status: "void",
+    createdAt: LAST_MONTH,
+    redeemedAt: null,
+    refundState: "refunded"
+  },
+  {
+    id: "aaaaaaaa-0000-4000-8000-000000000002",
+    code: null,
+    balanceCents: 5000,
+    originalCents: 5000,
+    status: "active",
+    createdAt: LAST_MONTH,
+    redeemedAt: null,
+    refundState: "refund_processing"
+  },
+  {
+    id: "aaaaaaaa-0000-4000-8000-000000000003",
+    code: null,
+    balanceCents: 1201,
+    originalCents: 2500,
+    status: "active",
+    createdAt: LAST_MONTH,
+    redeemedAt: null,
+    // The recipient spent $12.99 of this one. The badge must not say so.
+    refundState: "refund_review"
+  },
+  {
+    id: "aaaaaaaa-0000-4000-8000-000000000004",
+    code: null,
+    balanceCents: 10000,
+    originalCents: 10000,
+    status: "active",
+    createdAt: LAST_MONTH,
+    redeemedAt: null,
+    refundState: "disputed"
+  },
+  {
+    id: "aaaaaaaa-0000-4000-8000-000000000005",
+    code: null,
+    balanceCents: 2500,
+    originalCents: 2500,
+    status: "active",
+    createdAt: LAST_MONTH,
+    redeemedAt: null,
+    // Nothing has happened to this one. It must render NO refund block.
+    refundState: null
+  }
+]
 
 // -- Orders -------------------------------------------------------------------
 
@@ -241,6 +312,32 @@ export const PREVIEW_STATES = {
       PENDING,
       REVOKED
     ]
+  },
+
+  // -- Refund and dispute surfaces --------------------------------------------
+
+  "refund-states": {
+    surface: "refunds",
+    title: "Purchaser refund states",
+    note: "Every state, plus one card with nothing to report.",
+    cards: REFUND_CARDS,
+    hold: null
+  },
+
+  "credit-frozen": {
+    surface: "refunds",
+    title: "Recipient credit frozen during payment review",
+    note: "Part of the balance cannot be spent while the payment is under review.",
+    cards: [],
+    hold: { holdCents: 2500, restoredRecently: false }
+  },
+
+  "credit-restored": {
+    surface: "refunds",
+    title: "Recipient credit released",
+    note: "The hold is lifted and nothing is frozen.",
+    cards: [],
+    hold: { holdCents: 0, restoredRecently: true }
   }
 } as const satisfies Record<string, PreviewFixture>
 
@@ -258,3 +355,6 @@ export const PREVIEW_ORDERS = {
   pending: PENDING,
   revoked: REVOKED
 }
+
+/** Reused by the DOM tests so tests and browser assert on the same cards. */
+export const PREVIEW_REFUND_CARDS = REFUND_CARDS

@@ -479,3 +479,151 @@ test("the deterministic idempotency key is sent to the provider on every attempt
   await processEmailQueue(ENV, { fetchImpl: capturing })
   assert.deepEqual(seenKeys, ["gift_card_claimed:card-1"], "duplicate suppression depends on this key")
 })
+
+// ===========================================================================
+// Refunds and disputes
+//
+// Rendered through the real processor, because that is where a template name
+// typo becomes a delivery that is silently never sent — and where a param the
+// purchaser must not see would actually reach a mailbox.
+// ===========================================================================
+
+const refundRow = (template: string, recipient: string, params: Record<string, unknown>) =>
+  row({ template, recipient, order_id: null, params })
+
+test("the purchaser's REFUNDED email quotes the refunded amount and the reference", async () => {
+  reset()
+  db.queue = [
+    refundRow("gift_card_refunded", "buyer@example.com", {
+      amount_cents: 2500,
+      currency: "USD",
+      public_ref: "RFG-ABCDEF0123"
+    })
+  ]
+
+  const result = await processEmailQueue(ENV, { fetchImpl: fakeTransport() })
+
+  assert.equal(result.sent, 1)
+  assert.equal(db.sent[0].to, "buyer@example.com")
+  assert.match(db.sent[0].subject, /refunded/i)
+  assert.match(db.sent[0].text, /\$25\.00/)
+  assert.match(db.sent[0].text, /RFG-ABCDEF0123/)
+  assert.match(db.sent[0].text, /original payment method/i)
+})
+
+test("the purchaser's REVIEW email says nothing about what the recipient did", async () => {
+  reset()
+  db.queue = [
+    refundRow("gift_card_refund_review", "buyer@example.com", {
+      amount_cents: 2500,
+      currency: "USD",
+      public_ref: "RFG-ABCDEF0123"
+    })
+  ]
+
+  await processEmailQueue(ENV, { fetchImpl: fakeTransport() })
+
+  const body = `${db.sent[0].subject}\n${db.sent[0].text}\n${db.sent[0].html}`
+  for (const leak of [/spent/i, /claimed/i, /balance/i, /redeem/i, /recipient/i, /friend@/i]) {
+    assert.doesNotMatch(body, leak, `the review email leaked ${leak}`)
+  }
+  assert.match(body, /review/i)
+})
+
+test("the recipient's REFUNDED email states the removal and the new balance", async () => {
+  reset()
+  db.queue = [
+    refundRow("gift_card_refunded_recipient", "friend@example.com", {
+      amount_cents: 1201,
+      currency: "USD",
+      balance_cents: 0
+    })
+  ]
+
+  await processEmailQueue(ENV, { fetchImpl: fakeTransport() })
+
+  assert.equal(db.sent[0].to, "friend@example.com")
+  assert.match(db.sent[0].text, /\$12\.01/)
+  assert.match(db.sent[0].text, /\$0\.00/)
+  // Their ranks are not clawed back, and saying so prevents a support ticket.
+  assert.match(db.sent[0].text, /already bought is affected/i)
+})
+
+test("the recipient's FROZEN email never says 'dispute' or 'chargeback'", async () => {
+  reset()
+  db.queue = [
+    refundRow("gift_card_frozen_recipient", "friend@example.com", {
+      amount_cents: 2500,
+      currency: "USD",
+      balance_cents: 2500
+    })
+  ]
+
+  await processEmailQueue(ENV, { fetchImpl: fakeTransport() })
+
+  const body = `${db.sent[0].subject}\n${db.sent[0].text}\n${db.sent[0].html}`
+  // A chargeback is an accusation against the SENDER. The recipient is not the
+  // one being asked about it, and repeating it to them is both a leak and, more
+  // often than not, wrong.
+  for (const leak of [/dispute/i, /chargeback/i, /fraud/i, /stolen/i, /purchaser/i, /buyer@/i]) {
+    assert.doesNotMatch(body, leak, `the freeze email leaked ${leak}`)
+  }
+  assert.match(body, /on hold/i)
+  assert.match(body, /\$25\.00/)
+})
+
+test("the recipient's RESTORED email says the hold is gone", async () => {
+  reset()
+  db.queue = [
+    refundRow("gift_card_restored_recipient", "friend@example.com", {
+      amount_cents: 2500,
+      currency: "USD",
+      balance_cents: 4000
+    })
+  ]
+
+  await processEmailQueue(ENV, { fetchImpl: fakeTransport() })
+
+  assert.match(db.sent[0].subject, /available again/i)
+  assert.match(db.sent[0].text, /\$40\.00/)
+  assert.doesNotMatch(db.sent[0].text, /dispute|chargeback/i)
+})
+
+test("NO refund or dispute email carries a claim link", async () => {
+  reset()
+  // If any of these ever rendered a claim URL, the credential would be handed
+  // to whoever received the mail AFTER the card was voided or frozen.
+  db.queue = [
+    refundRow("gift_card_refunded", "buyer@example.com", { amount_cents: 2500, currency: "USD", public_ref: "RFG-1" }),
+    refundRow("gift_card_refund_review", "buyer@example.com", { amount_cents: 2500, currency: "USD", public_ref: "RFG-1" }),
+    refundRow("gift_card_refunded_recipient", "f@example.com", { amount_cents: 2500, currency: "USD", balance_cents: 0 }),
+    refundRow("gift_card_frozen_recipient", "f@example.com", { amount_cents: 2500, currency: "USD", balance_cents: 0 }),
+    refundRow("gift_card_restored_recipient", "f@example.com", { amount_cents: 2500, currency: "USD", balance_cents: 0 })
+  ]
+
+  const result = await processEmailQueue(ENV, { fetchImpl: fakeTransport() })
+
+  assert.equal(result.sent, 5, "all five templates render")
+  for (const mail of db.sent) {
+    assert.doesNotMatch(`${mail.text}${mail.html}`, /gift-cards\/claim|#[A-Za-z0-9_-]{40,}/, "a claim link appeared")
+  }
+})
+
+test("all five survive a missing currency and a missing amount without throwing", async () => {
+  reset()
+  db.queue = [
+    refundRow("gift_card_refunded", "b@example.com", {}),
+    refundRow("gift_card_refund_review", "b@example.com", {}),
+    refundRow("gift_card_refunded_recipient", "f@example.com", {}),
+    refundRow("gift_card_frozen_recipient", "f@example.com", {}),
+    refundRow("gift_card_restored_recipient", "f@example.com", {})
+  ]
+
+  const result = await processEmailQueue(ENV, { fetchImpl: fakeTransport() })
+
+  assert.equal(result.sent, 5)
+  for (const mail of db.sent) {
+    assert.match(mail.text, /\$0\.00/)
+    assert.doesNotMatch(mail.text, /NaN|undefined|null/)
+  }
+})

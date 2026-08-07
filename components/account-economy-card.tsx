@@ -3,9 +3,11 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { RefreshCw } from "lucide-react"
 
+import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
+import { recipientBadge, recipientCreditState } from "@/lib/gift-card/customer-state"
 
 /**
  * "Your Balance" card on the account page.
@@ -24,6 +26,9 @@ type StoreCreditPayload = {
   balanceCents: number
   currency: string
   updatedAt: string | null
+  /** Part of the balance that cannot be spent right now. */
+  holdCents: number
+  restoredRecently: boolean
 }
 
 type LoadState =
@@ -94,6 +99,42 @@ function GoldIngotIcon({ size = 24 }: { size?: number }) {
   )
 }
 
+/**
+ * Why part of a balance will not spend.
+ *
+ * Says nothing about a dispute, a chargeback, or who sent the gift card: the
+ * recipient is not a party to any of that, and the payment behind a gift they
+ * received being questioned is not an accusation they need to carry.
+ */
+export function CreditHoldNotice({
+  holdCents,
+  restoredRecently
+}: {
+  holdCents: number
+  restoredRecently: boolean
+}) {
+  const badge = recipientBadge(recipientCreditState({ holdCents, restoredRecently }))
+  if (!badge) {
+    return null
+  }
+
+  return (
+    <div
+      className="rounded-lg border border-amber-300/20 bg-black/24 p-4"
+      data-testid="store-credit-hold"
+      role="status"
+    >
+      <Badge variant={badge.tone}>{badge.label}</Badge>
+      {holdCents > 0 ? (
+        <p className="mt-2 font-mono text-lg font-semibold text-amber-100">
+          {`${formatCents(holdCents)} on hold`}
+        </p>
+      ) : null}
+      <p className="mt-2 text-sm text-muted-foreground">{badge.detail}</p>
+    </div>
+  )
+}
+
 export function AccountEconomyCard() {
   const [state, setState] = useState<LoadState>({ status: "loading" })
   const [showRedeem, setShowRedeem] = useState(false)
@@ -133,7 +174,12 @@ export function AccountEconomyCard() {
               ? Math.trunc(body.balanceCents)
               : 0,
           currency: typeof body?.currency === "string" ? body.currency : "USD",
-          updatedAt: body?.updatedAt ?? null
+          updatedAt: body?.updatedAt ?? null,
+          holdCents:
+            typeof body?.holdCents === "number" && Number.isFinite(body.holdCents)
+              ? Math.max(0, Math.trunc(body.holdCents))
+              : 0,
+          restoredRecently: body?.restoredRecently === true
         }
       })
     } catch {
@@ -237,6 +283,13 @@ export function AccountEconomyCard() {
               </p>
             ) : null}
           </div>
+        ) : null}
+
+        {state.status === "ready" ? (
+          <CreditHoldNotice
+            holdCents={state.data.holdCents}
+            restoredRecently={state.data.restoredRecently}
+          />
         ) : null}
 
         {state.status === "empty" ? (

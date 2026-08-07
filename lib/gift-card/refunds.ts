@@ -273,3 +273,126 @@ export async function handleGiftCardDisputeClosed(input: {
     unfrozenCents: Number(row?.unfrozen_cents ?? 0)
   }
 }
+
+// ---------------------------------------------------------------------------
+// The wired refund path
+// ---------------------------------------------------------------------------
+
+import {
+  createGiftCardRefund,
+  type GiftCardRefundResult
+} from "@/lib/gift-card/refund-request"
+
+export type RequestRefundOutcome =
+  | "refunded"
+  | "review_required"
+  | "rejected"
+  | "provider_failed"
+  | "provider_uncertain"
+  | "unavailable"
+
+/**
+ * The whole refund, start to finish.
+ *
+ * Order matters and is not negotiable: eligibility and the freeze happen FIRST,
+ * under a database lock, and only then is Stripe asked. Asking Stripe first
+ * would leave a window where the recipient can spend value that is already
+ * being refunded.
+ *
+ * A `pending` or `uncertain` provider result deliberately does NOT unfreeze and
+ * does NOT reverse. Stripe may have created the Refund and lost the response,
+ * so the safe side of that uncertainty is to leave the value where it is and
+ * let reconciliation settle it.
+ */
+export async function requestGiftCardRefund(
+  giftCardId: string,
+  options: {
+    requestedCents?: number | null
+    secretKey?: string
+    fetchImpl?: typeof fetch
+  } = {}
+): Promise<{ outcome: RequestRefundOutcome; refundId: string | null; refundedCents: number }> {
+  const started = await beginGiftCardRefund(giftCardId, options.requestedCents ?? null)
+
+  // Not eligible: no provider call at all. A partially spent, reserved,
+  // frozen, or disputed card never reaches Stripe automatically.
+  if (started.outcome !== "refund_started" || !started.refundId) {
+    return {
+      outcome: started.outcome === "review_required" ? "review_required" : started.outcome === "unavailable" ? "unavailable" : "rejected",
+      refundId: started.refundId,
+      refundedCents: 0
+    }
+  }
+
+  const supabase = getSupabaseServiceRoleClient()
+
+  // Claim the provider call, so a concurrent caller cannot issue a second one.
+  const { data: claimed } = await supabase.rpc("mark_gift_card_refund_pending", {
+    p_refund_id: started.refundId
+  })
+  if (claimed !== true) {
+    return { outcome: "provider_uncertain", refundId: started.refundId, refundedCents: 0 }
+  }
+
+  // Payment identity from OUR order record, never from a request.
+  const { data: card } = await supabase
+    .from("gift_cards")
+    .select("purchaser_order_id")
+    .eq("id", giftCardId)
+    .maybeSingle()
+
+  const { data: order } = await supabase
+    .from("orders")
+    .select("provider_payment_id,stripe_charge_id,currency")
+    .eq("id", String(card?.purchaser_order_id ?? ""))
+    .maybeSingle()
+
+  const secretKey = options.secretKey ?? process.env.STRIPE_SECRET_KEY ?? ""
+  if (!secretKey) {
+    await supabase.rpc("fail_gift_card_refund", { p_refund_id: started.refundId, p_category: "unconfigured" })
+    return { outcome: "unavailable", refundId: started.refundId, refundedCents: 0 }
+  }
+
+  let result: GiftCardRefundResult
+  try {
+    result = await createGiftCardRefund(
+      {
+        refundId: started.refundId,
+        paymentIntentId: (order?.provider_payment_id as string | null) ?? null,
+        chargeId: (order?.stripe_charge_id as string | null) ?? null,
+        // The ceiling the database computed under a lock.
+        amountCents: started.eligibleExternalCents,
+        currency: String(order?.currency ?? "USD")
+      },
+      { secretKey, fetchImpl: options.fetchImpl }
+    )
+  } catch {
+    return { outcome: "provider_uncertain", refundId: started.refundId, refundedCents: 0 }
+  }
+
+  if (result.kind === "succeeded") {
+    const completed = await completeGiftCardRefund({
+      refundId: started.refundId,
+      providerRefundId: result.providerRefundId,
+      refundedCents: result.amountCents
+    })
+    return {
+      outcome: completed.outcome === "completed" || completed.outcome === "already_completed" ? "refunded" : "review_required",
+      refundId: started.refundId,
+      refundedCents: completed.reversedCents
+    }
+  }
+
+  if (result.kind === "failed") {
+    // Definitive: no money moved. Retryable, and the value stays frozen — a
+    // failed refund is not a reason to make it spendable again.
+    await supabase.rpc("fail_gift_card_refund", {
+      p_refund_id: started.refundId,
+      p_category: result.category
+    })
+    return { outcome: "provider_failed", refundId: started.refundId, refundedCents: 0 }
+  }
+
+  // pending or uncertain: leave it in provider_refund_pending for reconciliation.
+  return { outcome: "provider_uncertain", refundId: started.refundId, refundedCents: 0 }
+}

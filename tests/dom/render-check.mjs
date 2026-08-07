@@ -438,6 +438,102 @@ try {
   })
 
   // =========================================================================
+  // Refund and dispute states — what the customer actually sees
+  // =========================================================================
+  const refunds = await get("/dev/preview/refund-states")
+  const refundBlocks = refunds.html.split('data-testid="gift-card-refund-state"').slice(1)
+  const refundText = text(refunds.html)
+
+  check("only cards with something to report render a state block", () => {
+    // Five fixture cards, one of which has no refund and no dispute.
+    assert.equal(refundBlocks.length, 4)
+  })
+
+  check("the four purchaser states are distinguishable words", () => {
+    for (const label of ["Refunded", "Refund processing", "Refund requires review", "Disputed"]) {
+      assert.ok(refundText.includes(label), `missing state: ${label}`)
+    }
+  })
+
+  check("every state block carries a sentence, not just a colored badge", () => {
+    for (const block of refundBlocks) {
+      // Color alone is not information. Each block must say something.
+      assert.ok(text(block).replace(/\s+/g, " ").trim().length > 40, "a state block was label-only")
+    }
+  })
+
+  check("NO refund state reveals what the recipient did with the card", () => {
+    // The review fixture is a card whose recipient spent $12.99 of $25.00.
+    for (const leak of [/spent/i, /\$12\.99/, /\$12\.01/, /partially/i, /redeem(ed|er)/i, /recipient/i]) {
+      assert.ok(!leak.test(refundText), `the refund states leaked ${leak}`)
+    }
+  })
+
+  check("a disputed card does not say chargeback, fraud, or bank dispute detail", () => {
+    assert.ok(!/chargeback/i.test(refundText))
+    assert.ok(!/fraud/i.test(refundText))
+  })
+
+  check("no refund state leaks an internal identifier", () => {
+    // `refund_review` and friends ARE the public state names and travel in the
+    // RSC payload by design. What must never appear is the internal vocabulary
+    // behind them.
+    assert.ok(!/eligible_unclaimed|eligible_claimed_unused|provider_refund_pending|review_required/.test(refunds.html))
+    assert.ok(!/\bre_[A-Za-z0-9]|\bpi_[A-Za-z0-9]|\bch_[A-Za-z0-9]/.test(refunds.html))
+    assert.ok(!/gift_card_refunds|store_credit_lots|payment_reviews/i.test(refunds.html))
+  })
+
+  check("no refund state offers a claim link or a code", () => {
+    assert.ok(!/gift-cards\/claim|claim#/.test(refunds.html))
+    assert.ok(!/RF-[A-Z0-9]{4}/.test(refundText), "a gift card code was rendered next to a refund state")
+  })
+
+  const frozen = await get("/dev/preview/credit-frozen")
+  const frozenText = text(frozen.html)
+
+  check("a recipient sees the hold, the amount, and why they cannot spend it", () => {
+    assert.match(frozen.html, /data-testid="store-credit-hold"/)
+    assert.ok(frozenText.includes("Frozen during payment review"))
+    assert.match(frozenText, /\$25\.00 on hold/)
+    assert.match(frozenText, /cannot be spent/i)
+  })
+
+  check("THE RECIPIENT IS NEVER TOLD A DISPUTE EXISTS", () => {
+    // A chargeback is an accusation aimed at the sender. The recipient is not
+    // the one being asked about it.
+    for (const leak of [/dispute/i, /chargeback/i, /fraud/i, /stolen/i, /purchaser/i, /sender's/i]) {
+      assert.ok(!leak.test(frozenText), `the frozen notice leaked ${leak}`)
+    }
+  })
+
+  check("the hold notice is announced, not just colored", () => {
+    const block = frozen.html.slice(frozen.html.indexOf('data-testid="store-credit-hold"'))
+    assert.match(block.slice(0, 400), /role="status"/)
+  })
+
+  const restored = await get("/dev/preview/credit-restored")
+  const restoredText = text(restored.html)
+
+  check("a restored recipient is told the hold is gone, with no amount on hold", () => {
+    assert.ok(restoredText.includes("Restored after dispute resolution"))
+    assert.match(restoredText, /available again/i)
+    assert.ok(!/on hold/i.test(restoredText))
+  })
+
+  check("neither recipient state names a gift card, a sender, or an order", () => {
+    for (const body of [frozen.html, restored.html]) {
+      assert.ok(!/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i.test(body), "raw UUID")
+      assert.ok(!/RFG-[A-Z0-9]/.test(body), "a gift card reference")
+    }
+  })
+
+  check("American English throughout the refund and dispute states", () => {
+    for (const body of [refundText, frozenText, restoredText]) {
+      assert.ok(!/colour|authorise|cancelled|recognise|apologise/i.test(body))
+    }
+  })
+
+  // =========================================================================
   // The preview harness itself must not exist in production
   // =========================================================================
   check("an unknown preview state is a 404, not a blank page", async () => {

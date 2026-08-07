@@ -17,6 +17,8 @@ import { notFound } from "next/navigation"
 import { Storefront } from "@/components/storefront"
 import { FairPlayPromise } from "@/components/store/fair-play"
 import { OrderHistoryPreview } from "@/components/dev/order-history-preview"
+import { GiftCardCodes } from "@/components/gift-card-codes"
+import { CreditHoldNotice } from "@/components/account-economy-card"
 import { PREVIEW_STATES, type PreviewStateId } from "@/lib/dev/preview-fixtures"
 
 export const dynamic = "force-dynamic"
@@ -43,7 +45,12 @@ export default async function PreviewPage({ params }: { params: Promise<{ state:
         <p className="mt-1 text-sm text-muted-foreground">{fixture.note}</p>
       </header>
 
-      {fixture.surface === "store" ? (
+      {fixture.surface === "refunds" ? (
+        <div className="space-y-6">
+          <GiftCardCodes cards={fixture.cards} />
+          {fixture.hold ? <CreditHoldNotice {...fixture.hold} /> : null}
+        </div>
+      ) : fixture.surface === "store" ? (
         <>
           <Storefront
             signedIn={fixture.signedIn}

@@ -5,6 +5,7 @@ import { useState } from "react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { purchaserBadge } from "@/lib/gift-card/customer-state"
 
 /**
  * "Your Gift Cards" — lets the purchaser reveal/copy the codes they bought.
@@ -22,6 +23,8 @@ export type GiftCardEntry = {
   status: string
   createdAt: string
   redeemedAt: string | null
+  /** Coarse refund/dispute state, or null when there is nothing to report. */
+  refundState?: string | null
 }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -51,7 +54,14 @@ export function GiftCardCodes({ cards }: { cards: GiftCardEntry[] }) {
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <div className="max-h-[24rem] space-y-3 overflow-y-auto pr-1">
+        {/* Focusable because it scrolls: without a tab stop, a keyboard user
+            cannot reach cards below the fold at all. */}
+        <div
+          className="max-h-[24rem] space-y-3 overflow-y-auto pr-1"
+          tabIndex={0}
+          role="group"
+          aria-label="Your gift cards"
+        >
           {cards.map((card) => (
             <GiftCardRowItem key={card.id} card={card} />
           ))}
@@ -65,6 +75,7 @@ function GiftCardRowItem({ card }: { card: GiftCardEntry }) {
   const [revealed, setRevealed] = useState(false)
   const [copied, setCopied] = useState(false)
   const redeemable = card.status === "active" && Boolean(card.code)
+  const refund = purchaserBadge(card.refundState)
 
   async function copy() {
     if (!card.code) {
@@ -85,6 +96,15 @@ function GiftCardRowItem({ card }: { card: GiftCardEntry }) {
         <p className="font-semibold text-white">{formatUsd(card.originalCents)} gift card</p>
         <Badge variant={redeemable ? "success" : "outline"}>{STATUS_LABEL[card.status] ?? card.status}</Badge>
       </div>
+
+      {refund ? (
+        // The badge carries a color; the sentence carries the meaning. Anyone
+        // who cannot see the color still gets the whole message.
+        <div className="mt-3 rounded-md border border-white/10 bg-black/24 p-3" data-testid="gift-card-refund-state">
+          <Badge variant={refund.tone}>{refund.label}</Badge>
+          <p className="mt-2 text-sm text-muted-foreground">{refund.detail}</p>
+        </div>
+      ) : null}
 
       {redeemable ? (
         <div className="mt-3 flex flex-wrap items-center gap-2">

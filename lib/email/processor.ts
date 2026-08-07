@@ -20,7 +20,12 @@ import { sendProviderEmail } from "./transport"
 import {
   buildGiftCardClaimedEmail,
   buildGiftCardDeliveryEmail,
-  buildGiftCardPurchaseEmail
+  buildGiftCardFrozenRecipientEmail,
+  buildGiftCardPurchaseEmail,
+  buildGiftCardRefundReviewEmail,
+  buildGiftCardRefundedEmail,
+  buildGiftCardRefundedRecipientEmail,
+  buildGiftCardRestoredRecipientEmail
 } from "./gift-card-templates"
 import { openClaimSecret } from "../gift-card/crypto"
 
@@ -169,6 +174,47 @@ async function renderDelivery(
       // Fragment, not query string: the secret never reaches our access logs or
       // a Referer header.
       claimUrl: `${siteUrl}/gift-cards/claim#${secret}`,
+      supportEmail,
+      siteUrl
+    })
+  }
+
+  // -- Refunds and disputes --------------------------------------------------
+  //
+  // Every one of these renders from the queue row's own params. None of them
+  // reads the gift card back: by send time the card may be void, refrozen, or
+  // spent further, and an email must describe the event it was queued for, not
+  // whatever is true minutes later.
+  const REFUND_TEMPLATES = {
+    gift_card_refunded: buildGiftCardRefundedEmail,
+    gift_card_refund_review: buildGiftCardRefundReviewEmail
+  } as const
+
+  const purchaserBuilder = REFUND_TEMPLATES[row.template as keyof typeof REFUND_TEMPLATES]
+  if (purchaserBuilder) {
+    const params = row.params ?? {}
+    return purchaserBuilder({
+      amountCents: Number(params.amount_cents ?? 0),
+      currency: String(params.currency ?? "USD"),
+      publicRef: String(params.public_ref ?? ""),
+      supportEmail,
+      siteUrl
+    })
+  }
+
+  const RECIPIENT_TEMPLATES = {
+    gift_card_refunded_recipient: buildGiftCardRefundedRecipientEmail,
+    gift_card_frozen_recipient: buildGiftCardFrozenRecipientEmail,
+    gift_card_restored_recipient: buildGiftCardRestoredRecipientEmail
+  } as const
+
+  const recipientBuilder = RECIPIENT_TEMPLATES[row.template as keyof typeof RECIPIENT_TEMPLATES]
+  if (recipientBuilder) {
+    const params = row.params ?? {}
+    return recipientBuilder({
+      amountCents: Number(params.amount_cents ?? 0),
+      currency: String(params.currency ?? "USD"),
+      balanceCents: Number(params.balance_cents ?? 0),
       supportEmail,
       siteUrl
     })

@@ -48,8 +48,8 @@ test("the drain is registered with ctx.waitUntil, not merely started", async () 
 
   // Cloudflare kills the event when the handler returns unless the work is
   // registered.
-  assert.equal(registered.length, 2, "email drain and reconciliation are registered separately")
-  assert.equal(returned.length, 2)
+  assert.equal(registered.length, 3, "email, payment reconciliation, and refund reconciliation are registered separately")
+  assert.equal(returned.length, 3)
 
   await Promise.all(registered)
   assert.equal(emails, 1)

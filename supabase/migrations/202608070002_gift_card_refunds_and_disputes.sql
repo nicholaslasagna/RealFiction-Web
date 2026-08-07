@@ -61,6 +61,15 @@ alter table public.order_refunds enable row level security;
 revoke all on table public.order_refunds from public, anon, authenticated;
 grant all on table public.order_refunds to service_role;
 
+-- An earlier version of this function shipped with a FOUR-column OUT row
+-- (it also reported a store-credit portion). Postgres cannot change an OUT
+-- row type with `create or replace`, so any database that still carries the old
+-- signature must drop it first. Both known shapes are listed explicitly rather
+-- than guessed at, and `if exists` keeps a clean-slate build silent.
+drop function if exists public.record_order_refund(uuid, text, bigint, text, boolean);
+drop function if exists public.record_order_refund(uuid, text, bigint, text);
+drop function if exists public.record_order_refund(uuid, text, bigint);
+
 /**
  * Records one external reversal, bounded by what was actually collected.
  *
@@ -461,6 +470,23 @@ begin
       )
     )
     on conflict (provider, provider_event_id) do nothing;
+
+    -- The purchaser hears "we are looking at it" IN THE SAME TRANSACTION that
+    -- opens the review, so a crash cannot leave a customer waiting on an email
+    -- that was never queued. The params carry no reason: `review_reason` says
+    -- what the recipient did with the card.
+    insert into public.email_deliveries (idempotency_key, template, recipient, order_id, params)
+    select
+      'gift_card_refund_review:' || v_id::text, 'gift_card_refund_review',
+      o.buyer_email, o.id,
+      jsonb_build_object(
+        'amount_cents', v_pos.external_remaining_cents,
+        'currency', v_card.currency,
+        'public_ref', v_card.public_ref
+      )
+    from public.orders o
+    where o.id = v_pos.purchaser_order_id and coalesce(o.buyer_email, '') <> ''
+    on conflict (idempotency_key) do nothing;
   end if;
 
   refund_id := v_id; state := v_state; eligible_external_cents := v_eligible;
@@ -602,6 +628,46 @@ begin
       completed_at = now()
   where id = p_refund_id;
 
+  -- Both emails are queued here, atomically with the money. The unique
+  -- idempotency key is what makes a webhook replay or a reconciliation pass
+  -- send nothing a second time.
+  insert into public.email_deliveries (idempotency_key, template, recipient, order_id, params)
+  select
+    'gift_card_refunded:' || p_refund_id::text, 'gift_card_refunded',
+    o.buyer_email, o.id,
+    jsonb_build_object(
+      'amount_cents', p_refunded_cents,
+      'currency', v_card.currency,
+      'public_ref', v_card.public_ref
+    )
+  from public.orders o
+  where o.id = v_refund.purchaser_order_id and coalesce(o.buyer_email, '') <> ''
+  on conflict (idempotency_key) do nothing;
+
+  if v_reverse > 0 and v_lot.user_id is not null then
+    -- Only when value was actually taken back OFF someone's balance. An
+    -- unclaimed card has no recipient to notify, and telling one that credit
+    -- was removed when none ever arrived would be alarming and false.
+    --
+    -- `order_id` is left null: this row belongs to the recipient, and the
+    -- purchaser's order is not theirs to be linked to.
+    insert into public.email_deliveries (idempotency_key, template, recipient, order_id, params)
+    select
+      'gift_card_refunded_recipient:' || p_refund_id::text, 'gift_card_refunded_recipient',
+      p.email, null,
+      jsonb_build_object(
+        'amount_cents', v_reverse,
+        'currency', v_card.currency,
+        'balance_cents', (
+          select coalesce(sum(l.delta_cents), 0)
+          from public.store_credit_ledger l where l.user_id = v_lot.user_id
+        )
+      )
+    from public.profiles p
+    where p.id = v_lot.user_id and coalesce(p.email, '') <> ''
+    on conflict (idempotency_key) do nothing;
+  end if;
+
   outcome := 'completed'; reversed_cents := v_reverse;
   return next;
 end;
@@ -711,6 +777,26 @@ begin
   )
   on conflict (provider, provider_event_id) do nothing;
 
+  if v_frozen > 0 and v_lot.user_id is not null then
+    -- Keyed on the CARD, not the event: Stripe can open a second dispute event
+    -- for the same charge, and the recipient should be told once.
+    insert into public.email_deliveries (idempotency_key, template, recipient, order_id, params)
+    select
+      'gift_card_frozen_recipient:' || p_gift_card_id::text, 'gift_card_frozen_recipient',
+      p.email, null,
+      jsonb_build_object(
+        'amount_cents', v_frozen,
+        'currency', v_card.currency,
+        'balance_cents', (
+          select coalesce(sum(l.delta_cents), 0)
+          from public.store_credit_ledger l where l.user_id = v_lot.user_id
+        )
+      )
+    from public.profiles p
+    where p.id = v_lot.user_id and coalesce(p.email, '') <> ''
+    on conflict (idempotency_key) do nothing;
+  end if;
+
   frozen_cents := v_frozen; downstream_orders := v_orders;
   return next;
 end;
@@ -792,6 +878,28 @@ begin
     )
   )
   on conflict (provider, provider_event_id) do nothing;
+
+  if v_result = 'won_unfrozen' and v_unfrozen > 0 and v_lot.user_id is not null then
+    -- ONLY on `won`. A lost dispute leaves the value frozen and a human owning
+    -- the outcome; auto-emailing "your credit is back" would be a lie, and
+    -- emailing the loss would tell the recipient about a chargeback that is not
+    -- theirs.
+    insert into public.email_deliveries (idempotency_key, template, recipient, order_id, params)
+    select
+      'gift_card_restored_recipient:' || p_gift_card_id::text, 'gift_card_restored_recipient',
+      p.email, null,
+      jsonb_build_object(
+        'amount_cents', v_unfrozen,
+        'currency', v_card.currency,
+        'balance_cents', (
+          select coalesce(sum(l.delta_cents), 0)
+          from public.store_credit_ledger l where l.user_id = v_lot.user_id
+        )
+      )
+    from public.profiles p
+    where p.id = v_lot.user_id and coalesce(p.email, '') <> ''
+    on conflict (idempotency_key) do nothing;
+  end if;
 
   outcome := v_result; unfrozen_cents := v_unfrozen;
   return next;

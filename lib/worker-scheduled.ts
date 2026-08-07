@@ -12,10 +12,11 @@
 
 import { processEmailQueue, type ProcessorEnv } from "./email/processor"
 import { reconcilePendingStripeOrders, type ReconcileEnv } from "./store/reconcile-pending"
+import { reconcileGiftCardRefunds, type RefundReconcileEnv } from "./gift-card/reconcile-refunds"
 
 export type ScheduledController = { scheduledTime: number; cron: string }
 export type ScheduledCtx = { waitUntil(promise: Promise<unknown>): void }
-export type ScheduledEnv = ProcessorEnv & ReconcileEnv
+export type ScheduledEnv = ProcessorEnv & ReconcileEnv & RefundReconcileEnv
 
 /**
  * Registers the scheduled work for the Worker's lifetime.
@@ -32,6 +33,7 @@ export function runScheduledJobs(
   deps: {
     processEmailQueue?: typeof processEmailQueue
     reconcilePendingStripeOrders?: typeof reconcilePendingStripeOrders
+    reconcileGiftCardRefunds?: typeof reconcileGiftCardRefunds
     /**
      * The shared fulfilment dispatch. Injected because it is `server-only` and
      * this module is executed directly by tests; the Worker entry supplies the
@@ -45,6 +47,7 @@ export function runScheduledJobs(
 ): Promise<unknown>[] {
   const drainEmails = deps.processEmailQueue ?? processEmailQueue
   const reconcile = deps.reconcilePendingStripeOrders ?? reconcilePendingStripeOrders
+  const reconcileRefunds = deps.reconcileGiftCardRefunds ?? reconcileGiftCardRefunds
 
   // `env` is passed explicitly: `process.env` is not populated in a scheduled
   // invocation, so anything reading it there sees undefined.
@@ -82,7 +85,25 @@ export function runScheduledJobs(
         })
     : Promise.resolve(null)
 
-  const registered = [emails, reconciliation]
+  // A THIRD isolated job on the same Cron. Separate promise, own terminal
+  // catch: a refund problem must not stop payments being recovered or email
+  // being sent, and neither of those may stop a stranded refund finalising.
+  const refunds = reconcileRefunds(env, { workerId: `cron-${controller.scheduledTime}` })
+    .then((result) => {
+      if (result.selected > 0) {
+        console.info("gift_card_refund_reconciliation_summary", result)
+      }
+      return result
+    })
+    .catch((error) => {
+      console.error(
+        "gift_card_refund_reconciliation_failed",
+        error instanceof Error ? error.message : "unknown"
+      )
+      return null
+    })
+
+  const registered = [emails, reconciliation, refunds]
   for (const promise of registered) {
     ctx.waitUntil(promise)
   }

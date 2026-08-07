@@ -1,5 +1,8 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Lets a dev server run beside the two built servers the browser suite starts,
+  // instead of contending with them over `.next`. Unset everywhere else.
+  distDir: process.env.RF_DIST_DIR || ".next",
   images: {
     unoptimized: true
   },

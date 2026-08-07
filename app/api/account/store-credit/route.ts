@@ -58,10 +58,23 @@ export async function GET() {
           : 0
     const safeCents = Number.isFinite(cents) ? Math.trunc(cents) : 0
 
+    // How much of that balance is on hold. A separate, best-effort call: a
+    // failure here must not blank out a balance the customer can see, and the
+    // RPC deliberately cannot tell us WHY the hold exists.
+    const hold = await callServiceRoleRpc<{ hold_cents?: number | string; restored_recently?: boolean }[] | null>(
+      "recipient_credit_hold",
+      { p_user_id: user.id }
+    )
+    const holdRow = Array.isArray(hold.data) ? hold.data[0] : null
+    const holdCents = hold.error ? 0 : Math.max(0, Math.trunc(Number(holdRow?.hold_cents ?? 0)) || 0)
+
     return Response.json({
       balanceCents: safeCents,
       currency: "USD",
-      updatedAt: row?.updated_at ?? null
+      updatedAt: row?.updated_at ?? null,
+      holdCents,
+      // Only meaningful once nothing is frozen; the UI decides which to show.
+      restoredRecently: hold.error ? false : holdRow?.restored_recently === true
     })
   } catch (error) {
     console.error("account_store_credit_error", describeError(error))

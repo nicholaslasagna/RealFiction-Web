@@ -18,6 +18,11 @@ import { defineConfig, devices } from "@playwright/test"
 
 const DISABLED_PORT = 3311
 const ENABLED_PORT = 3312
+// The refund and dispute states are only reachable through the development
+// preview harness, which `next start` deliberately 404s. A third server runs in
+// dev mode against its own build directory so it does not contend with the two
+// built ones over `.next`.
+const PREVIEW_PORT = 3313
 
 /** Obviously fake, and never valid anywhere. */
 const TEST_ONLY_ENV = {
@@ -58,6 +63,11 @@ export default defineConfig({
       name: "gift-cards-enabled",
       testMatch: /(enabled|claim|responsive|a11y)\.spec\.ts/,
       use: { ...devices["Desktop Chrome"], baseURL: `http://localhost:${ENABLED_PORT}` }
+    },
+    {
+      name: "refund-states",
+      testMatch: /refund-states\.spec\.ts/,
+      use: { ...devices["Desktop Chrome"], baseURL: `http://localhost:${PREVIEW_PORT}` }
     }
   ],
 
@@ -80,6 +90,13 @@ export default defineConfig({
       reuseExistingServer: false,
       timeout: 120_000,
       env: { ...TEST_ONLY_ENV }
+    },
+    {
+      command: `npx next dev --port ${PREVIEW_PORT}`,
+      port: PREVIEW_PORT,
+      reuseExistingServer: false,
+      timeout: 180_000,
+      env: { ...TEST_ONLY_ENV, RF_DIST_DIR: ".next-preview", NEXT_PUBLIC_SITE_URL: `http://localhost:${PREVIEW_PORT}` }
     }
   ]
 })

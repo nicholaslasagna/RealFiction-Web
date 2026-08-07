@@ -34,6 +34,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { STORE_BANNER_HEIGHT, STORE_BANNER_WIDTH, voteSites } from "@/lib/data"
 import { PurchaseRowCard, type PurchaseRow } from "@/components/account/purchase-history"
 import { createSupabaseServerClient, getAuthenticatedUser } from "@/lib/supabase/server"
+import { callServiceRoleRpc } from "@/lib/supabase/service-role-rest"
 
 export const dynamic = "force-dynamic"
 
@@ -109,6 +110,8 @@ type GiftCardRow = {
 
 type AccountData = {
   links: MinecraftLink[]
+  /** Coarse refund/dispute state per gift card. Empty when there is none. */
+  giftCardStates: Record<string, string>
   entitlements: EntitlementRow[]
   orders: OrderRow[]
   rewards: RewardRow[]
@@ -287,6 +290,34 @@ function rewardDetail(row: RewardRow) {
   return row.payload?.description ?? formatDate(row.created_at)
 }
 
+/**
+ * Refund and dispute state for the signed-in purchaser's own cards.
+ *
+ * Goes through the service role because `gift_card_refunds` is deliberately
+ * unreadable by `authenticated` — the RPC projects it down to one coarse word
+ * per card and nothing else. Best-effort: a missing migration or a transient
+ * failure hides the badges rather than breaking the account page.
+ */
+async function purchaserGiftCardStates(): Promise<Record<string, string>> {
+  const user = await getAuthenticatedUser().catch(() => null)
+  if (!user) {
+    return {}
+  }
+
+  const { data, error } = await callServiceRoleRpc<{ gift_card_id: string; state: string | null }[]>(
+    "purchaser_gift_card_states",
+    { p_user_id: user.id }
+  )
+
+  if (error || !Array.isArray(data)) {
+    return {}
+  }
+
+  return Object.fromEntries(
+    data.filter((row) => row.state).map((row) => [row.gift_card_id, row.state as string])
+  )
+}
+
 async function getAccountData(): Promise<AccountData> {
   try {
     const supabase = await createSupabaseServerClient()
@@ -346,6 +377,7 @@ async function getAccountData(): Promise<AccountData> {
       // Gift cards are best-effort — never fail the whole page if the lifecycle
       // migration hasn't landed in the target DB yet.
       giftCards: (giftCardsResult.data ?? []) as GiftCardRow[],
+      giftCardStates: await purchaserGiftCardStates(),
       voteStreak: (votesResult.data ?? null) as VoteStreakRow | null,
       failed
     }
@@ -356,6 +388,7 @@ async function getAccountData(): Promise<AccountData> {
       orders: [],
       rewards: [],
       giftCards: [],
+      giftCardStates: {},
       voteStreak: null,
       failed: true
     }
@@ -535,7 +568,8 @@ async function SignedInAccount() {
                 originalCents: card.original_balance_cents,
                 status: card.status,
                 createdAt: card.created_at,
-                redeemedAt: card.redeemed_at
+                redeemedAt: card.redeemed_at,
+                refundState: data.giftCardStates[card.id] ?? null
               }))}
             />
 
