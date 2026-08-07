@@ -7,6 +7,7 @@ import { Minus, Plus, ShoppingCart, Trash2 } from "lucide-react"
 import { CheckIcon } from "@/components/minecraft-icons"
 import { useEffect, useMemo, useRef, useState } from "react"
 
+import { GiftCardPurchaseForm } from "@/components/gift-card/purchase-form"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -98,6 +99,8 @@ function PayMark({ src }: { src: string }) {
 }
 
 export function Storefront({
+  giftCardsEnabled = false,
+  buyerEmail = null,
   signedIn,
   linkedUsername,
   entitlements = []
@@ -106,6 +109,14 @@ export function Storefront({
   linkedUsername: string | null
   /** Real expiry dates, server-resolved. Never inferred from a duration. */
   entitlements?: EntitlementView[]
+  /**
+   * Server-resolved. True only when the feature flag, the gift-card
+   * cryptographic keys, the email configuration, AND the reviewed tax treatment
+   * are all present. Defaults false so a caller that forgets to pass it renders
+   * the coming-soon card rather than a purchase form.
+   */
+  giftCardsEnabled?: boolean
+  buyerEmail?: string | null
 }) {
   // Which duration each product card is showing. Defaults to the shortest, so
   // nothing is preselected at a higher price than the customer asked for.
@@ -421,7 +432,23 @@ export function Storefront({
                   </span>
                 </div>
 
-                {isGiftCards ? (
+                {isGiftCards && giftCardsEnabled ? (
+                  // Only reachable when the SERVER has confirmed every gate:
+                  // feature flag, crypto keys, email configuration, and the
+                  // reviewed tax treatment. The client is never the authority.
+                  <Card className="minecraft-card">
+                    <CardContent className="py-8">
+                      <CardTitle className="display-font text-xl">Gift cards</CardTitle>
+                      <p className="mt-2 max-w-prose text-sm leading-6 text-muted-foreground">
+                        Send RealFiction store credit by email. Delivered right away, never
+                        expires, no fees.
+                      </p>
+                      <div className="mt-6">
+                        <GiftCardPurchaseForm buyerEmail={buyerEmail} />
+                      </div>
+                    </CardContent>
+                  </Card>
+                ) : isGiftCards ? (
                   <Card className="minecraft-card">
                     <CardContent className="flex flex-col items-start gap-3 py-8">
                       <Badge variant="outline">Coming soon</Badge>

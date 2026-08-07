@@ -21,6 +21,10 @@ const ENV = {
   GIFT_CARD_ENCRYPTION_KEY_VERSION: "1",
   RESEND_API_KEY: "resend-value",
   EMAIL_FROM: "RealFiction <orders@realfiction.live>",
+  // Explicit test-only reviewed value. Production has NO default: the tax
+  // treatment of stored value at sale is an unresolved Dashboard decision, and
+  // the gate fails closed without it.
+  GIFT_CARD_TAX_TREATMENT_REVIEWED: "no_tax_at_sale",
   STRIPE_SECRET_KEY: "stripe-secret-value",
   NEXT_PUBLIC_SITE_URL: "https://realfiction.live"
 }
@@ -241,6 +245,17 @@ test("missing crypto configuration refuses before any state exists", async () =>
   assert.equal(response.status, 503)
   assert.deepEqual(state.orders, [])
   assert.deepEqual(state.stripeBodies, [])
+})
+
+test("an UNREVIEWED tax treatment refuses before any state exists", async () => {
+  // The launch blocker, exercised through the real route.
+  reset()
+  process.env.GIFT_CARD_TAX_TREATMENT_REVIEWED = ""
+
+  const response = await post(VALID)
+  assert.equal(response.status, 503)
+  assert.deepEqual(state.orders, [])
+  assert.deepEqual(state.stripeBodies, [], "no Stripe request without a reviewed tax decision")
 })
 
 test("missing email configuration refuses before any state exists", async () => {

@@ -10,6 +10,8 @@ import { FairPlayPromise } from "@/components/store/fair-play"
 import { Storefront } from "@/components/storefront"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
+import { evaluateGiftCardAvailability } from "@/lib/gift-card/checkout-policy"
+import { isGiftCardCryptoConfigured } from "@/lib/gift-card/crypto"
 import { getStorefrontAccess } from "@/lib/store/ownership"
 import { getVerifiedMinecraftLink } from "@/lib/store-server"
 import { getAuthenticatedUser } from "@/lib/supabase/server"
@@ -31,6 +33,12 @@ export default async function StorePage() {
   // never inferred from a product's duration. The browser is shown these; it is
   // never asked for them.
   const ownership = await getStorefrontAccess(user?.id ?? null)
+  // Availability is decided on the SERVER. A browser cannot turn gift cards on
+  // by editing state, and a missing key renders the coming-soon card rather
+  // than a purchase form that would fail at checkout.
+  const giftCards = evaluateGiftCardAvailability(process.env, {
+    cryptoConfigured: isGiftCardCryptoConfigured(process.env)
+  })
   return (
     <section>
       <HolidayStoreBanner />
@@ -88,6 +96,8 @@ export default async function StorePage() {
 
         <Reveal className="mt-10">
           <Storefront
+            giftCardsEnabled={giftCards.available}
+            buyerEmail={user?.email ?? null}
             signedIn={Boolean(user)}
             linkedUsername={link?.username ?? null}
             entitlements={ownership.entitlements}
