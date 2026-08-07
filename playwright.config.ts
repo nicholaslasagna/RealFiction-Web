@@ -61,7 +61,7 @@ export default defineConfig({
     },
     {
       name: "gift-cards-enabled",
-      testMatch: /(enabled|claim|responsive|a11y)\.spec\.ts/,
+      testMatch: /(enabled|claim|responsive|a11y|a11y-sitewide)\.spec\.ts/,
       use: { ...devices["Desktop Chrome"], baseURL: `http://localhost:${ENABLED_PORT}` }
     },
     {
