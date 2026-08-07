@@ -92,6 +92,32 @@ type ClaimRow = {
  * release anything — it returns `mismatch_review`, which preserves the
  * reservation and asks a human.
  */
+/**
+ * Whether a Checkout Session id belongs to the mode we are configured for.
+ *
+ * Stripe namespaces object ids by mode: `cs_test_...` in test, `cs_live_...` in
+ * live. A test-mode id can NEVER be retrieved with a live key, and vice versa —
+ * the request is guaranteed to return `resource_missing` before it leaves
+ * Stripe's router.
+ *
+ * That guarantee is why this is worth checking locally. Without it a stale
+ * `cs_test_` row in a live database costs ten outbound requests and ten
+ * `resource_missing` errors in Workbench, because a 404 is indistinguishable
+ * from a timeout to the caller and is therefore retried on a backoff.
+ *
+ * Ids with neither prefix return true: an unrecognised shape is not evidence of
+ * a mismatch, and refusing to look it up would be worse than asking Stripe.
+ */
+export function sessionMatchesMode(sessionId: string, liveMode: boolean): boolean {
+  if (sessionId.startsWith("cs_test_")) {
+    return !liveMode
+  }
+  if (sessionId.startsWith("cs_live_")) {
+    return liveMode
+  }
+  return true
+}
+
 export function classifyPendingSession(
   session: SessionShape | null,
   expected: { orderId: string; sessionId: string; amountCents: number; currency: string; liveMode: boolean }
@@ -268,10 +294,34 @@ export async function reconcilePendingStripeOrders(
     let providerStatus = ""
 
     try {
-      const session = await retrieveSession(fetchImpl, stripeKey, row.provider_session_id, timeoutMs)
+      // MODE GUARD, before any network call.
+      //
+      // A `cs_test_` id under a live key (or the reverse) cannot resolve: the
+      // request is a guaranteed `resource_missing`. Skipping it costs nothing
+      // and avoids ten outbound failures per row, because a 404 is
+      // indistinguishable from a timeout here and is therefore retried.
+      //
+      // Classified as `mismatch_review` — the SAME outcome a session belonging
+      // to another order gets — so it flows through the existing review
+      // disposition below. Review, not a silent skip: a live order pointing at
+      // a test-mode session is a real data anomaly a human should see, and it
+      // stops the retries after ONE attempt instead of ten.
+      const modeOk = sessionMatchesMode(row.provider_session_id, liveMode)
+      if (!modeOk) {
+        console.warn("reconciliation_session_mode_mismatch", {
+          order_id: row.order_id,
+          live_mode: liveMode
+        })
+      }
+
+      const session = modeOk
+        ? await retrieveSession(fetchImpl, stripeKey, row.provider_session_id, timeoutMs)
+        : null
       providerStatus = typeof session?.status === "string" ? session.status : ""
 
-      outcome = classifyPendingSession(session, {
+      outcome = !modeOk
+        ? "mismatch_review"
+        : classifyPendingSession(session, {
         orderId: row.order_id,
         sessionId: row.provider_session_id,
         amountCents: Number(row.expected_amount_cents),
