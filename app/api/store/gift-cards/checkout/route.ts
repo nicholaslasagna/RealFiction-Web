@@ -44,6 +44,7 @@ import {
   parseGiftCardCheckout
 } from "@/lib/gift-card/checkout-policy"
 import { createGiftCardCheckoutSession } from "@/lib/gift-card/stripe-request"
+import { ABUSE_BLOCKED_MESSAGE, evaluateGiftCardPurchase, resolveSubjects } from "@/lib/abuse/guard"
 
 export const dynamic = "force-dynamic"
 
@@ -103,6 +104,28 @@ export async function POST(request: Request) {
       return safeJsonError("Something in your request does not look right.", 400)
     }
   }
+
+  // ---- Velocity. Before the order, the reservation, and Stripe. -----------
+  // A refusal here leaves nothing to clean up, and the attempt is still counted,
+  // so hammering the endpoint makes the next decision stricter rather than
+  // resetting anything.
+  const subjects = await resolveSubjects({
+    actor: user.id,
+    request,
+    email: user.email,
+    recipientEmail: intent.recipientEmail
+  })
+  const velocity = await evaluateGiftCardPurchase(subjects, intent.faceValueCents)
+
+  if (velocity.decision === "block") {
+    // One flat message. Naming the rule, the count, or the window would hand
+    // over the thresholds, and a 429 with a Retry-After would leak the window
+    // just as effectively.
+    console.warn("gift_card_checkout_blocked", { rule: velocity.rule, actor: user.id })
+    return safeJsonError(ABUSE_BLOCKED_MESSAGE, 403)
+  }
+  // `review` proceeds: the customer buys, and a human looks afterwards. Blocking
+  // a real customer over a soft signal is the worse error.
 
   let attemptClaimId: string | null = null
   let orderId: string | null = null

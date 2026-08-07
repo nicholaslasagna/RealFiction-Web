@@ -19,6 +19,7 @@
 import { getAuthenticatedUser } from "@/lib/supabase/server"
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role"
 import { safeJsonError } from "@/lib/security"
+import { checkActorRule, recordAbuseEvent, resolveSubjects } from "@/lib/abuse/guard"
 import {
   computeClaimVerifier,
   isCanonicalClaimSecret,
@@ -45,28 +46,31 @@ type ClaimResult =
   | "temporarily_unavailable"
   | "rate_limited"
 
-/** In-process failure counter. Bounded, per account. */
-const failures = new Map<string, { count: number; resetAt: number }>()
-const MAX_FAILURES = 10
-const WINDOW_MS = 15 * 60 * 1000
-
-function tooManyFailures(userId: string): boolean {
-  const now = Date.now()
-  const entry = failures.get(userId)
-  if (!entry || entry.resetAt < now) {
-    return false
-  }
-  return entry.count >= MAX_FAILURES
+/**
+ * DURABLE failure counting.
+ *
+ * This was a module-scope Map. On Cloudflare Workers that is not a rate limiter:
+ * isolates are per-request and are not shared, so an attacker got a fresh
+ * counter roughly as often as they wanted one. Both the count and the decision
+ * now live in Postgres.
+ *
+ * Failures are recorded against the ACCOUNT and, when the address is
+ * trustworthy, a peppered hash of the client IP — never the address itself.
+ */
+async function recordFailure(userId: string, request: Request) {
+  const subjects = await resolveSubjects({ actor: userId, request })
+  await recordAbuseEvent("gift_card_claim_failure", subjects)
 }
 
-function recordFailure(userId: string) {
-  const now = Date.now()
-  const entry = failures.get(userId)
-  if (!entry || entry.resetAt < now) {
-    failures.set(userId, { count: 1, resetAt: now + WINDOW_MS })
-    return
+/** Fails CLOSED: if we cannot count, we do not let the guessing continue. */
+async function tooManyFailures(userId: string): Promise<boolean> {
+  for (const rule of ["claim_failures_15m", "claim_failures_24h"]) {
+    const verdict = await checkActorRule(rule, "gift_card_claim_failure", userId)
+    if (verdict.decision === "block") {
+      return true
+    }
   }
-  entry.count += 1
+  return false
 }
 
 function reply(result: ClaimResult, extra: Record<string, unknown> = {}, status = 200) {
@@ -90,7 +94,9 @@ export async function POST(request: Request) {
     return reply("email_not_verified")
   }
 
-  if (tooManyFailures(user.id)) {
+  if (await tooManyFailures(user.id)) {
+    // No Retry-After: the window is part of the rule, and the rule is not
+    // something a guesser gets to read off a response header.
     return reply("rate_limited", {}, 429)
   }
 
@@ -112,7 +118,7 @@ export async function POST(request: Request) {
   // Shape-checked before it reaches the HMAC, so a malformed value cannot end
   // up inside a lower-level library's error message.
   if (typeof secret !== "string" || !isCanonicalClaimSecret(secret)) {
-    recordFailure(user.id)
+    await recordFailure(user.id, request)
     return reply("invalid_or_unavailable")
   }
 
@@ -160,11 +166,11 @@ export async function POST(request: Request) {
     }
 
     if (outcome === "wrong_recipient") {
-      recordFailure(user.id)
+      await recordFailure(user.id, request)
       return reply("wrong_recipient")
     }
 
-    recordFailure(user.id)
+    await recordFailure(user.id, request)
     return reply("invalid_or_unavailable")
   } catch {
     // Deliberately bare: an exception here could carry the secret in a stack

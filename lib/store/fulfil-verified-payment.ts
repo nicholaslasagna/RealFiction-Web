@@ -1,6 +1,7 @@
 import "server-only"
 
 import { isGiftCardOrder, issueGiftCardForPaidOrder } from "@/lib/gift-card/fulfillment"
+import { recordGiftCardPurchase } from "@/lib/abuse/purchases"
 import { fulfillPaidOrderWithOutbox } from "@/lib/store-server"
 import type { VerifiedPaymentFacts } from "@/lib/store/payment-facts"
 
@@ -33,11 +34,19 @@ export async function fulfilVerifiedPayment(
   // ordinary fulfilment, which would queue a RealCore reward for a product that
   // does not exist in game.
   if (await isGiftCardOrder(orderId)) {
-    await issueGiftCardForPaidOrder(
+    const issue = await issueGiftCardForPaidOrder(
       orderId,
       { paymentIntentId: facts.paymentIntentId, chargeId: facts.chargeId },
       env
     )
+
+    // Counts the SUCCESSFUL purchase and its value toward the velocity ceilings.
+    // Guarded on `issued` so a webhook and a reconciliation pass covering the
+    // same order — which is the normal recovery case, not an edge case — do not
+    // count it twice and push a real customer over a ceiling they never crossed.
+    if (issue.issued) {
+      await recordGiftCardPurchase(orderId)
+    }
     return { kind: "gift_card" }
   }
 

@@ -17,6 +17,12 @@ import { getAuthenticatedUser } from "@/lib/supabase/server"
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role"
 import { safeJsonError } from "@/lib/security"
 import { giftCardForOrder, requestGiftCardRefund } from "@/lib/gift-card/refunds"
+import {
+  ABUSE_BLOCKED_MESSAGE,
+  checkActorRule,
+  recordAbuseEvent,
+  resolveSubjects
+} from "@/lib/abuse/guard"
 
 export const dynamic = "force-dynamic"
 
@@ -90,6 +96,28 @@ export async function POST(request: Request) {
       // path, not this endpoint.
       return safeJsonError("That order is not a gift card purchase.", 400)
     }
+
+    // ---- Refund velocity. -------------------------------------------------
+    // Checked AFTER ownership, so the throttle cannot be used to probe which
+    // orders exist, and before any Stripe call, so a throttled request costs
+    // nothing externally. Fails closed: repeated refunding is the abuse this
+    // exists to stop, and one refused retry is a cheap price.
+    const refundVelocity = await checkActorRule(
+      "refund_requests_24h",
+      "gift_card_refund_request",
+      user.id
+    )
+    await recordAbuseEvent(
+      "gift_card_refund_request",
+      await resolveSubjects({ actor: user.id, request, email: user.email })
+    )
+
+    if (refundVelocity.decision === "block") {
+      console.warn("gift_card_refund_blocked", { actor: user.id })
+      return safeJsonError(ABUSE_BLOCKED_MESSAGE, 403)
+    }
+    // `review` still refunds — the refund itself is bounded and reversible — but
+    // a human is now looking at the pattern.
 
     const result = await requestGiftCardRefund(giftCardId)
 
