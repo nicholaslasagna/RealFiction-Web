@@ -17,6 +17,12 @@ import {
 } from "./templates"
 import { EMAIL_BATCH_SIZE, EMAIL_LEASE_SECONDS, sanitizeReceiptUrl } from "./queue"
 import { sendProviderEmail } from "./transport"
+import {
+  buildGiftCardClaimedEmail,
+  buildGiftCardDeliveryEmail,
+  buildGiftCardPurchaseEmail
+} from "./gift-card-templates"
+import { openClaimSecret } from "../gift-card/crypto"
 
 export type ProcessorEnv = {
   SUPABASE_URL?: string
@@ -24,6 +30,9 @@ export type ProcessorEnv = {
   SUPABASE_SERVICE_ROLE_KEY?: string
   RESEND_API_KEY?: string
   EMAIL_FROM?: string
+  // Gift-card delivery opens the sealed claim secret while rendering.
+  GIFT_CARD_ENCRYPTION_KEY?: string
+  GIFT_CARD_ENCRYPTION_KEY_VERSION?: string
   EMAIL_SUPPORT_ADDRESS?: string
   NEXT_PUBLIC_SITE_URL?: string
 }
@@ -97,6 +106,80 @@ async function renderDelivery(
         params.entitlementStatus === "revoked" || params.entitlementStatus === "under_review"
           ? params.entitlementStatus
           : "unchanged",
+      supportEmail,
+      siteUrl
+    })
+  }
+
+  // -- Gift cards ------------------------------------------------------------
+
+  if (row.template === "gift_card_purchase") {
+    const params = row.params ?? {}
+    return buildGiftCardPurchaseEmail({
+      amountCents: Number(params.amount_cents ?? 0),
+      currency: String(params.currency ?? "USD"),
+      recipientEmail: String(params.recipient_email ?? ""),
+      senderName: String(params.sender_name ?? ""),
+      sentToSelf: params.sent_to_self === true,
+      publicRef: String(params.public_ref ?? ""),
+      supportEmail,
+      siteUrl
+    })
+  }
+
+  if (row.template === "gift_card_delivery") {
+    const params = row.params ?? {}
+    const cardId = typeof params.gift_card_id === "string" ? params.gift_card_id : null
+    if (!cardId) {
+      return null
+    }
+
+    // THE ONLY PLACE THE SECRET IS OPENED. The outbox row carries the card id,
+    // not the secret: a queue row is retried, logged, and read by staff, and a
+    // long-lived claim credential must not live in one.
+    const { data: credential } = await supabase
+      .from("gift_card_claim_credentials")
+      .select("delivery_ciphertext")
+      .eq("gift_card_id", cardId)
+      .eq("state", "active")
+      .maybeSingle()
+
+    const ciphertext = credential?.delivery_ciphertext
+    if (typeof ciphertext !== "string" || !ciphertext) {
+      // No active credential: the card was rotated or voided between queueing
+      // and sending. Returning null marks this delivery permanently unsendable
+      // rather than shipping an email with a dead link.
+      return null
+    }
+
+    const secret = await openClaimSecret(ciphertext, env)
+    if (!secret) {
+      // Wrong key, tampered ciphertext, or missing configuration. THROW rather
+      // than return null: this is very likely an operator problem that a later
+      // attempt can fix, so the delivery must stay retryable instead of being
+      // burned. The error carries no material.
+      throw new Error("gift_card_claim_secret_unavailable")
+    }
+
+    return buildGiftCardDeliveryEmail({
+      amountCents: Number(params.amount_cents ?? 0),
+      currency: String(params.currency ?? "USD"),
+      senderName: String(params.sender_name ?? ""),
+      message: typeof params.message === "string" ? params.message : null,
+      // Fragment, not query string: the secret never reaches our access logs or
+      // a Referer header.
+      claimUrl: `${siteUrl}/gift-cards/claim#${secret}`,
+      supportEmail,
+      siteUrl
+    })
+  }
+
+  if (row.template === "gift_card_claimed") {
+    const params = row.params ?? {}
+    return buildGiftCardClaimedEmail({
+      amountCents: Number(params.amount_cents ?? 0),
+      currency: String(params.currency ?? "USD"),
+      balanceCents: Number(params.balance_cents ?? 0),
       supportEmail,
       siteUrl
     })

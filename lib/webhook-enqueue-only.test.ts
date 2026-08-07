@@ -12,6 +12,21 @@ let reviews: string[] = []
 
 mock.module("server-only", { namedExports: {}, defaultExport: {} })
 
+// Gift-card routing has its own suite (lib/gift-card-checkout.test.ts and the
+// pgTAP vertical slice). This file is about the enqueue-only guarantee, so the
+// branch is stubbed rather than given a live service-role client.
+mock.module("@/lib/gift-card/fulfillment", {
+  namedExports: {
+    isGiftCardOrder: async () => false,
+    issueGiftCardForPaidOrder: async () => ({
+      issued: true,
+      outcome: "issued",
+      giftCardId: null,
+      publicRef: null
+    })
+  }
+})
+
 mock.module("@/lib/store-server", {
   namedExports: {
     fulfillPaidOrderWithOutbox: async (orderId: string) => {

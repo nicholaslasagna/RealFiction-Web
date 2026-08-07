@@ -33,6 +33,7 @@ import {
   revokeOrderWithRefundOutbox
 } from "@/lib/store-server"
 import { verifyPaymentFacts, type VerifiedPaymentFacts } from "@/lib/store/payment-facts"
+import { isGiftCardOrder, issueGiftCardForPaidOrder } from "@/lib/gift-card/fulfillment"
 
 function toHex(buffer: ArrayBuffer) {
   return [...new Uint8Array(buffer)].map((byte) => byte.toString(16).padStart(2, "0")).join("")
@@ -250,6 +251,20 @@ export async function POST(request: Request) {
             paymentIntentId: action.paymentIntentId,
             detail: { priority: "high", check: gate.reason }
           })
+          break
+        }
+
+        // Past the shared gate, fulfilment becomes product-specific. A gift
+        // card issues stored value and queues two emails; everything else
+        // grants entitlements and queues a RealCore reward. Both are one
+        // transaction, both are idempotent, and both throw on failure so Stripe
+        // redelivers rather than receiving a 2xx that lost the work.
+        if (await isGiftCardOrder(action.orderId)) {
+          await issueGiftCardForPaidOrder(
+            action.orderId,
+            { paymentIntentId: facts.paymentIntentId, chargeId: facts.chargeId },
+            process.env
+          )
           break
         }
 

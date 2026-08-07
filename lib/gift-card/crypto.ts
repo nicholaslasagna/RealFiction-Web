@@ -26,13 +26,22 @@
 // never the material that caused them.
 //
 // Web Crypto only: this runs in the Cloudflare Worker as well as in Node.
-
-import "server-only"
+//
+// Deliberately NOT marked `server-only`. The scheduled email Worker imports this
+// to open a sealed secret while rendering a delivery, and that import chain is
+// not a React Server Component context — the marker would throw there. Nothing
+// here reads `process.env` on its own: every key arrives as an explicit `env`
+// argument, so there is no ambient secret for a client bundle to capture, and a
+// bundler that did include this file would gain no key material.
 
 export type GiftCardCryptoEnv = {
   GIFT_CARD_CLAIM_PEPPER?: string
   GIFT_CARD_ENCRYPTION_KEY?: string
   GIFT_CARD_ENCRYPTION_KEY_VERSION?: string
+  // Index signature so `process.env` (NodeJS.ProcessEnv) and the Worker env are
+  // both assignable, matching the pattern in payment-readiness.ts. Never holds
+  // or returns a secret value beyond the three keys above.
+  [key: string]: string | undefined
 }
 
 /** 256 bits. Not negotiable downward — it is the whole security argument. */
