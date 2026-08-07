@@ -25,6 +25,66 @@ export type EntitlementView = {
   expiresAt: string | null
 }
 
+/**
+ * A raw entitlement row, as stored. The account page and the storefront read
+ * the same table, so they share this shape.
+ */
+export type EntitlementRecord = {
+  entitlement_key: string
+  status?: string | null
+  expires_at?: string | null
+}
+
+/**
+ * THE rule for "does this account currently hold this?".
+ *
+ * An entitlement is CURRENT only while both are true:
+ *   1. its status is `active` — a revoked or refunded grant is not ownership; and
+ *   2. it has not expired — no `expires_at` (a permanent grant), or one in the
+ *      future.
+ *
+ * Condition 2 is the one that gets forgotten, because `status` stays `active`
+ * on a term grant after its date passes: nothing sweeps the column, and nothing
+ * should — the row is the historical record of a real purchase. Expiry is a
+ * function of the DATE, not of a flag, and reading only the flag is what made
+ * the account page report a May 30 one-month purchase as owned indefinitely.
+ *
+ * Stacking works naturally: a customer with several rows for one product is
+ * current while ANY of them is unexpired, which is the furthest-out date.
+ *
+ * Returns the slugs (`product:` prefix removed), not the raw rows, so callers
+ * cannot accidentally re-derive ownership from a row this already rejected.
+ */
+export function activeEntitlementSlugs(
+  rows: readonly EntitlementRecord[],
+  now: number = Date.now()
+): Set<string> {
+  const active = new Set<string>()
+
+  for (const row of rows) {
+    // Absent status is treated as active: the storefront query filters on
+    // status server-side and does not always re-select the column.
+    const status = (row.status ?? "active").trim().toLowerCase()
+    if (status !== "active") {
+      continue
+    }
+
+    const expiry = row.expires_at ?? null
+    if (expiry) {
+      const parsed = Date.parse(expiry)
+      // An UNPARSEABLE date is treated as expired, not as permanent. Reading a
+      // corrupt value as "never expires" would grant access forever.
+      if (Number.isNaN(parsed) || parsed <= now) {
+        continue
+      }
+    }
+
+    active.add(String(row.entitlement_key).replace(/^product:/, ""))
+  }
+
+  return active
+}
+
 export type AccessState =
   | { kind: "none" }
   | { kind: "active"; label: string; expiresAt: string }

@@ -1,7 +1,11 @@
 import "server-only"
 
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role"
-import type { EntitlementView } from "@/lib/store/access-view"
+import {
+  activeEntitlementSlugs,
+  type EntitlementRecord,
+  type EntitlementView
+} from "@/lib/store/access-view"
 import { findPrice } from "@/lib/store/catalog"
 
 /**
@@ -26,14 +30,10 @@ export async function getOwnedProductIds(userId: string | null): Promise<string[
       .eq("user_id", userId)
       .eq("status", "active")
 
-    const now = Date.now()
-    return (data ?? [])
-      .filter((row) => {
-        const expiry = row.expires_at as string | null
-        // A permanent grant has no expiry; a term grant counts only while live.
-        return !expiry || Date.parse(expiry) > now
-      })
-      .map((row) => String(row.entitlement_key).replace(/^product:/, ""))
+    // The SHARED rule, not a local copy of it. This used to inline the same
+    // status-and-expiry check that the account page was missing entirely; one
+    // implementation means the two pages cannot drift apart again.
+    return [...activeEntitlementSlugs((data ?? []) as EntitlementRecord[])]
   } catch {
     // Ownership is a display nicety. If it cannot be read, show the store as if
     // signed out rather than failing the page.

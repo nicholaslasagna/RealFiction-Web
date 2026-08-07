@@ -1,3 +1,4 @@
+import { activeEntitlementSlugs } from "@/lib/store/access-view"
 import type { Metadata } from "next"
 import Image from "next/image"
 import Link from "next/link"
@@ -474,7 +475,19 @@ async function SignedInAccount() {
   const data = await getAccountData()
   const verifiedLink = data.links.find((link) => link.status === "verified")
   const pendingLink = data.links.find((link) => link.status === "pending")
-  const ownedSlugs = new Set(data.entitlements.map((row) => baseSlug(entitlementSlug(row))))
+  // CURRENT ownership, not historical. `activeEntitlementSlugs` is the same
+  // rule the storefront uses, which is why the store already said these were
+  // expired while this page said Owned: this line used to map EVERY entitlement
+  // row, so a one-month grant from May counted as owned forever.
+  //
+  // The rows themselves are untouched — they are the record of a real purchase
+  // and still appear under All Purchases.
+  const currentSlugs = activeEntitlementSlugs(data.entitlements)
+  const ownedSlugs = new Set([...currentSlugs].map((slug) => baseSlug(slug)))
+
+  // Everything ever held, for telling "expired" apart from "never bought".
+  const everSlugs = new Set(data.entitlements.map((row) => baseSlug(entitlementSlug(row))))
+
   const ownedCount = perkCards.filter((perk) => perk.slugs.some((slug) => ownedSlugs.has(slug))).length
 
   return (
@@ -520,6 +533,10 @@ async function SignedInAccount() {
             <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
               {perkCards.map((perk) => {
                 const unlocked = perk.slugs.some((slug) => ownedSlugs.has(slug))
+                // Held once, but not now. Worth distinguishing from "Locked":
+                // a lapsed supporter should see that their perk ended, not a
+                // card implying they never bought it.
+                const lapsed = !unlocked && perk.slugs.some((slug) => everSlugs.has(slug))
                 const Icon = perk.icon
 
                 return (
@@ -548,8 +565,8 @@ async function SignedInAccount() {
                         <span className="flex h-11 w-11 items-center justify-center border-2 border-[#00060e] bg-gradient-to-b from-[#1a2638] to-[#0a1424] shadow-[inset_0_2px_0_rgba(255,255,255,0.08),inset_0_-2px_0_rgba(0,0,0,0.3)]">
                           <Icon size={22} />
                         </span>
-                        <Badge variant={unlocked ? "success" : "outline"}>
-                          {unlocked ? "Owned" : "Locked"}
+                        <Badge variant={unlocked ? "success" : lapsed ? "warning" : "outline"}>
+                          {unlocked ? "Owned" : lapsed ? "Expired" : "Locked"}
                         </Badge>
                       </div>
                       <CardTitle className="display-font text-2xl">{perk.title}</CardTitle>
