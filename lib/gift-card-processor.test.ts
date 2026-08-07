@@ -11,6 +11,8 @@ import { mock, test } from "node:test"
 
 register("./test-alias-hook.mjs", import.meta.url)
 
+const { isStripeRequest, isResendRequest } = await import("../tests/support/request-host.ts")
+
 mock.module("server-only", { namedExports: {}, defaultExport: {} })
 
 const { createClaimCredential } = await import("./gift-card/crypto.ts")
@@ -87,7 +89,7 @@ const { processEmailQueue } = await import("./email/processor.ts")
 
 function fakeTransport(ok = true) {
   return (async (url: unknown, init?: RequestInit) => {
-    if (!String(url).includes("api.resend.com")) {
+    if (!isResendRequest(url)) {
       throw new Error("unexpected host")
     }
     const body = JSON.parse(String(init?.body)) as {

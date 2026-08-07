@@ -12,6 +12,8 @@ import { mock, test } from "node:test"
 
 register("./test-alias-hook.mjs", import.meta.url)
 
+const { isStripeRequest, isResendRequest } = await import("../tests/support/request-host.ts")
+
 const { createPgSupabaseClient, sql } = await import("../tests/support/pg-supabase.mjs")
 
 const DB = process.env.RF_ABUSE_DB ?? "rf_abuse_route"
@@ -93,7 +95,7 @@ mock.module("@/lib/store-server", {
 })
 
 globalThis.fetch = (async (url: unknown) => {
-  if (String(url).includes("api.stripe.com")) {
+  if (isStripeRequest(url)) {
     stripe.calls++
     return { ok: true, json: async () => ({ id: "cs_1", url: "https://checkout.stripe.com/x", expires_at: 1 }) } as never
   }

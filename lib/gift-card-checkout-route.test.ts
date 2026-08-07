@@ -10,6 +10,8 @@ import { mock, test } from "node:test"
 
 register("./test-alias-hook.mjs", import.meta.url)
 
+const { isStripeRequest, isResendRequest } = await import("../tests/support/request-host.ts")
+
 const ATTEMPT = "3f2504e0-4f89-41d3-9a0c-0305e82c3301"
 const ORDER_ID = "11111111-2222-4333-8444-555555555555"
 
@@ -141,7 +143,7 @@ mock.module("@/lib/store-server", {
 Object.assign(process.env, ENV)
 
 globalThis.fetch = (async (url: unknown, init?: RequestInit) => {
-  if (String(url).includes("api.stripe.com")) {
+  if (isStripeRequest(url)) {
     state.stripeBodies.push(String(init?.body))
     if (!state.stripeOk) {
       return { ok: false, status: 402, json: async () => ({ error: { type: "card_error", code: "declined" } }) }

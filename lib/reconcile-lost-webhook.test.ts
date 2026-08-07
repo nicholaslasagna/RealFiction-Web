@@ -16,6 +16,8 @@ import { mock, test } from "node:test"
 
 register("./test-alias-hook.mjs", import.meta.url)
 
+const { isStripeRequest, isResendRequest } = await import("../tests/support/request-host.ts")
+
 const { createPgSupabaseClient, rows, sql } = await import("../tests/support/pg-supabase.mjs")
 
 const DB = process.env.RF_RECONCILE_DB ?? "rf_reconcile_lost"
@@ -43,7 +45,7 @@ globalThis.fetch = (async (url: unknown, init?: RequestInit) => {
     // RETRIEVAL: what reconciliation pulls.
     return { ok: true, status: 200, json: async () => stripe.session } as never
   }
-  if (target.includes("api.stripe.com")) {
+  if (isStripeRequest(target)) {
     stripe.requests.push(String(init?.body))
     stripe.lastSessionId = `cs_rec_${++stripe.counter}`
     return {
@@ -51,7 +53,7 @@ globalThis.fetch = (async (url: unknown, init?: RequestInit) => {
       json: async () => ({ id: stripe.lastSessionId, url: "https://checkout.stripe.com/x", expires_at: 2_000_000_000 })
     } as never
   }
-  if (target.includes("api.resend.com")) {
+  if (isResendRequest(target)) {
     return { ok: true, status: 200, json: async () => ({ id: "m1" }), text: async () => "{}" } as never
   }
   throw new Error(`unexpected network call: ${target}`)

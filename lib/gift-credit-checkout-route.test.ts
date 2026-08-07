@@ -16,6 +16,8 @@ import { mock, test } from "node:test"
 
 register("./test-alias-hook.mjs", import.meta.url)
 
+const { isStripeRequest, isResendRequest } = await import("../tests/support/request-host.ts")
+
 const { createPgSupabaseClient, rows, sql } = await import("../tests/support/pg-supabase.mjs")
 
 const DB = process.env.RF_CHECKOUT_DB ?? "rf_checkout_route"
@@ -57,7 +59,7 @@ mock.module("@/lib/supabase/service-role", {
 const stripe = { requests: [] as string[], ok: true }
 
 globalThis.fetch = (async (url: unknown, init?: RequestInit) => {
-  if (String(url).includes("api.stripe.com")) {
+  if (isStripeRequest(url)) {
     stripe.requests.push(String(init?.body))
     if (!stripe.ok) {
       return { ok: false, status: 402, json: async () => ({ error: { type: "card_error", code: "declined" } }) }

@@ -11,6 +11,8 @@ import { mock, test } from "node:test"
 // Teach Node the "@/..." alias so the real route module can be imported.
 register("./test-alias-hook.mjs", import.meta.url)
 
+const { isStripeRequest, isResendRequest } = await import("../tests/support/request-host.ts")
+
 // Effects we must prove did NOT happen.
 let alreadyOwned: string[] = []
 let upgradeQuote: Record<string, unknown> | null = {
@@ -174,7 +176,7 @@ mock.module("@/lib/supabase/server", {
 
 // Any Stripe traffic would go through global fetch; count and fail loudly.
 globalThis.fetch = (async (input: unknown) => {
-  if (String(input).includes("api.stripe.com")) {
+  if (isStripeRequest(input)) {
     calls.stripeFetch++
   }
   throw new Error("no network in tests")

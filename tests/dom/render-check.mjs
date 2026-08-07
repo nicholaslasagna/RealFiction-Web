@@ -17,6 +17,8 @@ import assert from "node:assert/strict"
 import { spawn } from "node:child_process"
 import { setTimeout as delay } from "node:timers/promises"
 
+import { parse } from "parse5"
+
 // Next refuses to run two dev servers for the same directory, so reuse one if a
 // developer already has it open and start our own otherwise.
 const PORT = Number(process.env.RF_DOM_PORT ?? 3210)
@@ -43,19 +45,59 @@ function check(name, fn) {
   }
 }
 
-/** Visible text of the served HTML, tags stripped, entities decoded. */
+/**
+ * Visible text of the served HTML.
+ *
+ * PARSED, NOT PATTERN-MATCHED
+ * ===========================
+ * This used a chain of regexes and CodeQL was right about both of them:
+ *
+ *   /<[^>]+>/g            the textbook bad tag filter. A `>` inside an
+ *                         attribute value ends the "tag" early, so
+ *                         `<a title="a>b">hidden` leaks `b">hidden` into the
+ *                         text — and an assertion that something does NOT
+ *                         appear would then pass for the wrong reason.
+ *
+ *   &#x27; then &amp;     entities decoded in several passes, with `&amp;`
+ *                         LAST, so `&amp;lt;` decodes to `&lt;` — one round of
+ *                         unescaping too many, on content this harness exists
+ *                         to check for injection.
+ *
+ * parse5 does the whole job correctly and once: it is the HTML5 reference
+ * parser, it resolves entities per spec exactly one time, and it puts script
+ * and style contents in nodes we can simply not visit rather than in text we
+ * have to strip back out.
+ */
 function text(html) {
-  return html
-    .replace(/<script[\s\S]*?<\/script>/g, " ")
-    .replace(/<style[\s\S]*?<\/style>/g, " ")
-    .replace(/<[^>]+>/g, "\n")
-    .replace(/&#x27;/g, "'")
-    .replace(/&amp;/g, "&")
-    .replace(/&quot;/g, '"')
-    .replace(/&nbsp;/g, " ")
-    // React splits adjacent text nodes with <!-- -->, so a rendered "-$12.99"
-    // arrives as "-" and "$12.99" on separate lines. Rejoin a lone sign.
-    .replace(/(^|\n)-\s*\n\s*\$/g, "$1-$")
+  const parts = []
+
+  const visit = (node) => {
+    // Never descend into these. Their contents are code, not visible text, and
+    // the old regex removing them was the other half of the tag-filter bug.
+    if (node.nodeName === "script" || node.nodeName === "style") {
+      return
+    }
+    if (node.nodeName === "#text") {
+      // Already entity-decoded by the parser, exactly once.
+      parts.push(node.value)
+      return
+    }
+    for (const child of node.childNodes ?? []) {
+      visit(child)
+    }
+  }
+
+  visit(parse(html))
+
+  return (
+    // One newline per node boundary, matching what the old `<[^>]+>` -> "\n"
+    // produced, so every existing assertion keeps working unchanged.
+    parts
+      .join("\n")
+      // React splits adjacent text nodes with <!-- -->, so a rendered "-$12.99"
+      // arrives as "-" and "$12.99" on separate lines. Rejoin a lone sign.
+      .replace(/(^|\n)-\s*\n\s*\$/g, "$1-$")
+  )
 }
 
 /** The accounting rows of one purchase card, in document order. */

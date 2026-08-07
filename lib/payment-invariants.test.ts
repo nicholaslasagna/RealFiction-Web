@@ -67,7 +67,18 @@ test("docs never instruct the wrong webhook path", () => {
 
 test("docs document the canonical webhook path and all nine production events", () => {
   const setup = readFileSync(path.join(repoRoot, "docs", "STRIPE_SETUP.md"), "utf8")
-  assert.match(setup, new RegExp(CANONICAL_WEBHOOK_PATH.replace(/\//g, "\\/")))
+
+  // A plain substring check, not a regex.
+  //
+  // This built `new RegExp(CANONICAL_WEBHOOK_PATH.replace(/\//g, "\\/"))` —
+  // a hand-rolled escaping scheme that escaped exactly one metacharacter and
+  // left `.`, `?`, `+`, `(` and the rest live. CodeQL called that incomplete
+  // sanitization and was right. The assertion never wanted pattern matching in
+  // the first place: it wants to know the literal path appears in the document.
+  assert.ok(
+    setup.includes(CANONICAL_WEBHOOK_PATH),
+    `STRIPE_SETUP.md must document ${CANONICAL_WEBHOOK_PATH}`
+  )
 
   for (const event of [
     "checkout.session.completed",
@@ -80,7 +91,8 @@ test("docs document the canonical webhook path and all nine production events", 
     "charge.dispute.created",
     "charge.dispute.closed"
   ]) {
-    assert.match(setup, new RegExp(event.replace(/\./g, "\\.")), `STRIPE_SETUP.md must document ${event}`)
+    // Same reasoning: the event name is a literal, so compare it as one.
+    assert.ok(setup.includes(event), `STRIPE_SETUP.md must document ${event}`)
   }
 })
 

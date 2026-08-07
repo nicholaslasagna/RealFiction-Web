@@ -16,6 +16,8 @@ import { mock, test } from "node:test"
 
 register("./test-alias-hook.mjs", import.meta.url)
 
+const { isStripeRequest, isResendRequest } = await import("../tests/support/request-host.ts")
+
 const { createPgSupabaseClient, rows, sql } = await import("../tests/support/pg-supabase.mjs")
 
 const DB = process.env.RF_INTEGRATION_DB ?? "rf_gift_integration"
@@ -54,7 +56,7 @@ const logLines: string[] = []
 
 globalThis.fetch = (async (url: unknown, init?: RequestInit) => {
   const target = String(url)
-  if (target.includes("api.stripe.com")) {
+  if (isStripeRequest(target)) {
     stripe.requests.push(String(init?.body))
     // A UNIQUE session id per call. Stripe never reuses one, and
     // `checkout_attempts_session_idx` is unique — returning a constant made the
@@ -65,7 +67,7 @@ globalThis.fetch = (async (url: unknown, init?: RequestInit) => {
       json: async () => ({ id: stripe.lastSessionId, url: "https://checkout.stripe.com/x", expires_at: 2_000_000_000 })
     }
   }
-  if (target.includes("api.resend.com")) {
+  if (isResendRequest(target)) {
     const body = JSON.parse(String(init?.body)) as { to: string[] | string; subject: string; text: string; html: string }
     emails.push({
       to: Array.isArray(body.to) ? body.to[0] : body.to,

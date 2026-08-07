@@ -6,6 +6,8 @@ import { mock, test } from "node:test"
 
 register("./test-alias-hook.mjs", import.meta.url)
 
+const { isStripeRequest, isResendRequest } = await import("../tests/support/request-host.ts")
+
 const calls = { resendFetch: 0, stripeFetch: 0, enqueue: 0, fulfil: 0 }
 let enqueuedKeys: string[] = []
 let reviews: string[] = []
@@ -87,8 +89,8 @@ mock.module("@/lib/store-server", {
 // Any outbound HTTP at all is a failure of the architecture.
 globalThis.fetch = (async (input: unknown) => {
   const url = String(input)
-  if (url.includes("api.resend.com")) calls.resendFetch++
-  if (url.includes("api.stripe.com")) calls.stripeFetch++
+  if (isResendRequest(url)) calls.resendFetch++
+  if (isStripeRequest(url)) calls.stripeFetch++
   throw new Error("no network during webhook handling")
 }) as typeof fetch
 
