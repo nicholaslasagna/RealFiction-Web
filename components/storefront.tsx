@@ -1,5 +1,6 @@
 "use client"
 
+import { GIFT_CARD_DENOMINATIONS } from "@/lib/gift-card/checkout-policy"
 import Image from "next/image"
 import Link from "next/link"
 import { Minus, Plus, ShoppingCart, Trash2 } from "lucide-react"
@@ -176,10 +177,7 @@ export function Storefront({
         .map((c) => ({
           meta: c,
           id: c.id,
-          products: c.id === "gift-cards" ? [] : storeProducts.filter((p) => p.category === c.id),
-          // Deliberately empty: gift cards render as a single coming-soon
-          // panel, never as purchasable cards.
-          cards: []
+          products: c.id === "gift-cards" ? [] : storeProducts.filter((p) => p.category === c.id)
         }))
         .filter((s) => s.products.length > 0 || s.id === "gift-cards"),
     [category]
@@ -418,7 +416,17 @@ export function Storefront({
           {sections.map((section) => {
             const SectionIcon = section.meta.icon
             const isGiftCards = section.meta.id === "gift-cards"
-            const count = isGiftCards ? section.cards.length : section.products.length
+            // Gift cards have no rows in `storeProducts` — the purchase form
+            // renders straight from GIFT_CARD_DENOMINATIONS — so the count has
+            // to come from the same list the form does, or the badge disagrees
+            // with what is on screen. It read a hardcoded empty array from when
+            // this section could only ever be Coming Soon, which is why an
+            // enabled storefront showed "Gift Cards 0" above nine denominations.
+            const count = isGiftCards
+              ? giftCardsEnabled
+                ? GIFT_CARD_DENOMINATIONS.length
+                : 0
+              : section.products.length
 
             return (
               <section key={section.meta.id} className="space-y-4">

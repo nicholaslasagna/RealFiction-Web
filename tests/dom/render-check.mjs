@@ -442,6 +442,47 @@ try {
     assert.match(visible, /Not redeemable for cash except where required by law/i)
   })
 
+  check("the ENABLED gift-card section counts NINE denominations", () => {
+    // The regression: this badge read a hardcoded empty array left over from
+    // when the section could only ever be Coming Soon, so an enabled storefront
+    // showed "Gift Cards 0" directly above nine purchasable amounts.
+    const visible = text(giftStore.html)
+    assert.match(
+      visible,
+      /Gift Cards\s*9\b/,
+      `expected "Gift Cards 9" in the enabled storefront, got: ${visible.slice(0, 400)}`
+    )
+    assert.ok(!/Gift Cards\s*0\b/.test(visible), 'the section still reports "Gift Cards 0"')
+  })
+
+  check("the count matches the number of amounts actually rendered", () => {
+    // Asserting the badge alone would still pass if the form rendered a
+    // different number of amounts, so tie the two together.
+    const amounts = [...giftStore.html.matchAll(/role="radio"/g)].length
+    assert.equal(amounts, 9, `expected 9 selectable amounts, found ${amounts}`)
+  })
+
+  check("each denomination shows its card art", () => {
+    for (const cents of [5, 10, 15, 20, 25, 30, 50, 75, 100]) {
+      assert.match(
+        giftStore.html,
+        new RegExp(`/images/giftcard-${cents}\\.png`),
+        `giftcard-${cents}.png is not rendered`
+      )
+    }
+  })
+
+  check("the card art is DECORATIVE, so the price is not announced twice", () => {
+    // Each image sits inside a radio whose accessible name is already the
+    // amount. A non-empty alt would make a screen reader say "$25" twice.
+    const giftImages = [...giftStore.html.matchAll(/<img[^>]*giftcard-\d+\.png[^>]*>/g)].map((m) => m[0])
+    assert.equal(giftImages.length, 9, `expected 9 gift-card images, found ${giftImages.length}`)
+    for (const img of giftImages) {
+      assert.match(img, /alt=""/, `gift-card image must have an empty alt: ${img}`)
+      assert.match(img, /aria-hidden="true"/, `gift-card image must be aria-hidden: ${img}`)
+    }
+  })
+
   check("the gift-card form links to working terms and support", () => {
     assert.match(giftStore.html, /href="\/legal\/gift-cards"/)
     assert.match(giftStore.html, /mailto:support@realfiction\.live/)

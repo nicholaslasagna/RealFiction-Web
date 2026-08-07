@@ -51,3 +51,32 @@ test.describe("store with gift cards disabled", () => {
     expect(refusal.status()).toBe(503)
   })
 })
+
+// ===========================================================================
+// The section count, with the feature OFF
+//
+// Counterpart to the enabled-side DOM checks. The count fix must not leak a
+// purchasable-looking number into the Coming Soon state: showing "Gift Cards 9"
+// above a panel that says they are not on sale would advertise nine products
+// that cannot be bought.
+// ===========================================================================
+
+test("the DISABLED gift-card section counts 0 and keeps Coming Soon", async ({ page }) => {
+  await page.goto("/store")
+
+  const body = await page.locator("body").innerText()
+
+  expect(body, "Coming soon panel is missing").toMatch(/Coming soon/i)
+  expect(body, "a disabled section must not advertise nine denominations").not.toMatch(
+    /Gift Cards\s*9\b/
+  )
+
+  // No gift-card purchase affordance: no amount picker, no card art.
+  //
+  // Scoped to the gift-card picker specifically. The page legitimately has
+  // seven other radio groups — the 1m/3m/6m/12m duration pickers on the
+  // ordinary products — and asserting on `[role="radiogroup"]` globally would
+  // fail on those rather than on anything to do with gift cards.
+  await expect(page.getByText("Choose an amount")).toHaveCount(0)
+  await expect(page.locator('img[src*="giftcard-"]')).toHaveCount(0)
+})

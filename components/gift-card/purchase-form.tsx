@@ -94,7 +94,7 @@ export function GiftCardPurchaseForm({ buyerEmail }: { buyerEmail: string | null
         </legend>
         {/* A radio group, not buttons: arrow keys move between amounts, which is
             what a screen-reader or keyboard user expects of a single choice. */}
-        <div role="radiogroup" aria-labelledby={ids.amount} className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-5">
+        <div role="radiogroup" aria-labelledby={ids.amount} className="mt-3 grid grid-cols-3 gap-3 sm:grid-cols-5">
           {GIFT_CARD_DENOMINATIONS.map((denomination) => {
             const active = denomination.slug === slug
             return (
@@ -104,13 +104,28 @@ export function GiftCardPurchaseForm({ buyerEmail }: { buyerEmail: string | null
                 role="radio"
                 aria-checked={active}
                 onClick={() => setSlug(denomination.slug)}
-                className={`min-h-11 rounded-md border px-3 py-2 text-sm font-semibold tabular-nums transition ${
+                className={`group min-h-11 overflow-hidden rounded-md border transition ${
                   active
                     ? "border-amber-200/60 bg-amber-200/12 text-amber-100"
                     : "border-white/12 bg-black/24 text-muted-foreground hover:border-amber-200/30"
                 }`}
               >
-                {money(denomination.faceValueCents)}
+                {/* The card art. `alt=""` and aria-hidden on purpose: the price
+                    below is the accessible name, and a second announcement of
+                    "$25 gift card" would make a screen reader say it twice.
+                    The image is decoration on top of a labelled control. */}
+                <img
+                  src={`/images/${denomination.slug.replace("gift-card-", "giftcard-")}.png`}
+                  alt=""
+                  aria-hidden="true"
+                  loading="lazy"
+                  width={494}
+                  height={768}
+                  className={`h-auto w-full transition ${active ? "opacity-100" : "opacity-80 group-hover:opacity-100"}`}
+                />
+                <span className="block px-3 py-2 text-sm font-semibold tabular-nums">
+                  {money(denomination.faceValueCents)}
+                </span>
               </button>
             )
           })}
