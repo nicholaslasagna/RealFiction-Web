@@ -30,9 +30,16 @@ export default {
     // Both jobs are registered with ctx.waitUntil inside, so neither is
     // abandoned when this handler returns.
     runScheduledJobs(controller, env, ctx, {
-      // The SAME dispatch the Stripe webhook calls. Passed in rather than
-      // imported by lib/worker-scheduled.ts so that module stays free of
-      // `server-only` and remains directly executable by tests.
+      // The SAME dispatch the Stripe webhook calls. Injected rather than
+      // imported by lib/worker-scheduled.ts so that module stays directly
+      // executable by tests.
+      //
+      // The dispatch and everything it reaches must stay free of the
+      // `server-only` marker: wrangler bundles this entry without the
+      // `react-server` export condition, so the marker resolves to a module
+      // that throws on import and the deploy fails validation (Cloudflare
+      // 10021) before any request or cron runs. lib/server-boundary.test.ts
+      // fails the suite if that marker ever comes back.
       fulfil: (orderId, facts) =>
         fulfilVerifiedPayment(orderId, { ...facts }, env as Record<string, string | undefined>)
     })

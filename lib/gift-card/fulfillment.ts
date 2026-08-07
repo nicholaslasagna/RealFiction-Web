@@ -18,7 +18,18 @@
 // afterwards, a failure between the two would leave paid-for value with no way
 // to claim it — value the customer owns and cannot reach.
 
-import "server-only"
+// NO `server-only` MARKER, DELIBERATELY.
+//
+// This module is reachable from the Cloudflare Worker entry (worker/index.ts)
+// as well as from Next server code. Wrangler bundles that entry WITHOUT the
+// `react-server` export condition, so `server-only` resolves to its throwing
+// `index.js` rather than the empty stub Next resolves it to — and the Worker
+// then fails deploy validation with Cloudflare error 10021 before it ever runs.
+//
+// The boundary this marker used to provide is enforced instead by
+// lib/server-boundary.test.ts, which fails if any `"use client"` module can
+// reach a privileged module. That check covers the Worker graph too, which the
+// marker never could.
 
 import { createClaimCredential, type GiftCardCryptoEnv } from "./crypto"
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role"
