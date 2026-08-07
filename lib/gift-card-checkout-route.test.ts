@@ -35,6 +35,7 @@ const state = {
   cancelled: [] as string[],
   closedAttempts: [] as string[],
   attachedSessions: [] as string[],
+  orderSessions: [] as { orderId: string; sessionId: string | null }[],
   metadata: {} as Record<string, unknown>,
   stripeBodies: [] as string[],
   stripeOk: true,
@@ -113,6 +114,11 @@ mock.module("@/lib/store-server", {
       state.attachedSessions.push(input.sessionId)
       return true
     },
+    // Reconciliation selects only orders carrying a session id, so the route
+    // persists it on the order as well as the attempt.
+    attachProviderSession: async (orderId: string, sessionId: string | null) => {
+      state.orderSessions.push({ orderId, sessionId })
+    },
     closeCheckoutAttempt: async (claimId: string) => {
       state.closedAttempts.push(claimId)
     },
@@ -146,6 +152,7 @@ function reset(overrides: Partial<typeof state> = {}) {
   state.cancelled = []
   state.closedAttempts = []
   state.attachedSessions = []
+  state.orderSessions = []
   state.metadata = {}
   state.stripeBodies = []
   state.stripeOk = true
@@ -187,6 +194,11 @@ test("a valid $25 request returns a Stripe Checkout URL", async () => {
   assert.equal(body.checkoutUrl, "https://checkout.stripe.com/x")
   assert.equal(body.orderId, ORDER_ID)
   assert.deepEqual(state.attachedSessions, ["cs_gift_1"])
+  assert.deepEqual(
+    state.orderSessions,
+    [{ orderId: ORDER_ID, sessionId: "cs_gift_1" }],
+    "the session is persisted on the ORDER too, or reconciliation could never find it"
+  )
   assert.deepEqual(state.cancelled, [], "nothing was cleaned up on success")
 })
 

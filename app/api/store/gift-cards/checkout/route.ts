@@ -29,6 +29,7 @@ import { safeJsonError } from "@/lib/security"
 import {
   attachCheckoutAttemptOrder,
   attachCheckoutSession,
+  attachProviderSession,
   cancelOrder,
   claimCheckoutAttempt,
   closeCheckoutAttempt,
@@ -218,6 +219,12 @@ export async function POST(request: Request) {
       // displace it.
       throw new Error("A different checkout session is already attached.")
     }
+
+    // Persist the session on the ORDER as well, exactly as ordinary checkout
+    // does. Reconciliation selects only orders carrying a session id — without
+    // this a gift-card payment whose webhook was lost could never be recovered,
+    // because nothing would know which session to ask Stripe about.
+    await attachProviderSession(orderId, session.providerSessionId)
 
     console.info("gift_card_checkout_created", { order_id: orderId, slug: intent.slug })
 

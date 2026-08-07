@@ -11,10 +11,11 @@
 // rejection inside a scheduled event.
 
 import { processEmailQueue, type ProcessorEnv } from "./email/processor"
+import { reconcilePendingStripeOrders, type ReconcileEnv } from "./store/reconcile-pending"
 
 export type ScheduledController = { scheduledTime: number; cron: string }
 export type ScheduledCtx = { waitUntil(promise: Promise<unknown>): void }
-export type ScheduledEnv = ProcessorEnv
+export type ScheduledEnv = ProcessorEnv & ReconcileEnv
 
 /**
  * Registers the scheduled work for the Worker's lifetime.
@@ -28,9 +29,22 @@ export function runScheduledJobs(
   controller: ScheduledController,
   env: ScheduledEnv,
   ctx: ScheduledCtx,
-  deps: { processEmailQueue?: typeof processEmailQueue } = {}
+  deps: {
+    processEmailQueue?: typeof processEmailQueue
+    reconcilePendingStripeOrders?: typeof reconcilePendingStripeOrders
+    /**
+     * The shared fulfilment dispatch. Injected because it is `server-only` and
+     * this module is executed directly by tests; the Worker entry supplies the
+     * real one.
+     */
+    fulfil?: (
+      orderId: string,
+      facts: { paymentIntentId: string | null; chargeId: string | null; receiptUrl: string | null }
+    ) => Promise<unknown>
+  } = {}
 ): Promise<unknown>[] {
   const drainEmails = deps.processEmailQueue ?? processEmailQueue
+  const reconcile = deps.reconcilePendingStripeOrders ?? reconcilePendingStripeOrders
 
   // `env` is passed explicitly: `process.env` is not populated in a scheduled
   // invocation, so anything reading it there sees undefined.
@@ -46,7 +60,29 @@ export function runScheduledJobs(
       return null
     })
 
-  const registered = [emails]
+  // Shares the existing Cron rather than adding a second one. A SEPARATE
+  // promise, deliberately: a reconciliation failure must not stop the email
+  // queue draining, and an email failure must not stop a paid-but-unfulfilled
+  // order being recovered. Promise.all would couple them.
+  const reconciliation = deps.fulfil
+    ? reconcile(env, { workerId: `cron-${controller.scheduledTime}`, fulfil: deps.fulfil })
+        .then((result) => {
+          if (result.selected > 0) {
+            // Counts and categories only — no session ids, customers, or secrets.
+            console.info("reconciliation_summary", result)
+          }
+          return result
+        })
+        .catch((error) => {
+          console.error(
+            "reconciliation_failed",
+            error instanceof Error ? error.message : "unknown"
+          )
+          return null
+        })
+    : Promise.resolve(null)
+
+  const registered = [emails, reconciliation]
   for (const promise of registered) {
     ctx.waitUntil(promise)
   }

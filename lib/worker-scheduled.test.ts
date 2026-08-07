@@ -48,8 +48,8 @@ test("the drain is registered with ctx.waitUntil, not merely started", async () 
 
   // Cloudflare kills the event when the handler returns unless the work is
   // registered.
-  assert.equal(registered.length, 1)
-  assert.equal(returned.length, 1)
+  assert.equal(registered.length, 2, "email drain and reconciliation are registered separately")
+  assert.equal(returned.length, 2)
 
   await Promise.all(registered)
   assert.equal(emails, 1)
@@ -113,7 +113,7 @@ const workerSource = readFileSync(path.join(repoRoot, "worker", "index.ts"), "ut
 const wrangler = readFileSync(path.join(repoRoot, "wrangler.toml"), "utf8")
 
 test("the deployed entry delegates to the function these tests executed", () => {
-  assert.match(workerSource, /runScheduledJobs\(controller, env, ctx\)/)
+  assert.match(workerSource, /runScheduledJobs\(controller, env, ctx/)
   assert.match(workerSource, /import openNextWorker from "\.\.\/\.open-next\/worker\.js"/)
   assert.match(workerSource, /fetch:\s*openNextWorker\.fetch/)
 })

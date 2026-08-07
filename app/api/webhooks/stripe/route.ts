@@ -22,7 +22,6 @@ import {
 import {
   enqueuePartialRefundOutbox,
   findOrderIdByPaymentId,
-  fulfillPaidOrderWithOutbox,
   getOrderExpectation,
   getOrderPaymentContext,
   markOrderUnpaidClosed,
@@ -33,7 +32,7 @@ import {
   revokeOrderWithRefundOutbox
 } from "@/lib/store-server"
 import { verifyPaymentFacts, type VerifiedPaymentFacts } from "@/lib/store/payment-facts"
-import { isGiftCardOrder, issueGiftCardForPaidOrder } from "@/lib/gift-card/fulfillment"
+import { fulfilVerifiedPayment } from "@/lib/store/fulfil-verified-payment"
 
 function toHex(buffer: ArrayBuffer) {
   return [...new Uint8Array(buffer)].map((byte) => byte.toString(16).padStart(2, "0")).join("")
@@ -259,25 +258,18 @@ export async function POST(request: Request) {
         // grants entitlements and queues a RealCore reward. Both are one
         // transaction, both are idempotent, and both throw on failure so Stripe
         // redelivers rather than receiving a 2xx that lost the work.
-        if (await isGiftCardOrder(action.orderId)) {
-          await issueGiftCardForPaidOrder(
-            action.orderId,
-            { paymentIntentId: facts.paymentIntentId, chargeId: facts.chargeId },
-            process.env
-          )
-          break
-        }
-
-        // ONE transaction: payment refs + fulfilment + the confirmation outbox
-        // row. It throws on failure, which the catch below turns into a 500 so
-        // Stripe redelivers — never a 2xx that silently lost the outbox
-        // operation. No Resend call happens here; a scheduled worker sends.
-        // Reconciliation calls this SAME database function, never a copy of it.
-        await fulfillPaidOrderWithOutbox(action.orderId, {
-          paymentIntentId: facts.paymentIntentId,
-          chargeId: facts.chargeId,
-          receiptUrl: facts.receiptUrl
-        })
+        // Reconciliation calls this SAME function, never a copy of it. Each
+        // path establishes authenticity its own way — signature here, an
+        // authenticated pull there — and then they converge completely.
+        await fulfilVerifiedPayment(
+          action.orderId,
+          {
+            paymentIntentId: facts.paymentIntentId,
+            chargeId: facts.chargeId,
+            receiptUrl: facts.receiptUrl
+          },
+          process.env
+        )
         break
       }
 

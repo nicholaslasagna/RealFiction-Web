@@ -13,6 +13,7 @@
 // The body lives in lib/worker-scheduled.ts so it can be executed by tests; this
 // file must stay thin enough to be obviously correct by reading it.
 import { runScheduledJobs, type ScheduledCtx, type ScheduledEnv } from "../lib/worker-scheduled"
+import { fulfilVerifiedPayment } from "../lib/store/fulfil-verified-payment"
 
 // Re-export the Durable Object classes OpenNext generates, or the deployment
 // loses its cache/queue bindings.
@@ -28,6 +29,12 @@ export default {
   async scheduled(controller: ScheduledController, env: ScheduledEnv, ctx: ScheduledCtx) {
     // Both jobs are registered with ctx.waitUntil inside, so neither is
     // abandoned when this handler returns.
-    runScheduledJobs(controller, env, ctx)
+    runScheduledJobs(controller, env, ctx, {
+      // The SAME dispatch the Stripe webhook calls. Passed in rather than
+      // imported by lib/worker-scheduled.ts so that module stays free of
+      // `server-only` and remains directly executable by tests.
+      fulfil: (orderId, facts) =>
+        fulfilVerifiedPayment(orderId, { ...facts }, env as Record<string, string | undefined>)
+    })
   }
 }

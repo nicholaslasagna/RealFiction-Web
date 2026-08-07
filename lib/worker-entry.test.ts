@@ -27,7 +27,7 @@ test("the entry forwards fetch to the generated OpenNext handler", () => {
 test("the entry exposes scheduled() and passes runtime env explicitly", () => {
   assert.match(workerSource, /async scheduled\(/)
   // process.env is not populated in a scheduled invocation, so env must flow in.
-  assert.match(workerSource, /runScheduledJobs\(controller, env, ctx\)/)
+  assert.match(workerSource, /runScheduledJobs\(controller, env, ctx/)
 })
 
 // The waitUntil registration and failure isolation are EXECUTED in
