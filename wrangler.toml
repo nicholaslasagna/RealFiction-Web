@@ -3,6 +3,24 @@ main = "worker/index.ts"
 compatibility_date = "2026-05-20"
 compatibility_flags = ["nodejs_compat", "global_fetch_strictly_public"]
 
+# Do not delete runtime plaintext vars that are not listed in this file.
+#
+# Wrangler's DEFAULT is to replace the Worker's variables with exactly the
+# `[vars]` block below, deleting anything else. That silently removed
+# dashboard-managed plaintext variables on every deploy — confirmed in the
+# dashboard, where manually added vars disappeared after a deploy while secrets
+# survived, because secrets are managed through a separate API that `deploy`
+# never touches.
+#
+# With this set, `[vars]` below is still applied on every deploy; the difference
+# is that variables NOT named here are left alone instead of being removed.
+#
+# NOTE: this makes the dashboard a real source of truth for some runtime values,
+# so a variable that matters can no longer be found by reading this file alone.
+# Anything security-relevant should be a SECRET (`wrangler secret put`), not a
+# plaintext var, precisely so it is neither readable nor accidentally deletable.
+keep_vars = true
+
 # Drains the transactional email queue. The Stripe webhook only enqueues; this
 # is what actually talks to Resend, so no webhook ever waits on a mail provider.
 [triggers]
