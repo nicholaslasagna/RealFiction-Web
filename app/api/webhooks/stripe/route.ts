@@ -33,6 +33,12 @@ import {
 } from "@/lib/store-server"
 import { verifyPaymentFacts, type VerifiedPaymentFacts } from "@/lib/store/payment-facts"
 import { fulfilVerifiedPayment } from "@/lib/store/fulfil-verified-payment"
+import {
+  giftCardForOrder,
+  handleGiftCardDisputeClosed,
+  handleGiftCardDisputeCreated,
+  handleGiftCardRefundEvent
+} from "@/lib/gift-card/refunds"
 
 function toHex(buffer: ArrayBuffer) {
   return [...new Uint8Array(buffer)].map((byte) => byte.toString(16).padStart(2, "0")).join("")
@@ -292,6 +298,50 @@ export async function POST(request: Request) {
       case "revoke": {
         const orderId = action.orderId ?? (await resolveOrderId(action.paymentIntentId, object))
 
+        // ---- GIFT-CARD DISPATCH, BEFORE ANY ORDINARY REVOCATION ----------
+        // `revoke_order` reverses entitlements and queues RealCore rewards. A
+        // gift card has neither, and is `consumable`, so it would do almost
+        // nothing — crucially it would NOT invalidate the claim credential,
+        // void the card, or reverse the stored value. Refunding a claimed card
+        // through it returns the money and leaves the credit spendable.
+        //
+        // Classification asks the DATABASE which card this order issued, never
+        // event metadata, and FAILS CLOSED: if we cannot tell, the ordinary
+        // path must not run.
+        if (orderId) {
+          const giftCardId = await giftCardForOrder(orderId)
+
+          if (giftCardId) {
+            const amount = Number(object.amount ?? 0)
+
+            if (event.type === "charge.dispute.closed") {
+              // A LOST closure classifies as `revoke`/chargeback, same as a new
+              // dispute — so type must be checked here or a closure would be
+              // handled as a fresh dispute and never resolve the freeze.
+              await handleGiftCardDisputeClosed({
+                giftCardId,
+                providerEventId: event.id,
+                status: typeof object.status === "string" ? object.status : "lost"
+              })
+            } else if (action.mode === "chargeback") {
+              await handleGiftCardDisputeCreated({
+                giftCardId,
+                providerEventId: event.id,
+                disputedCents: Number.isFinite(amount) ? amount : 0
+              })
+            } else if (typeof object.id === "string" && object.id) {
+              await handleGiftCardRefundEvent({
+                giftCardId,
+                providerRefundId: object.id,
+                refundedCents: Number.isFinite(amount) ? amount : 0
+              })
+            }
+
+            await markWebhookEventProcessed("stripe", event.id)
+            return Response.json({ received: true, gift_card: true })
+          }
+        }
+
         if (!orderId) {
           await recordPaymentReview({
             providerEventId: event.id,
@@ -400,6 +450,21 @@ export async function POST(request: Request) {
 
       case "manual_review": {
         const orderId = await resolveOrderId(action.paymentIntentId, object)
+
+        // A dispute CLOSING on a gift-card purchase decides whether the frozen
+        // value comes back. Only an authoritative win unfreezes.
+        if (orderId && action.reason.startsWith("dispute_closed")) {
+          const giftCardId = await giftCardForOrder(orderId)
+          if (giftCardId) {
+            await handleGiftCardDisputeClosed({
+              giftCardId,
+              providerEventId: event.id,
+              status: typeof object.status === "string" ? object.status : null
+            })
+            await markWebhookEventProcessed("stripe", event.id)
+            return Response.json({ received: true, gift_card: true })
+          }
+        }
         await recordPaymentReview({
           providerEventId: event.id,
           eventType: event.type,

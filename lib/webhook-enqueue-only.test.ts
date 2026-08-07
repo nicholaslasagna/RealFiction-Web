@@ -12,6 +12,17 @@ let reviews: string[] = []
 
 mock.module("server-only", { namedExports: {}, defaultExport: {} })
 
+// The refund path now asks the database whether the order issued a gift card,
+// and FAILS CLOSED when it cannot tell. These fixtures are ordinary orders.
+mock.module("@/lib/supabase/service-role", {
+  namedExports: {
+    getSupabaseServiceRoleClient: () => ({
+      rpc: async (fn: string) => (fn === "gift_card_for_order" ? { data: null, error: null } : { data: null, error: null }),
+      from: () => ({ select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null }) }) }) })
+    })
+  }
+})
+
 // Gift-card routing has its own suite (lib/gift-card-checkout.test.ts and the
 // pgTAP vertical slice). This file is about the enqueue-only guarantee, so the
 // branch is stubbed rather than given a live service-role client.
