@@ -19,10 +19,15 @@
 //   node scripts/staging-preflight.mjs
 import { createClient } from "@supabase/supabase-js"
 
+import { formatBlocked, formatResult } from "./preflight-reporter.mjs"
+
 const results = []
-const record = (ok, label, detail = "") => {
-  results.push({ ok, label, detail })
-  console.log(`${ok ? "READY  " : "BLOCKED"}  ${label}${detail ? `  — ${detail}` : ""}`)
+const record = (ok, label, reasonCode = null, count = null) => {
+  const { row, line } = formatResult(ok, label, reasonCode, count)
+  // Only allowlisted text and a stringified number are STORED, so the summary
+  // at the end cannot reconstruct anything unsafe either.
+  results.push(row)
+  console.log(line)
 }
 
 const env = process.env
@@ -42,7 +47,10 @@ if (key.startsWith("sk_live_") || key.startsWith("rk_live_")) {
   console.error("This script is for staging only. Nothing was contacted.")
   process.exit(3)
 }
-record(key.startsWith("sk_test_") || key.startsWith("rk_test_"), "Stripe key is test mode", `${key.slice(0, 8)}…`)
+// The key PREFIX is still checked; it is simply no longer printed. Even eight
+// characters of a secret is eight characters of a secret in a CI log.
+const keyIsTest = key.startsWith("sk_test_") || key.startsWith("rk_test_")
+record(keyIsTest, "Stripe key is test mode", keyIsTest ? "ok" : "stripe_key_not_test")
 
 // Read-only, and it makes Stripe itself confirm the mode rather than trusting
 // the key prefix.
@@ -50,9 +58,12 @@ const balance = await fetch("https://api.stripe.com/v1/balance", {
   headers: { Authorization: `Bearer ${key}` }
 })
 const balanceBody = await balance.json().catch(() => ({}))
+// Stripe's own error text is NOT echoed: a provider message can quote back a
+// redacted key fragment. The HTTP status is a number and is safe.
 record(balance.ok, "Stripe API reachable with that key",
-  balance.ok ? "ok" : (balanceBody.error?.message ?? `HTTP ${balance.status}`))
-record(balanceBody.livemode === false, "Stripe reports livemode=false", String(balanceBody.livemode))
+  balance.ok ? "ok" : "stripe_unreachable", balance.ok ? null : balance.status)
+record(balanceBody.livemode === false, "Stripe reports livemode=false",
+  balanceBody.livemode === false ? "ok" : "stripe_livemode_true")
 
 // ---------------------------------------------------------------------------
 // 2. Supabase: migrations and catalog.
@@ -85,7 +96,8 @@ for (const fn of REQUIRED_FUNCTIONS) {
   // PGRST202 means "no such function". Any OTHER error means the function
   // exists and merely rejected our empty arguments — which is what we want.
   const exists = !(error && String(error.code) === "PGRST202")
-  record(exists, `migration applied: ${fn}()`, exists ? "" : "FUNCTION MISSING")
+  // `fn` comes from the REQUIRED_FUNCTIONS literal above, never the environment.
+  record(exists, `migration applied: ${fn}()`, exists ? null : "migration_missing")
 }
 
 const { data: rows, error: rowsError } = await db
@@ -96,16 +108,20 @@ const { data: rows, error: rowsError } = await db
 
 const EXPECTED = [500, 1000, 1500, 2000, 2500, 3000, 5000, 7500, 10000]
 if (rowsError) {
-  record(false, "gift-card catalog readable", rowsError.message)
+  // The driver's error message can carry the project URL, which is built from
+  // SUPABASE_URL. Only the fixed reason is reported.
+  record(false, "gift-card catalog readable", "catalog_unreadable")
 } else {
-  record(rows.length === 9, "nine gift-card rows exist", `${rows.length} found`)
+  record(rows.length === 9, "nine gift-card rows exist",
+    rows.length === 9 ? null : "row_count_wrong", rows.length)
   record(
     JSON.stringify(rows.map((r) => r.price_cents)) === JSON.stringify(EXPECTED),
     "denominations are $5-$100 at the right cents",
-    rows.map((r) => r.price_cents).join(",")
+    "denominations_wrong"
   )
   const active = rows.filter((r) => r.active).length
-  record(active === 9, "all nine rows ACTIVE in staging", `${active}/9 active`)
+  record(active === 9, "all nine rows ACTIVE in staging",
+    active === 9 ? null : "rows_not_active", active)
 }
 
 // ---------------------------------------------------------------------------
@@ -118,13 +134,13 @@ const store = await fetch(`${env.STAGING_URL.replace(/\/$/, "")}/store`, {
   headers: { Accept: "text/html" }
 })
 const html = await store.text().catch(() => "")
-record(store.ok, "staging /store reachable", `HTTP ${store.status}`)
+record(store.ok, "staging /store reachable", store.ok ? null : "store_unreachable", store.status)
 
 const offersGiftCards = /gift[- ]card/i.test(html) && !/coming soon/i.test(html)
 record(
   offersGiftCards,
   "storefront gate is OPEN (all six runtime secrets present)",
-  offersGiftCards ? "purchase form rendered" : "still Coming Soon - a runtime secret is missing"
+  offersGiftCards ? "gate_open" : "gate_closed"
 )
 
 console.log("")
@@ -134,5 +150,7 @@ if (blocked.length === 0) {
   process.exit(0)
 }
 console.log(`${blocked.length} BLOCKED item(s):`)
-for (const b of blocked) console.log(`  - ${b.label}${b.detail ? `  (${b.detail})` : ""}`)
+// `b.reason` is a value from REASONS and `b.count` is a stringified number, so
+// this sink can only print allowlisted text.
+for (const b of blocked) console.log(formatBlocked(b))
 process.exit(1)
