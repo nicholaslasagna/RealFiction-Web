@@ -10,14 +10,6 @@ const MAP_TABS = [
 
 type TabId = (typeof MAP_TABS)[number]["id"]
 
-const PIN_POSITIONS: ReadonlyArray<readonly [number, number]> = [
-  [18, 42],
-  [38, 28],
-  [55, 68],
-  [72, 38],
-  [88, 60]
-]
-
 export function HomeLiveMaps() {
   const [active, setActive] = useState<TabId>("smp")
   const tab = MAP_TABS.find((t) => t.id === active) ?? MAP_TABS[0]
@@ -43,35 +35,10 @@ export function HomeLiveMaps() {
       </div>
 
       <div className="map-frame">
+        {/* No pin overlay. Five pins used to sit at fixed percentages here,
+            unchanged across all three tabs — so they marked nothing, and on a
+            live-render preview they read as real locations. */}
         <div className="shot" style={{ backgroundImage: `url(${tab.bg})` }}>
-          {PIN_POSITIONS.map(([l, t], i) => (
-            <div
-              key={i}
-              style={{
-                position: "absolute",
-                left: `${l}%`,
-                top: `${t}%`,
-                transform: "translate(-50%, -100%)",
-                color: i === 1 ? "var(--gold)" : "var(--mc-green)",
-                zIndex: 1
-              }}
-            >
-              <svg
-                width="22"
-                height="22"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                style={{ filter: "drop-shadow(0 4px 8px rgba(0,0,0,0.6))" }}
-              >
-                <path d="M12 22s7-6.3 7-12a7 7 0 1 0-14 0c0 5.7 7 12 7 12z" />
-                <circle cx="12" cy="10" r="2.5" />
-              </svg>
-            </div>
-          ))}
           <div className="label">{tab.url} · live render</div>
         </div>
       </div>
