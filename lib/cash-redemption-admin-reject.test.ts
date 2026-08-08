@@ -92,6 +92,10 @@ const frozen = () => Number(sql(DB, `select coalesce(sum(frozen_cents),0) from p
 const ledger = () => Number(sql(DB, `select coalesce(sum(delta_cents),0) from public.store_credit_ledger where user_id='${CLAIMANT}'`))
 const remaining = () => Number(sql(DB, `select coalesce(sum(remaining_cents),0) from public.store_credit_lots where user_id='${CLAIMANT}'`))
 const closureEmails = () => Number(sql(DB, "select count(*) from public.email_deliveries where template='cash_redemption_closed'"))
+const completedEmails = () => Number(sql(DB, "select count(*) from public.email_deliveries where template='cash_redemption_completed'"))
+const requestState = (id) => sql(DB, `select state from public.cash_redemption_requests where id='${id}'`)
+const requestFrozen = (id) => Number(sql(DB, `select frozen_cents from public.cash_redemption_requests where id='${id}'`))
+const requestPaidOut = (id) => Number(sql(DB, `select paid_out_cents from public.cash_redemption_requests where id='${id}'`))
 
 /** Run an independent PostgreSQL client, concurrently with other clients. */
 function runPsql(statement: string): Promise<string> {
@@ -208,8 +212,8 @@ test("a client cannot name the state or a payout amount", async () => {
     const response = await post({ action: "reject", requestId: id, reviewNote: "a note", [field]: "completed" })
     assert.equal(response.status, 400, `${field} was accepted`)
   }
-  // And `completed` is not an action this surface offers at all.
-  assert.equal((await post({ action: "complete", requestId: id, reviewNote: "a note" })).status, 400)
+  // Completion is an action, but the requested state is not approved for it.
+  assert.equal((await post({ action: "complete", requestId: id, reviewNote: "a note" })).status, 409)
   assert.deepEqual(rpcCalls, [])
 })
 
@@ -307,6 +311,298 @@ test("the admin queue reports the terminal closure delivery state", async () => 
   assert.equal(queue.ok, true)
   if (queue.ok) {
     assert.equal(queue.rows[0].customerNotified, "pending")
+  }
+})
+
+test("approval uses the canonical manual-payout transition and changes no money", async () => {
+  const id = seedOpenRequest()
+  session.user = STAFF
+  session.isAdmin = true
+
+  const response = await post({ action: "approve", requestId: id, reviewNote: "Eligible for payout" })
+  assert.equal(response.status, 200)
+  assert.deepEqual(rpcCalls, [
+    {
+      fn: "resolve_cash_redemption",
+      args: {
+        p_request_id: id,
+        p_state: "manual_payout_required",
+        p_note: "Eligible for payout",
+        p_paid_out_cents: 0
+      }
+    }
+  ])
+  assert.equal(requestState(id), "manual_payout_required")
+  assert.equal(requestFrozen(id), 500)
+  assert.equal(frozen(), 500)
+  assert.equal(remaining(), 500)
+  assert.equal(ledger(), 500)
+  assert.equal(closureEmails(), 0)
+  assert.equal(completedEmails(), 0)
+})
+
+test("manual-payout-required exposes completion only and rejects ordinary web actions", async () => {
+  const id = seedOpenRequest()
+  session.user = STAFF
+  session.isAdmin = true
+
+  await post({ action: "approve", requestId: id, reviewNote: "Approved for manual payout" })
+  rpcCalls.length = 0
+
+  const reject = await post({ action: "reject", requestId: id, reviewNote: "Stale reject button" })
+  assert.equal(reject.status, 409)
+  assert.deepEqual(rpcCalls, [])
+  const approve = await post({ action: "approve", requestId: id, reviewNote: "Stale approve button" })
+  assert.equal(approve.status, 409)
+  assert.deepEqual(rpcCalls, [])
+  assert.equal(requestState(id), "manual_payout_required")
+  assert.equal(requestFrozen(id), 500)
+  assert.equal(frozen(), 500)
+  assert.equal(remaining(), 500)
+  assert.equal(ledger(), 500)
+
+  const fs = await import("node:fs")
+  const component = fs.readFileSync(
+    new URL("../components/admin/cash-redemption-actions.tsx", import.meta.url),
+    "utf8"
+  )
+  assert.match(component, /canReject = isActive && state !== "manual_payout_required"/)
+  assert.match(component, /canComplete = state === "manual_payout_required"/)
+})
+
+test("approval and completion require staff and same-origin requests", async () => {
+  const id = seedOpenRequest()
+  session.user = null
+  session.isAdmin = false
+  assert.equal((await post({ action: "approve", requestId: id, reviewNote: "Valid note" })).status, 404)
+
+  session.user = PLAYER
+  assert.equal((await post({ action: "approve", requestId: id, reviewNote: "Valid note" })).status, 404)
+
+  // The route validates the note before authorization-sensitive state changes.
+  assert.deepEqual(rpcCalls, [])
+
+  session.user = STAFF
+  session.isAdmin = true
+  assert.equal((await post({ action: "approve", requestId: id, reviewNote: "Approve for testing" })).status, 200)
+  rpcCalls.length = 0
+  session.user = PLAYER
+  session.isAdmin = false
+  assert.equal((await post({ action: "complete", requestId: id, reviewNote: "Valid note" })).status, 404)
+
+  session.user = STAFF
+  session.isAdmin = true
+  for (const action of ["approve", "complete"]) {
+    const response = await post({ action, requestId: id, reviewNote: "A valid note" }, "https://evil.example")
+    assert.equal(response.status, 403)
+  }
+  assert.deepEqual(rpcCalls, [])
+  assert.equal(requestState(id), "manual_payout_required")
+  assert.equal(frozen(), 500)
+})
+
+test("completion is unavailable before manual payout approval", async () => {
+  const id = seedOpenRequest()
+  session.user = STAFF
+  session.isAdmin = true
+
+  const response = await post({ action: "complete", requestId: id, reviewNote: "Payout was sent" })
+  assert.equal(response.status, 409)
+  assert.deepEqual(rpcCalls, [])
+  assert.equal(requestState(id), "requested")
+  assert.equal(frozen(), 500)
+})
+
+test("completion rejects client payout amounts and external payment references", async () => {
+  const id = seedOpenRequest()
+  session.user = STAFF
+  session.isAdmin = true
+  await post({ action: "approve", requestId: id, reviewNote: "Ready for manual payout" })
+  rpcCalls.length = 0
+
+  for (const extra of [{ paidOutCents: 1 }, { externalPayoutReference: "bank-123" }]) {
+    const response = await post({ action: "complete", requestId: id, reviewNote: "Payout was sent", ...extra })
+    assert.equal(response.status, 400)
+  }
+  assert.deepEqual(rpcCalls, [])
+  assert.equal(requestState(id), "manual_payout_required")
+  assert.equal(requestFrozen(id), 500)
+})
+
+test("the canonical resolver rejects a completion amount that differs from the request hold", async () => {
+  const id = seedOpenRequest()
+  sql(DB, `select public.resolve_cash_redemption('${id}', 'manual_payout_required', 'Approved')`)
+
+  for (const wrongAmount of [499, 501, 0, -1]) {
+    const outcome = sql(
+      DB,
+      `select outcome from public.resolve_cash_redemption('${id}', 'completed', 'Wrong amount', ${wrongAmount})`
+    )
+    assert.equal(outcome, "payout_amount_mismatch")
+    assert.equal(requestState(id), "manual_payout_required")
+    assert.equal(requestFrozen(id), 500)
+    assert.equal(frozen(), 500)
+    assert.equal(remaining(), 500)
+    assert.equal(ledger(), 500)
+    assert.equal(completedEmails(), 0)
+  }
+
+  assert.equal(requestState(id), "manual_payout_required")
+  assert.equal(requestFrozen(id), 500)
+  assert.equal(frozen(), 500)
+  assert.equal(remaining(), 500)
+  assert.equal(ledger(), 500)
+  assert.equal(completedEmails(), 0)
+})
+
+test("a correct and wrong completion race cannot let the wrong amount mutate", async () => {
+  const id = seedOpenRequest()
+  sql(DB, `select public.resolve_cash_redemption('${id}', 'manual_payout_required', 'Approved')`)
+
+  const [correct, wrong] = await Promise.all([
+    runPsql(`select outcome from public.resolve_cash_redemption('${id}', 'completed', 'Correct amount', 500)`),
+    runPsql(`select outcome from public.resolve_cash_redemption('${id}', 'completed', 'Wrong amount', 499)`)
+  ])
+
+  assert.equal(correct, "completed")
+  assert.ok(["payout_amount_mismatch", "already_final"].includes(wrong))
+  assert.equal(requestState(id), "completed")
+  assert.equal(requestFrozen(id), 0)
+  assert.equal(frozen(), 0)
+  assert.equal(remaining(), 0)
+  assert.equal(ledger(), 0)
+  assert.equal(completedEmails(), 1)
+})
+
+test("completion uses the authoritative held amount and consumes it once", async () => {
+  const id = seedOpenRequest()
+  session.user = STAFF
+  session.isAdmin = true
+  await post({ action: "approve", requestId: id, reviewNote: "Approved for payout" })
+  rpcCalls.length = 0
+
+  const response = await post({ action: "complete", requestId: id, reviewNote: "Paid outside RealFiction" })
+  assert.equal(response.status, 200)
+  assert.deepEqual(rpcCalls, [
+    {
+      fn: "resolve_cash_redemption",
+      args: {
+        p_request_id: id,
+        p_state: "completed",
+        p_note: "Paid outside RealFiction",
+        p_paid_out_cents: 500
+      }
+    }
+  ])
+  assert.equal(requestState(id), "completed")
+  assert.equal(requestFrozen(id), 0)
+  assert.equal(requestPaidOut(id), 500)
+  assert.equal(frozen(), 0)
+  assert.equal(remaining(), 0)
+  assert.equal(ledger(), 0)
+  assert.equal(completedEmails(), 1)
+
+  rpcCalls.length = 0
+  const second = await post({ action: "complete", requestId: id, reviewNote: "Duplicate completion" })
+  assert.equal(second.status, 200)
+  assert.equal(((await second.json()) as { outcome?: string }).outcome, "already_completed")
+  assert.deepEqual(rpcCalls, [])
+  assert.equal(ledger(), 0)
+  assert.equal(completedEmails(), 1)
+})
+
+test("two approvals leave one manual-payout state and preserve the hold", async () => {
+  const id = seedOpenRequest()
+  session.user = STAFF
+  session.isAdmin = true
+
+  const [a, b] = await Promise.all([
+    post({ action: "approve", requestId: id, reviewNote: "Admin one approved" }),
+    post({ action: "approve", requestId: id, reviewNote: "Admin two approved" })
+  ])
+  assert.equal(a.status, 200)
+  assert.equal(b.status, 200)
+  assert.equal(requestState(id), "manual_payout_required")
+  assert.equal(frozen(), 500)
+  assert.equal(remaining(), 500)
+  assert.equal(ledger(), 500)
+  assert.equal(completedEmails(), 0)
+})
+
+test("approval and rejection race to one safe final result", async () => {
+  const id = seedOpenRequest()
+  session.user = STAFF
+  session.isAdmin = true
+
+  const [approve, reject] = await Promise.all([
+    post({ action: "approve", requestId: id, reviewNote: "Approve race" }),
+    post({ action: "reject", requestId: id, reviewNote: "Reject race" })
+  ])
+  assert.equal(approve.status, 200)
+  assert.equal(reject.status, 200)
+
+  const state = requestState(id)
+  assert.ok(["manual_payout_required", "rejected"].includes(state))
+  assert.equal(ledger(), 500)
+  if (state === "manual_payout_required") {
+    assert.equal(frozen(), 500)
+    assert.equal(closureEmails(), 0)
+  } else {
+    assert.equal(frozen(), 0)
+    assert.equal(remaining(), 500)
+    assert.equal(closureEmails(), 1)
+  }
+})
+
+test("two completions consume the approved hold once", async () => {
+  const id = seedOpenRequest()
+  session.user = STAFF
+  session.isAdmin = true
+  await post({ action: "approve", requestId: id, reviewNote: "Approved once" })
+
+  const [a, b] = await Promise.all([
+    post({ action: "complete", requestId: id, reviewNote: "Payout one sent" }),
+    post({ action: "complete", requestId: id, reviewNote: "Payout two sent" })
+  ])
+  assert.equal(a.status, 200)
+  assert.equal(b.status, 200)
+  assert.deepEqual([
+    ((await a.json()) as { outcome?: string }).outcome,
+    ((await b.json()) as { outcome?: string }).outcome
+  ].sort(), ["already_completed", "completed"])
+  assert.equal(requestState(id), "completed")
+  assert.equal(frozen(), 0)
+  assert.equal(remaining(), 0)
+  assert.equal(ledger(), 0)
+  assert.equal(completedEmails(), 1)
+})
+
+test("rejection and completion race cannot both consume or release twice", async () => {
+  const id = seedOpenRequest()
+  session.user = STAFF
+  session.isAdmin = true
+  await post({ action: "approve", requestId: id, reviewNote: "Ready for payout" })
+
+  const [complete, reject] = await Promise.all([
+    post({ action: "complete", requestId: id, reviewNote: "External payout sent" }),
+    post({ action: "reject", requestId: id, reviewNote: "Payout cancelled" })
+  ])
+  assert.equal(complete.status, 200)
+  assert.equal(reject.status, 409)
+
+  const state = requestState(id)
+  assert.ok(["completed", "rejected"].includes(state))
+  assert.equal(frozen(), 0)
+  if (state === "completed") {
+    assert.equal(remaining(), 0)
+    assert.equal(ledger(), 0)
+    assert.equal(completedEmails(), 1)
+    assert.equal(closureEmails(), 0)
+  } else {
+    assert.equal(remaining(), 500)
+    assert.equal(ledger(), 500)
+    assert.equal(completedEmails(), 0)
+    assert.equal(closureEmails(), 1)
   }
 })
 
@@ -408,24 +704,37 @@ test("R+S. NO automatic payout path, and the browser never calls the resolver", 
   const client = fs.readFileSync(new URL("../components/admin/cash-redemption-actions.tsx", import.meta.url), "utf8")
   const page = fs.readFileSync(new URL("../app/admin/cash-redemptions/page.tsx", import.meta.url), "utf8")
 
-  // The route may only ever send `rejected`, with a hard-coded zero payout.
-  assert.match(route, /p_state: "rejected"/)
-  assert.match(route, /p_paid_out_cents: 0/)
-  assert.ok(!/"completed"/.test(route), "the route can send `completed`")
+  // The route may only send the three reviewed transitions, and completion
+  // derives its amount from the authoritative frozen row rather than the body.
+  assert.match(route, /p_state: targetState/)
+  assert.match(route, /manual_payout_required/)
+  assert.match(route, /p_paid_out_cents: paidOutCents/)
+  assert.match(route, /action === "complete"/)
+  assert.match(route, /Manual payout is already required/)
+  assert.match(route, /payout_amount_mismatch/)
+  assert.ok(!/paidOutCents\s*:\s*payload/.test(route), "the client can choose the payout amount")
 
-  // No direct writes to the financial tables.
-  for (const table of ["cash_redemption_requests", "store_credit_lots", "store_credit_ledger"]) {
-    assert.ok(!new RegExp(`from\\("${table}"\\)`).test(route), `the route touches ${table} directly`)
-  }
+  // No direct financial writes. The route may read the request to derive the
+  // authoritative completion amount, but the resolver owns every mutation.
+  assert.ok(!/\.(?:update|insert|upsert)\(/.test(route), "the route directly writes a table")
 
-  // The browser never names the RPC, and no payout vocabulary exists anywhere.
+  // The browser never names the RPC or a payment provider.
   for (const source of [client, page]) {
     assert.ok(!/resolve_cash_redemption/.test(source), "the browser references the resolver")
     assert.ok(!/supabase/i.test(source), "the browser imports a Supabase client")
-    for (const word of [/payout\(/, /\bpay\b.*\bnow\b/i, /cash out/i, /send money/i]) {
-      assert.ok(!word.test(source), `payout vocabulary ${word} present`)
-    }
+    assert.ok(!/Stripe|Resend|PayPal|Venmo|bank transfer/i.test(source), "the browser invokes a provider")
   }
+
+  // The first button click only opens a dialog. The mutation is isolated in
+  // submit(), with Escape/Cancel closing without calling fetch.
+  assert.match(client, /begin\("approve", event\)/)
+  assert.match(client, /begin\("complete", event\)/)
+  assert.match(client, /event\.key === "Escape"/)
+  assert.match(client, /onClick=\{close\}/)
+  assert.match(client, /async function submit\(\)/)
+  assert.match(client, /fetch\("\/api\/admin\/cash-redemptions"/)
+  assert.match(page, /Manual payout required/)
+  assert.match(page, /Record Payout Completed/)
 })
 
 test("T. no gift-card secret or credential appears in the response", async () => {

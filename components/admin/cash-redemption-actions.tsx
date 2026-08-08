@@ -1,34 +1,64 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useRef, useState, type MouseEvent } from "react"
 import { useRouter } from "next/navigation"
 
 import { Button } from "@/components/ui/button"
 import { formatCurrency } from "@/lib/utils"
 
-/**
- * The reject control for one open cash-redemption review.
- *
- * TWO STEPS, ALWAYS. The first click only opens the dialog — it sends nothing
- * and mutates nothing. Releasing a customer's held money is not a single-click
- * action, and the amount is shown in the dialog so the operator confirms
- * against a number rather than a row they think they clicked.
- *
- * This component is trusted with nothing. The endpoint re-checks staff,
- * re-checks origin, re-validates the note, and hard-codes both the target state
- * and the payout amount. Nothing here can name a state or an amount.
- */
+type Action = "reject" | "approve" | "complete"
 
 type Props = {
   requestId: string
   requester: string
   requestedCents: number
   frozenCents: number
+  state: string
 }
 
-export function CashRedemptionActions({ requestId, requester, requestedCents, frozenCents }: Props) {
+const ACTIVE_STATES = new Set(["requested", "eligibility_review", "eligible", "manual_payout_required"])
+
+function actionCopy(action: Action, frozenCents: number) {
+  if (action === "approve") {
+    return {
+      title: "Approve for manual payout?",
+      description:
+        "Approving this review does not send money. The customer's held store credit will remain unavailable until an administrator records that the required out-of-band payout has actually been completed.",
+      noteLabel: "Review note (required)",
+      notePlaceholder: "Why is this review eligible for manual payout?",
+      confirm: "Approve for Manual Payout"
+    }
+  }
+
+  if (action === "complete") {
+    return {
+      title: "Record payout completed?",
+      description: `Use this only after the required cash payout of ${formatCurrency(frozenCents)} has already been completed outside RealFiction. Recording completion permanently consumes the corresponding held store credit. This button does not send money.`,
+      noteLabel: "Completion note (required)",
+      notePlaceholder: "Confirm how the out-of-band payout was completed.",
+      confirm: "Record Payout Completed"
+    }
+  }
+
+  return {
+    title: "Reject this review and release the hold?",
+    description:
+      "Rejecting this review releases the customer's held store credit. No cash payout will occur. The request stays in history.",
+    noteLabel: "Review note (required)",
+    notePlaceholder: "Why is this being rejected?",
+    confirm: "Reject & Release Hold"
+  }
+}
+
+export function CashRedemptionActions({
+  requestId,
+  requester,
+  requestedCents,
+  frozenCents,
+  state
+}: Props) {
   const router = useRouter()
-  const [open, setOpen] = useState(false)
+  const [openAction, setOpenAction] = useState<Action | null>(null)
   const [note, setNote] = useState("")
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -38,29 +68,26 @@ export function CashRedemptionActions({ requestId, requester, requestedCents, fr
   const openerRef = useRef<HTMLButtonElement>(null)
 
   const shortRef = requestId.slice(0, 8)
+  const isActive = ACTIVE_STATES.has(state)
+  const canReject = isActive && state !== "manual_payout_required"
+  const canApprove = isActive && state !== "manual_payout_required"
+  const canComplete = state === "manual_payout_required"
 
-  // Focus moves INTO the dialog on open and RETURNS to the opener on close.
-  // Without the return, a keyboard user is dropped at the top of the document
-  // and has to tab back through the whole queue.
   useEffect(() => {
-    if (open) {
+    if (openAction) {
       noteRef.current?.focus()
     } else {
       openerRef.current?.focus()
     }
-  }, [open])
+  }, [openAction])
 
-  // Escape closes, and a focus trap keeps Tab inside. Both are hand-rolled
-  // because this project has no dialog primitive; `window.confirm` cannot carry
-  // an amount or a required note.
   useEffect(() => {
-    if (!open) {
+    if (!openAction) {
       return
     }
 
     function onKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") {
-        // Escape must never submit. It closes and changes nothing.
         event.preventDefault()
         if (!busy) {
           close()
@@ -92,73 +119,103 @@ export function CashRedemptionActions({ requestId, requester, requestedCents, fr
 
     document.addEventListener("keydown", onKeyDown)
     return () => document.removeEventListener("keydown", onKeyDown)
-  }, [open, busy])
+  }, [openAction, busy])
 
   function close() {
-    setOpen(false)
+    setOpenAction(null)
     setNote("")
     setError(null)
   }
 
-  async function reject() {
+  function begin(action: Action, event: MouseEvent<HTMLButtonElement>) {
+    openerRef.current = event.currentTarget
+    setOpenAction(action)
+  }
+
+  async function submit() {
+    if (!openAction) {
+      return
+    }
+
     setBusy(true)
     setError(null)
     try {
       const response = await fetch("/api/admin/cash-redemptions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "reject", requestId, reviewNote: note })
+        body: JSON.stringify({ action: openAction, requestId, reviewNote: note })
       })
-      const result = (await response.json().catch(() => ({}))) as {
-        error?: string
-        outcome?: string
-      }
+      const result = (await response.json().catch(() => ({}))) as { error?: string }
 
       if (!response.ok) {
-        // The dialog STAYS OPEN so the message is readable and the note is not
-        // lost. Closing on failure is how an operator concludes nothing
-        // happened when something did.
-        setError(result.error ?? "That review could not be closed.")
+        setError(result.error ?? "That review could not be resolved.")
         return
       }
 
       close()
-      // The server is authoritative. Re-render from it rather than patching
-      // local state, so the badge count and the row state cannot drift.
       router.refresh()
     } catch {
-      setError("That review could not be closed. Check your connection.")
+      setError("That review could not be resolved. Check your connection.")
     } finally {
       setBusy(false)
     }
   }
 
-  if (!open) {
+  if (!openAction) {
+    if (!isActive) {
+      return null
+    }
+
     return (
-      <button
-        ref={openerRef}
-        type="button"
-        onClick={() => setOpen(true)}
-        data-testid="cash-redemption-reject-open"
-        className="border border-rose-300/35 bg-rose-300/10 px-2.5 py-1 text-xs font-bold text-rose-100 transition hover:bg-rose-300/20"
-      >
-        Reject &amp; Release Hold
-      </button>
+      <div className="mt-2 flex flex-wrap gap-2">
+        {canReject ? (
+          <button
+            type="button"
+            onClick={(event) => begin("reject", event)}
+            data-testid="cash-redemption-reject-open"
+            className="border border-rose-300/35 bg-rose-300/10 px-2.5 py-1 text-xs font-bold text-rose-100 transition hover:bg-rose-300/20"
+          >
+            Reject &amp; Release Hold
+          </button>
+        ) : null}
+        {canApprove ? (
+          <button
+            type="button"
+            onClick={(event) => begin("approve", event)}
+            data-testid="cash-redemption-approve-open"
+            className="border border-amber-200/35 bg-amber-200/10 px-2.5 py-1 text-xs font-bold text-amber-100 transition hover:bg-amber-200/20"
+          >
+            Approve for Manual Payout
+          </button>
+        ) : null}
+        {canComplete ? (
+          <button
+            type="button"
+            onClick={(event) => begin("complete", event)}
+            data-testid="cash-redemption-complete-open"
+            className="border border-emerald-300/35 bg-emerald-300/10 px-2.5 py-1 text-xs font-bold text-emerald-100 transition hover:bg-emerald-300/20"
+          >
+            Record Payout Completed
+          </button>
+        ) : null}
+      </div>
     )
   }
+
+  const copy = actionCopy(openAction, frozenCents)
 
   return (
     <div
       ref={dialogRef}
       role="dialog"
       aria-modal="true"
-      aria-labelledby={`reject-title-${requestId}`}
-      aria-describedby={`reject-desc-${requestId}`}
-      data-testid="cash-redemption-reject-dialog"
-      className="mt-2 max-w-md border border-rose-300/30 bg-rose-300/[0.06] p-3"
+      aria-labelledby={`cash-redemption-action-title-${requestId}`}
+      aria-describedby={`cash-redemption-action-desc-${requestId}`}
+      data-testid={`cash-redemption-${openAction}-dialog`}
+      className="mt-2 max-w-md border border-amber-200/30 bg-amber-200/[0.06] p-3"
     >
-      <h3 id={`reject-title-${requestId}`} className="text-sm font-bold text-rose-100">
-        Reject this review and release the hold?
+      <h3 id={`cash-redemption-action-title-${requestId}`} className="text-sm font-bold text-amber-100">
+        {copy.title}
       </h3>
 
       <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-xs text-slate-200">
@@ -166,21 +223,20 @@ export function CashRedemptionActions({ requestId, requester, requestedCents, fr
         <dd>{requester}</dd>
         <dt className="text-muted-foreground">Requested</dt>
         <dd className="font-mono">{formatCurrency(requestedCents)}</dd>
-        <dt className="text-muted-foreground">On hold</dt>
-        <dd className="font-mono" data-testid="reject-frozen-amount">
+        <dt className="text-muted-foreground">Currently on hold</dt>
+        <dd className="font-mono" data-testid="cash-redemption-frozen-amount">
           {formatCurrency(frozenCents)}
         </dd>
         <dt className="text-muted-foreground">Reference</dt>
         <dd className="font-mono">{shortRef}</dd>
       </dl>
 
-      <p id={`reject-desc-${requestId}`} className="mt-2 text-xs leading-5 text-rose-100/90">
-        Rejecting this review releases the customer&rsquo;s held store credit. No cash payout will
-        occur. The request stays in history.
+      <p id={`cash-redemption-action-desc-${requestId}`} className="mt-2 text-xs leading-5 text-amber-100/90">
+        {copy.description}
       </p>
 
       <label className="mt-3 block">
-        <span className="text-xs text-slate-200">Review note (required)</span>
+        <span className="text-xs text-slate-200">{copy.noteLabel}</span>
         <textarea
           ref={noteRef}
           value={note}
@@ -188,29 +244,26 @@ export function CashRedemptionActions({ requestId, requester, requestedCents, fr
           maxLength={500}
           disabled={busy}
           onChange={(event) => setNote(event.target.value)}
-          data-testid="cash-redemption-reject-note"
+          data-testid={`cash-redemption-${openAction}-note`}
           className="mt-1 block w-full border border-white/12 bg-black/30 px-2 py-1.5 text-sm text-slate-200"
-          placeholder="Why is this being rejected?"
+          placeholder={copy.notePlaceholder}
         />
       </label>
 
       <div className="mt-3 flex flex-wrap gap-2">
         <Button
           type="button"
-          onClick={reject}
-          // Disabled while in flight, so a double click cannot send twice. The
-          // endpoint is idempotent regardless; this is the first line, not the
-          // only one.
+          onClick={submit}
           disabled={busy || note.trim().length < 3}
-          data-testid="cash-redemption-reject-confirm"
+          data-testid={`cash-redemption-${openAction}-confirm`}
         >
-          {busy ? "Closing…" : "Reject & Release Hold"}
+          {busy ? "Recording…" : copy.confirm}
         </Button>
         <button
           type="button"
           onClick={close}
           disabled={busy}
-          data-testid="cash-redemption-reject-cancel"
+          data-testid={`cash-redemption-${openAction}-cancel`}
           className="px-2.5 py-1 text-xs text-muted-foreground underline underline-offset-4 disabled:opacity-50"
         >
           Cancel
@@ -218,11 +271,7 @@ export function CashRedemptionActions({ requestId, requester, requestedCents, fr
       </div>
 
       {error ? (
-        <p
-          role="alert"
-          data-testid="cash-redemption-reject-error"
-          className="mt-2 text-xs text-rose-200"
-        >
+        <p role="alert" data-testid="cash-redemption-action-error" className="mt-2 text-xs text-rose-200">
           {error}
         </p>
       ) : null}

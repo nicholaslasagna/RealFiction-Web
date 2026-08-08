@@ -15,7 +15,6 @@ export const metadata: Metadata = {
 // Per-request authorization. Never cached, never prerendered.
 export const dynamic = "force-dynamic"
 
-/** The real `email_deliveries.delivery_outcome` values, not invented ones. */
 /**
  * The REAL `email_deliveries.delivery_outcome` values.
  *
@@ -36,6 +35,16 @@ const DELIVERY_LABEL: Record<string, string> = {
   not_queued: "Not queued"
 }
 
+const STATE_LABEL: Record<string, string> = {
+  requested: "Requested",
+  eligibility_review: "Eligibility review",
+  eligible: "Eligible for manual payout",
+  manual_payout_required: "Manual payout required",
+  rejected: "Rejected",
+  completed: "Completed",
+  ineligible: "Ineligible"
+}
+
 function when(value: string | null) {
   return value ? String(value).slice(0, 16).replace("T", " ") : "—"
 }
@@ -48,8 +57,8 @@ function when(value: string | null) {
  * that visible rather than implicit — an operator can see that an email failed
  * and still work the queue.
  *
- * Rejection is the only mutation exposed here. It releases a hold through the
- * canonical resolver; no payout or direct accounting write is available.
+ * All actions use the canonical resolver. Approval leaves the hold in place;
+ * completion records an already-finished out-of-band payout and consumes it.
  */
 export default async function CashRedemptionAdminPage() {
   const staff = await requireStaff()
@@ -121,7 +130,9 @@ export default async function CashRedemptionAdminPage() {
                   data-open={row.isOpen ? "true" : "false"}
                 >
                   <td className="py-3 pr-4">
-                    <Badge variant={row.isOpen ? "warning" : "outline"}>{row.state}</Badge>
+                    <Badge variant={row.isOpen ? "warning" : "outline"}>
+                      {STATE_LABEL[row.state] ?? row.state}
+                    </Badge>
                   </td>
                   <td className="py-3 pr-4">
                     <span className="block text-slate-200">{row.minecraftUsername ?? "Not linked"}</span>
@@ -150,6 +161,7 @@ export default async function CashRedemptionAdminPage() {
                         requester={row.minecraftUsername ?? row.claimantEmail ?? "Unknown"}
                         requestedCents={row.requestedCents}
                         frozenCents={row.frozenCents}
+                        state={row.state}
                       />
                     ) : null}
                   </td>
@@ -162,9 +174,9 @@ export default async function CashRedemptionAdminPage() {
 
       <div className="mt-8 border-t border-white/10 pt-5">
         <p className="max-w-3xl text-sm leading-6 text-muted-foreground">
-          Rejecting a request releases the held store credit and emails the customer. No payout
-          occurs, and nothing on this page can move money. Recording an out-of-band payout is a
-          separate workflow.
+          Approval never sends money and leaves the hold in place. Rejecting releases the held
+          store credit. Record Payout Completed only after the out-of-band payment has actually
+          happened; it then consumes the held credit through the canonical resolver.
         </p>
         <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
           Email status updates when the delivery worker next runs, within five minutes.
