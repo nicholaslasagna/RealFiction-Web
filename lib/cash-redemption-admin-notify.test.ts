@@ -308,3 +308,227 @@ test("NOTHING in the admin surface can move money", async () => {
     assert.ok(!forbidden.test(page), `the page references ${forbidden}`)
   }
 })
+
+// ===========================================================================
+// The DATABASE is a second boundary, independent of requireStaff()
+//
+// `requireStaff()` guards the page. It cannot guard a request that never
+// reaches the page — a signed-in customer holds an anon-key session and can
+// call PostgREST directly. Financial-review data must be unreachable that way
+// too.
+// ===========================================================================
+
+test("staff_cash_redemption_queue is a SECURITY DEFINER function, not a view or table", () => {
+  assert.equal(
+    sql(DB, `select count(*) from pg_views where schemaname='public' and viewname='staff_cash_redemption_queue'`),
+    "0",
+    "a view would be reachable through PostgREST directly"
+  )
+  assert.equal(
+    sql(DB, `select count(*) from pg_tables where schemaname='public' and tablename='staff_cash_redemption_queue'`),
+    "0"
+  )
+  assert.equal(
+    sql(DB, `select prosecdef::text from pg_proc p join pg_namespace n on n.oid=p.pronamespace
+             where n.nspname='public' and p.proname='staff_cash_redemption_queue'`),
+    "true"
+  )
+})
+
+test("it has a FIXED search_path and the expected owner", () => {
+  assert.equal(
+    sql(DB, `select array_to_string(proconfig,',') from pg_proc p join pg_namespace n on n.oid=p.pronamespace
+             where n.nspname='public' and p.proname='staff_cash_redemption_queue'`),
+    "search_path=public",
+    "a mutable search_path lets a caller shadow the tables it reads"
+  )
+  assert.equal(
+    sql(DB, `select pg_get_userbyid(proowner) from pg_proc p join pg_namespace n on n.oid=p.pronamespace
+             where n.nspname='public' and p.proname='staff_cash_redemption_queue'`),
+    "postgres"
+  )
+})
+
+test("PUBLIC, anon and authenticated CANNOT execute the queue function", () => {
+  for (const role of ["public", "anon", "authenticated"]) {
+    assert.equal(
+      sql(DB, `select has_function_privilege('${role}','public.staff_cash_redemption_queue(integer)','execute')::text`),
+      "false",
+      `${role} can read the financial review queue directly`
+    )
+  }
+  assert.equal(
+    sql(DB, `select has_function_privilege('service_role','public.staff_cash_redemption_queue(integer)','execute')::text`),
+    "true",
+    "the backend lost its access"
+  )
+})
+
+test("the ACL contains no PUBLIC grant at all", () => {
+  // A bare `=X/owner` entry is the PUBLIC grant. Its absence is the thing
+  // has_function_privilege('public', …) reflects, asserted directly.
+  const acl = sql(DB, `select coalesce(proacl::text,'NULL') from pg_proc p
+                       join pg_namespace n on n.oid=p.pronamespace
+                       where n.nspname='public' and p.proname='staff_cash_redemption_queue'`)
+  assert.notEqual(acl, "NULL", "a null ACL means PUBLIC EXECUTE")
+  assert.ok(!/[{,]=X\//.test(acl), `the ACL carries a PUBLIC grant: ${acl}`)
+})
+
+test("an ORDINARY AUTHENTICATED session is refused by the DATABASE, not just the app", () => {
+  seed()
+  sql(DB, `select public.request_cash_redemption('${CLAIMANT}')`)
+
+  // Executed AS `authenticated`, exactly as a PostgREST call from a signed-in
+  // browser would be. No application code is involved.
+  const outcome = sql(
+    DB,
+    `do $$ begin
+       perform public.staff_cash_redemption_queue(50);
+       raise exception 'REACHED';
+     exception
+       when insufficient_privilege then raise notice 'denied';
+       when others then raise notice 'other:%', sqlerrm;
+     end $$;`,
+    { role: "authenticated" }
+  )
+  assert.doesNotMatch(String(outcome), /REACHED/, "an ordinary user read the review queue directly")
+})
+
+test("the underlying review table is unreadable by anon and authenticated", () => {
+  seed()
+  sql(DB, `select public.request_cash_redemption('${CLAIMANT}')`)
+
+  for (const role of ["anon", "authenticated"]) {
+    assert.equal(
+      sql(DB, `select has_table_privilege('${role}','public.cash_redemption_requests','select')::text`),
+      "false",
+      `${role} can select the review table directly`
+    )
+  }
+  // RLS on as well, so the deny survives a future accidental GRANT.
+  assert.equal(
+    sql(DB, `select relrowsecurity::text from pg_class c join pg_namespace n on n.oid=c.relnamespace
+             where n.nspname='public' and c.relname='cash_redemption_requests'`),
+    "true"
+  )
+})
+
+test("the outbox is granted to authenticated but RLS returns NOTHING", () => {
+  seed()
+  sql(DB, `select public.request_cash_redemption('${CLAIMANT}')`)
+
+  // The GRANT exists; the absence of any permissive policy is what denies.
+  // Asserted empirically rather than inferred, because a future policy would
+  // silently expose notification metadata.
+  const visible = sql(DB, "select count(*) from public.email_deliveries", { role: "authenticated" })
+  assert.equal(visible, "0", "an authenticated user can read the email outbox")
+})
+
+// ===========================================================================
+// The blank recipient can never reach the provider
+// ===========================================================================
+
+const { isSendableAddress, sendProviderEmail } = await import("./email/transport.ts")
+
+test("the TRANSPORT refuses a blank, whitespace or sentinel recipient", async () => {
+  // Asserted at the lowest boundary every send passes through, so no caller —
+  // present or future — can bypass it.
+  const calls: string[] = []
+  const fetchImpl = (async (url: unknown) => {
+    calls.push(String(url))
+    return { ok: true, status: 200, json: async () => ({ id: "x" }) } as never
+  }) as never as typeof fetch
+
+  for (const to of ["", "   ", "\t\n", "@staff", "admin", "no-at-sign.example"]) {
+    const result = await sendProviderEmail(
+      { to, subject: "s", text: "t", html: "<p>t</p>", idempotencyKey: "k" },
+      { apiKey: "test-only", from: "RealFiction <o@e.test>", fetchImpl }
+    )
+    assert.equal(result.kind, "permanent", `"${to}" was not refused`)
+    assert.equal(result.kind === "permanent" && result.category, "invalid_recipient")
+  }
+
+  assert.deepEqual(calls, [], "the provider was contacted with an unsendable recipient")
+})
+
+test("a real address still sends", async () => {
+  const calls: string[] = []
+  const fetchImpl = (async (url: unknown) => {
+    calls.push(String(url))
+    return { ok: true, status: 200, json: async () => ({ id: "msg_1" }) } as never
+  }) as never as typeof fetch
+
+  const result = await sendProviderEmail(
+    { to: "business@realfiction.live", subject: "s", text: "t", html: "<p>t</p>", idempotencyKey: "k" },
+    { apiKey: "test-only", from: "RealFiction <o@e.test>", fetchImpl }
+  )
+  assert.equal(result.kind, "accepted")
+  assert.equal(calls.length, 1)
+})
+
+test("isSendableAddress rejects exactly what it should", () => {
+  for (const bad of ["", " ", "@staff", "a@b", "a b@c.test", `${"x".repeat(250)}@e.test`]) {
+    assert.equal(isSendableAddress(bad), false, `${JSON.stringify(bad)} was accepted`)
+  }
+  for (const good of ["business@realfiction.live", "ops+reviews@realfiction.live"]) {
+    assert.equal(isSendableAddress(good), true, `${good} was rejected`)
+  }
+})
+
+// ===========================================================================
+// unconfigured -> configured recovery, end to end
+// ===========================================================================
+
+test("an UNCONFIGURED admin notification recovers when configuration arrives", () => {
+  seed()
+  sql(DB, `select public.request_cash_redemption('${CLAIMANT}')`)
+  const id = sql(DB, "select id from public.email_deliveries where template='cash_redemption_admin_review'")
+
+  // 1-2. The row exists; the mailbox is not configured.
+  assert.equal(resolveDestination({ template: "cash_redemption_admin_review", recipient: "" }, {}), null)
+
+  // 3-4. The processor parks it WITHOUT contacting the provider.
+  sql(DB, `select public.claim_due_email_deliveries(10, 120, 'w1')`)
+  sql(DB, `select public.mark_email_unconfigured('${id}', 300)`)
+  assert.equal(
+    sql(DB, `select delivery_outcome from public.email_deliveries where id='${id}'`),
+    "unconfigured"
+  )
+
+  // The attempt budget was NOT consumed — the claim's increment is undone, so a
+  // long outage cannot exhaust the retries a real delivery will need.
+  assert.equal(
+    sql(DB, `select attempts from public.email_deliveries where id='${id}'`),
+    "0",
+    "a missing binding burned an attempt"
+  )
+
+  // And it is not retried in a hot loop.
+  assert.equal(
+    sql(DB, `select (next_attempt_at > now() + interval '30 seconds')::text
+             from public.email_deliveries where id='${id}'`),
+    "true",
+    "an unconfigured row would be re-claimed immediately"
+  )
+
+  // 5-6. Configuration arrives, the backoff elapses, and the SAME row is
+  // selectable again — it was never stranded.
+  sql(DB, `update public.email_deliveries set next_attempt_at = now() - interval '1 second' where id='${id}'`)
+  const claimed = sql(DB, `select count(*) from public.claim_due_email_deliveries(10, 120, 'w2')`)
+  assert.equal(claimed, "1", "an unconfigured row became permanently stranded")
+
+  // 7. It sends once.
+  sql(DB, `select public.mark_email_sent('${id}', 'provider-msg-1', 200)`)
+  assert.equal(sql(DB, `select delivery_outcome from public.email_deliveries where id='${id}'`), "sent")
+
+  // 8. A later worker does not pick it up again.
+  assert.equal(
+    sql(DB, `select count(*) from public.claim_due_email_deliveries(10, 120, 'w3')`),
+    "0",
+    "a sent notification was re-claimed and would be duplicated"
+  )
+  assert.equal(
+    sql(DB, "select count(*) from public.email_deliveries where template='cash_redemption_admin_review'"),
+    "1"
+  )
+})

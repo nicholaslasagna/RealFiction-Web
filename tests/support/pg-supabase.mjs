@@ -20,12 +20,27 @@ import { execFileSync } from "node:child_process"
 const PSQL = process.env.RF_PSQL ?? "/opt/homebrew/opt/postgresql@16/bin/psql"
 const SOCKET = process.env.RF_PGSOCKET ?? "/tmp/rfpg"
 
-export function sql(database, statement) {
-  return execFileSync(
-    PSQL,
-    ["-h", SOCKET, "-U", "postgres", "-d", database, "-X", "-A", "-t", "-v", "ON_ERROR_STOP=1", "-c", statement],
-    { encoding: "utf8", env: { ...process.env, LC_ALL: "C" } }
-  ).trim()
+/**
+ * @param options.role Run the statement AS this role, in a rolled-back
+ *   transaction. Lets a test assert what `anon` or `authenticated` can actually
+ *   reach — the boundary a signed-in browser hits when it calls PostgREST
+ *   directly, with no application code in the way.
+ */
+export function sql(database, statement, options = {}) {
+  const body = options.role
+    ? `begin; set local role ${options.role}; ${statement}; rollback;`
+    : statement
+  const args = ["-h", SOCKET, "-U", "postgres", "-d", database, "-X", "-A", "-t", "-v", "ON_ERROR_STOP=1"]
+  // `-q` suppresses the BEGIN/SET/ROLLBACK command tags the role wrapper adds,
+  // so a role-scoped call returns the same shape as an ordinary one.
+  if (options.role) {
+    args.push("-q")
+  }
+  args.push("-c", body)
+  return execFileSync(PSQL, args, {
+    encoding: "utf8",
+    env: { ...process.env, LC_ALL: "C" }
+  }).trim()
 }
 
 /** Rows as objects, via json_agg so types survive the round trip. */

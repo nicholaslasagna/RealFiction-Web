@@ -72,10 +72,44 @@ export function buildResendHeaders(message: EmailMessage, config: EmailTransport
  * the provider response body, or the rendered HTML. The caller records only a
  * status code and a short category.
  */
+/**
+ * A destination this transport will actually send to.
+ *
+ * Deliberately conservative and deliberately HERE, at the lowest boundary every
+ * send passes through, rather than in one caller: an outbox row whose recipient
+ * is resolved from configuration can be blank if that configuration is missing,
+ * and `to: [""]` is a request to the provider that either errors opaquely or —
+ * worse — succeeds against some placeholder. No caller can bypass this.
+ */
+export function isSendableAddress(value: string | null | undefined): boolean {
+  const address = String(value ?? "").trim()
+  if (!address || address.length > 254) {
+    return false
+  }
+  // One @, no whitespace, a dotted domain. Verification is the mailbox's job;
+  // this only rejects values that are obviously not a destination.
+  return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(address)
+}
+
 export async function sendProviderEmail(
   message: EmailMessage,
   config: EmailTransportConfig
 ): Promise<TransportResult> {
+  // BEFORE the provider is contacted. `permanent` rather than `retryable`: a
+  // blank or malformed recipient will not fix itself by being retried, and
+  // burning the attempt budget on it would eventually park a delivery whose
+  // real problem is configuration.
+  if (!isSendableAddress(message.to)) {
+    return {
+      kind: "permanent",
+      status: 0,
+      category: "invalid_recipient",
+      // No address in the message: it may be a sentinel or a misconfiguration,
+      // and this string reaches logs.
+      error: "recipient is not a sendable address"
+    }
+  }
+
   const fetchImpl = config.fetchImpl ?? fetch
   const timeoutMs = config.timeoutMs ?? PROVIDER_TIMEOUT_MS
   const controller = new AbortController()
