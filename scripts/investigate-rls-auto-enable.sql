@@ -69,13 +69,48 @@ join pg_class c on c.oid = tg.tgrelid
 join pg_namespace n on n.oid = p.pronamespace
 where n.nspname = 'public' and p.proname = 'rls_auto_enable' and not tg.tgisinternal;
 
--- 6. Other functions whose body mentions it
-select n.nspname as schema, p.proname as calling_function
+-- 6. Other functions OR PROCEDURES whose body mentions it
+--
+-- LIMIT OF THIS QUERY, STATED PLAINLY: it is a text search of `prosrc`. It
+-- finds a literal mention, including one inside dynamic SQL. It CANNOT find a
+-- name assembled at runtime from fragments (format('rls_' || 'auto_enable')),
+-- and it cannot see callers outside this database at all. An empty result here
+-- means "no caller found", never "no caller exists".
+select
+  n.nspname  as schema,
+  p.proname  as calling_routine,
+  case p.prokind when 'f' then 'function' when 'p' then 'procedure'
+                 when 'a' then 'aggregate' when 'w' then 'window' end as kind,
+  p.prosecdef as caller_is_security_definer,
+  -- The breakage criterion: a SECURITY INVOKER caller reachable by anon or
+  -- authenticated WILL fail after the revoke. A DEFINER caller will not.
+  (not p.prosecdef and (has_function_privilege('anon', p.oid, 'execute')
+                        or has_function_privilege('authenticated', p.oid, 'execute')))
+             as revoke_would_break_this_caller
 from pg_proc p
 join pg_namespace n on n.oid = p.pronamespace
 where p.prosrc like '%rls_auto_enable%'
   and p.proname <> 'rls_auto_enable'
-order by 1, 2;
+order by revoke_would_break_this_caller desc, 1, 2;
+
+-- 6b. Scheduled jobs, if pg_cron is installed
+--
+-- A cron job is a caller this database records but `prosrc` never mentions.
+-- Skipped cleanly when pg_cron is absent rather than erroring.
+do $$
+begin
+  if to_regclass('cron.job') is null then
+    raise notice 'pg_cron is not installed — no scheduled-job caller is possible';
+  else
+    raise notice 'pg_cron IS installed — inspect cron.job for references (query below)';
+  end if;
+end $$;
+
+select jobid, schedule, command, nodename, username, active
+from cron.job
+where command like '%rls_auto_enable%';
+-- If pg_cron is absent this statement errors with 42P01 (relation does not
+-- exist). That is expected and harmless — the NOTICE above already told you.
 
 -- 7. Is it owned by an extension? (i.e. installed, not hand-written)
 select e.extname as owning_extension
