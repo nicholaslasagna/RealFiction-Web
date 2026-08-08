@@ -116,3 +116,43 @@ test("the allowlist contains no wildcard or pattern", () => {
   }
   assert.deepEqual(allowedOrigins(PROD), ["https://realfiction.live"])
 })
+
+// ===========================================================================
+// The NODE_ENV fail-open (found in the final adversarial review)
+// ===========================================================================
+
+test("localhost is REFUSED whenever a real site origin is configured", () => {
+  // The condition used to be an OR chain including `NODE_ENV !== "production"`,
+  // so any runtime where NODE_ENV was not exactly "production" — unset in a
+  // Worker isolate, "prod", "PRODUCTION" — trusted localhost in production.
+  for (const nodeEnv of [undefined, "", "prod", "PRODUCTION", "development", "test"]) {
+    const env = { NEXT_PUBLIC_SITE_URL: "https://realfiction.live", NODE_ENV: nodeEnv }
+    assert.deepEqual(
+      allowedOrigins(env),
+      ["https://realfiction.live"],
+      `NODE_ENV=${JSON.stringify(nodeEnv)} widened the allowlist`
+    )
+    assert.equal(
+      checkSameOrigin(req("POST", "http://localhost:3000"), env).ok,
+      false,
+      `NODE_ENV=${JSON.stringify(nodeEnv)} accepted localhost against a production site URL`
+    )
+  }
+})
+
+test("localhost still works for genuine local development", () => {
+  // No configured origin at all, or a localhost one.
+  assert.equal(checkSameOrigin(req("POST", "http://localhost:3000"), {}).ok, true)
+  assert.equal(
+    checkSameOrigin(req("POST", "http://localhost:3313"), { NEXT_PUBLIC_SITE_URL: "http://localhost:3000" }).ok,
+    true
+  )
+})
+
+test("a malformed site URL trusts NOTHING rather than falling back to localhost", () => {
+  // Fail closed: an unparseable NEXT_PUBLIC_SITE_URL must not silently become
+  // "allow local origins" on a deployed instance.
+  const env = { NEXT_PUBLIC_SITE_URL: "https://  not a url", NODE_ENV: "production" }
+  assert.equal(checkSameOrigin(req("POST", "https://realfiction.live"), env).ok, false)
+  assert.equal(checkSameOrigin(req("POST", "http://localhost:3000"), env).ok, false)
+})

@@ -46,9 +46,24 @@ export function allowedOrigins(env: Record<string, string | undefined> = process
     }
   }
 
-  // Local development. Never added when a production site URL is configured,
-  // so a deployed instance cannot be driven from a developer's machine.
-  if (!configured || configured.includes("localhost") || env.NODE_ENV !== "production") {
+  // Local development origins.
+  //
+  // FAILS CLOSED, and this was a bug. The condition used to include
+  // `env.NODE_ENV !== "production"` as an OR term, so ANY runtime where
+  // NODE_ENV was not exactly the string "production" — unset in a Worker
+  // isolate, "prod", "PRODUCTION" — trusted http://localhost:3000 even with a
+  // real site URL configured. The comment claimed the opposite of what the code
+  // did.
+  //
+  // NODE_ENV is simply not consulted now. The rule needs no environment flag:
+  // if a real site origin is configured, it is the ONLY trusted origin.
+  // Localhost is trusted only when there is no configured origin at all, or
+  // when the configured origin is itself local.
+  const isLocalConfig =
+    !configured || origins.has("http://localhost:3000") ||
+    [...origins].some((o) => o.startsWith("http://localhost:") || o.startsWith("http://127.0.0.1:"))
+
+  if (isLocalConfig) {
     for (const port of ["3000", "3311", "3312", "3313"]) {
       origins.add(`http://localhost:${port}`)
       origins.add(`http://127.0.0.1:${port}`)

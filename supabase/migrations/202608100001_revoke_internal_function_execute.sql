@@ -37,6 +37,13 @@
 
 -- Internal helper. Never called by application code; only by other functions,
 -- which run as their own owner and are unaffected by this revoke.
+-- TRANSACTIONAL. Postgres DDL and GRANT/REVOKE are transactional, so a failure
+-- anywhere below rolls the whole thing back and leaves production exactly as it
+-- was. Without this, a failure in the deny-by-default sweep would leave some
+-- functions revoked and others not — a half-applied privilege change nobody
+-- could reason about afterwards.
+begin;
+
 revoke all on function public._add_playtime_total(text, text, text, integer)
 from public, anon, authenticated;
 
@@ -142,3 +149,5 @@ begin
     raise exception 'ABORT: SECURITY DEFINER function(s) still callable by anon: %', v_leaked;
   end if;
 end $$;
+
+commit;

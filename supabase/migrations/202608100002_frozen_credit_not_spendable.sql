@@ -37,6 +37,15 @@
 -- ---------------------------------------------------------------------------
 -- 1. Spendable balance excludes frozen value
 -- ---------------------------------------------------------------------------
+-- TRANSACTIONAL, and here it is load-bearing.
+--
+-- This migration replaces TWO functions. Applied without a transaction, a
+-- failure between them would leave `reserve_store_credit_for_order` patched
+-- while `request_cash_redemption_core` still took only one advisory lock —
+-- exactly the mismatched-lock state that caused RF-05. Either both land or
+-- neither does.
+begin;
+
 create or replace function public.reserve_store_credit_for_order(
   p_order_id uuid,
   p_user_id uuid,
@@ -260,3 +269,5 @@ $function$;
 
 revoke all on function public.request_cash_redemption_core(uuid, uuid) from public, anon, authenticated;
 grant execute on function public.request_cash_redemption_core(uuid, uuid) to service_role;
+
+commit;

@@ -29,6 +29,33 @@
 -- Nothing below writes. Safe to run against production.
 
 -- ---------------------------------------------------------------------------
+-- 0. SUMMARY FIRST — read this before the detail
+-- ---------------------------------------------------------------------------
+-- Four numbers and a verdict. If `suspicious_current_role_actors` is 0 there is
+-- nothing to chase; the detailed queries below are then context only.
+select
+  (select count(*) from public.economy_ledger
+    where actor_type = 'admin')                          as total_admin_ledger_events,
+  (select count(distinct external_ref_id) from public.economy_ledger
+    where actor_type = 'admin' and external_ref_type is not null)
+                                                          as distinct_import_batches,
+  (select count(distinct actor_id) from public.economy_ledger
+    where actor_type = 'admin')                          as unique_actor_ids,
+  (select count(distinct a.admin_user_id)
+     from public.economy_admin_audit a
+     left join public.profiles p on p.id = a.admin_user_id
+    where coalesce(p.role::text, 'player') not in ('staff','admin','owner'))
+                                                          as suspicious_current_role_actors,
+  case
+    when (select count(distinct a.admin_user_id)
+            from public.economy_admin_audit a
+            left join public.profiles p on p.id = a.admin_user_id
+           where coalesce(p.role::text, 'player') not in ('staff','admin','owner')) = 0
+    then 'CLEAN so far: no admin-attributed economy activity belongs to an account that is a non-staff account today.'
+    else 'REVIEW: at least one actor is not staff TODAY. This is a LEAD, not proof — see the historical-role caveat on every row of query 4.'
+  end                                                     as summary_verdict;
+
+-- ---------------------------------------------------------------------------
 -- 1. Every import/rollback the economy ledger attributes to an "admin"
 -- ---------------------------------------------------------------------------
 -- Grouped by import batch, which the function stores in external_ref_id.
