@@ -328,12 +328,66 @@ test("paragraphs and line breaks are structural, not markup", () => {
 })
 
 test("control characters are stripped from a body", () => {
-  const blocks = parseAnnouncementBody("cleantext[31m")
+  // THE CONTRACT, stated as code points rather than a character class.
+  //
+  // `parseAnnouncementBody` keeps TAB (0x09), LF (0x0A), and everything from
+  // 0x20 up; it removes every other C0 control - which includes CR (0x0D).
+  //
+  // The previous assertion embedded raw control bytes inside a regex range.
+  // That is unreadable in a diff, invisible in most editors, and ambiguous to a
+  // reader and to static analysis alike: a range written with literal control
+  // characters cannot be checked by eye. A predicate over charCodeAt has no
+  // range semantics to misread, and states the policy directly.
+  const isRemoved = (code: number) => code < 0x20 && code !== 0x09 && code !== 0x0a
+  const BELL = String.fromCharCode(0x07)
+  const ESCAPE = String.fromCharCode(0x1b)
+
+  const blocks = parseAnnouncementBody(`clean${BELL}text${ESCAPE}[31m`)
   const text = JSON.stringify(blocks)
-  // eslint-disable-next-line no-control-regex
-  assert.ok(!/[ --]/.test(text), "a control character survived")
+
+  // The two characters actually supplied are gone, named explicitly.
+  assert.ok(!text.includes(BELL), "BEL (U+0007) survived")
+  assert.ok(!text.includes(ESCAPE), "ESC (U+001B) survived")
+
+  // And nothing else in the removed set survived either.
+  for (let index = 0; index < text.length; index += 1) {
+    const code = text.charCodeAt(index)
+    assert.ok(
+      !isRemoved(code),
+      `U+${code.toString(16).padStart(4, "0").toUpperCase()} survived at ${index}`
+    )
+  }
+
+  // Stripping is not mangling: the visible text is untouched.
+  assert.ok(text.includes("clean"), "surrounding text was lost")
+  assert.ok(text.includes("text"), "surrounding text was lost")
 })
 
+test("EVERY C0 control is handled exactly as the contract says", () => {
+  // Exhaustive over 0x00-0x1F, so the contract cannot drift silently.
+  for (let code = 0x00; code < 0x20; code += 1) {
+    const char = String.fromCharCode(code)
+    const blocks = parseAnnouncementBody(`a${char}b`)
+    // The RENDERED text, not JSON.stringify's output: stringify escapes a tab
+    // as a backslash and a `t`, so searching its output for the character
+    // itself reports a surviving tab as missing.
+    const rendered = blocks
+      .flatMap((block) => block.lines)
+      .flat()
+      .map((run) => (run.kind === "text" ? run.value : run.label))
+      .join("")
+    const label = `U+${code.toString(16).padStart(4, "0").toUpperCase()}`
+
+    if (code === 0x09) {
+      assert.ok(rendered.includes(char), "TAB must be preserved")
+    } else if (code === 0x0a) {
+      // LF is structural: it becomes a line break rather than a literal.
+      assert.equal(blocks[0].lines.length, 2, "LF must still split lines")
+    } else {
+      assert.ok(!rendered.includes(char), `${label} was not removed`)
+    }
+  }
+})
 // ===========================================================================
 // The canonical URL is the same everywhere
 // ===========================================================================
@@ -899,4 +953,116 @@ test("confirmation cannot clear a LIVE delivered message", async () => {
   const response = await confirmRemoved("live-one")
   assert.equal(((await response.json()) as { changed?: boolean }).changed, false)
   assert.equal(sql(DB, "select discord_message_id from public.announcements where slug='live-one'"), "m-current")
+})
+
+// ===========================================================================
+// Slug normalisation — shape and complexity
+//
+// The previous implementation chained `.replace(/[^a-z0-9]+/g, "-")` with
+// `.replace(/^-+|-+$/g, "")`. The second alternation is polynomial: against a
+// long run of hyphens the engine retries `-+$` from every position, so
+// `"-".repeat(n)` costs O(n squared). It was reachable from an unauthenticated
+// request body, because normalisation runs BEFORE the length check that would
+// have rejected the input.
+//
+// These exercise the shapes that were pathological. They assert OUTPUT, not
+// timing: a wall-clock threshold is the flaky way to test this, and a correct
+// single-pass implementation is what actually makes the shape safe.
+// ===========================================================================
+
+const SLUG_MAX = 80
+
+test("a huge run of hyphens normalises to nothing", () => {
+  // The exact former pathological input.
+  assert.equal(normalizeSlug("-".repeat(50_000)), "")
+  assert.equal(normalizeSlug("-".repeat(1_000_000)), "")
+})
+
+test("huge runs of arbitrary punctuation normalise to nothing", () => {
+  for (const filler of ["!", ".", "_", " ", "/", "@"]) {
+    assert.equal(normalizeSlug(filler.repeat(100_000)), "", `${filler} produced output`)
+  }
+})
+
+test("alternating valid and invalid characters collapse correctly", () => {
+  assert.equal(normalizeSlug("a-b-c"), "a-b-c")
+  assert.equal(normalizeSlug("a!b!c"), "a-b-c")
+  assert.equal(normalizeSlug("a!!!b"), "a-b")
+  // A long alternation is bounded by the slug limit, not by the input.
+  const result = normalizeSlug("a!".repeat(100_000))
+  assert.ok(result.length <= SLUG_MAX)
+  assert.ok(/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(result), `invalid slug: ${result}`)
+})
+
+test("all-invalid input yields an empty slug, and validation rejects it", () => {
+  for (const input of ["", "   ", "!!!", "///", "éè", "-".repeat(500)]) {
+    assert.equal(normalizeSlug(input), "", `${JSON.stringify(input)} produced output`)
+  }
+  const result = validateAnnouncement({ ...VALID, slug: "!!!" })
+  assert.equal(result.ok, false)
+  assert.equal(result.ok === false && result.field, "slug")
+})
+
+test("leading and trailing separators are dropped", () => {
+  assert.equal(normalizeSlug("---season---"), "season")
+  assert.equal(normalizeSlug("   season   "), "season")
+  assert.equal(normalizeSlug("!!!season!!!"), "season")
+  assert.equal(normalizeSlug("-a-"), "a")
+})
+
+test("output is bounded by the slug limit", () => {
+  assert.equal(normalizeSlug("x".repeat(500)).length, SLUG_MAX)
+  assert.ok(normalizeSlug("season ".repeat(200)).length <= SLUG_MAX)
+})
+
+test("TRUNCATION NEVER LEAVES A TRAILING HYPHEN", () => {
+  // The old implementation did exactly this, producing a slug its OWN validator
+  // then rejected: `.slice()` ran after the trim, so a cut landing on a
+  // separator left one behind.
+  const shapes = [
+    "x".repeat(SLUG_MAX - 1) + "-y",   // cut immediately after a separator
+    "x".repeat(SLUG_MAX) + "-y",       // cut exactly at the limit
+    "a-".repeat(SLUG_MAX),             // separator every other character
+    "ab!".repeat(SLUG_MAX),
+    "word ".repeat(SLUG_MAX)
+  ]
+
+  for (const shape of shapes) {
+    const slug = normalizeSlug(shape)
+    assert.ok(!slug.endsWith("-"), `trailing hyphen for ${JSON.stringify(shape.slice(0, 20))}…`)
+    assert.ok(!slug.startsWith("-"), `leading hyphen for ${JSON.stringify(shape.slice(0, 20))}…`)
+    assert.ok(slug.length <= SLUG_MAX)
+    // The real point: whatever comes out must satisfy the validator.
+    assert.ok(/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug), `invalid slug produced: ${slug}`)
+  }
+})
+
+test("a truncated slug is ACCEPTED by validateAnnouncement", () => {
+  // End to end, because the old bug only surfaced when the two met: normalise
+  // produced a trailing hyphen and SLUG_PATTERN then refused it.
+  const result = validateAnnouncement({ ...VALID, slug: "x".repeat(SLUG_MAX - 1) + "-y" })
+  assert.equal(result.ok, true, "a truncated slug was rejected by its own validator")
+})
+
+test("runs of separators never produce consecutive hyphens", () => {
+  for (const input of ["a!!!!!!!!!!b", "a          b", "a---------b", "a!-!-!-!-!b"]) {
+    const slug = normalizeSlug(input)
+    assert.ok(!slug.includes("--"), `consecutive hyphens in ${slug}`)
+    assert.equal(slug, "a-b")
+  }
+})
+
+test("case folding and digits behave as before", () => {
+  assert.equal(normalizeSlug("Season 4"), "season-4")
+  assert.equal(normalizeSlug("SEASON FOUR"), "season-four")
+  assert.equal(normalizeSlug("Season 4: The Return!"), "season-4-the-return")
+})
+
+test("oversized input is bounded BEFORE the scan", () => {
+  // O(n) is not the same as free. A slug derived from a valid title must still
+  // normalise identically, which is why the bound is the canonical title limit
+  // rather than a new number.
+  const title = "Season ".repeat(20).trim()
+  assert.ok(title.length <= 140)
+  assert.equal(normalizeSlug(title), normalizeSlug(title + "x".repeat(1_000_000)).slice(0, normalizeSlug(title).length))
 })
