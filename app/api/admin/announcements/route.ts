@@ -91,6 +91,47 @@ export async function POST(request: Request) {
     }
   }
 
+  // ---- Manual recovery from a stuck Discord retraction ------------------
+  // An explicit human assertion — "I looked at the channel and the message is
+  // gone" — and the only way out of `retract_failed`. It publishes nothing and
+  // contacts Discord not at all: if we could verify it automatically, the
+  // DELETE would not have failed.
+  if (raw.action === "confirm_discord_removed") {
+    const slug = typeof raw.slug === "string" ? raw.slug.trim().toLowerCase() : ""
+    if (!slug || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) {
+      return safeJsonError("Something in your request does not look right.", 400)
+    }
+
+    try {
+      const supabase = getSupabaseServiceRoleClient()
+      const { data, error } = await supabase.rpc("confirm_announcement_discord_removed", {
+        p_slug: slug
+      })
+
+      if (error) {
+        console.error("announcement_confirm_removed_failed", { code: error.code ?? "unknown" })
+        return safeJsonError("We could not record that. Please try again.", 503)
+      }
+
+      const row = (Array.isArray(data) ? data[0] : data) as Record<string, unknown> | null
+      console.warn("announcement_discord_removal_confirmed", {
+        slug,
+        discord: row?.discord_state,
+        changed: row?.changed,
+        actor: staff.userId
+      })
+
+      return Response.json({
+        slug,
+        discordState: String(row?.discord_state ?? "unknown"),
+        changed: row?.changed === true
+      })
+    } catch {
+      console.error("announcement_confirm_removed_error")
+      return safeJsonError("We could not record that. Please try again.", 503)
+    }
+  }
+
   const payload = raw
 
   for (const field of FORBIDDEN) {

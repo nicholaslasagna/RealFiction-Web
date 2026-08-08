@@ -51,7 +51,27 @@ create table if not exists public.announcements (
   -- Draft is the default. A row is invisible to the public until an explicit
   -- publish, so an accidental insert cannot become a live announcement.
   status text not null default 'draft' check (status in ('draft', 'published', 'archived')),
+
+  -- CURRENT publication time. Drives public ordering and visibility, and is
+  -- RESTAMPED when a retracted announcement is deliberately published again —
+  -- otherwise a republished announcement would reappear buried under its
+  -- original date, which is not what "publish this" means to the person who
+  -- clicked it.
+  --
+  -- Editing an already-live announcement does NOT restamp it: a typo fix must
+  -- not bump something back to the top of the feed.
   published_at timestamptz,
+
+  -- The FIRST time this was ever made public. Written once and never rewritten,
+  -- so retracting and republishing cannot erase the fact that it went out
+  -- before — which is the question that matters if anyone later asks what was
+  -- visible and when.
+  --
+  -- One extra column rather than overloading `published_at`, because that field
+  -- cannot mean "current" and "first" at once without one of them being a lie.
+  -- This is deliberately NOT an audit-log table; it is the smallest field that
+  -- answers the question.
+  first_published_at timestamptz,
 
   -- Display attribution only. NEVER an account id: this string is rendered on
   -- a public page and mirrored to Discord.
@@ -194,13 +214,17 @@ begin
   if not found then
     insert into public.announcements (
       slug, title, excerpt, body, category, author_display, image_url,
-      mirror_to_discord, status, published_at
+      mirror_to_discord, status, published_at, first_published_at
     )
     values (
       p_slug, p_title, coalesce(p_excerpt, ''), coalesce(p_body, ''),
       coalesce(p_category, 'Announcement'), p_author_display, p_image_url,
       coalesce(p_mirror_to_discord, true),
       case when p_publish then 'published' else 'draft' end,
+      case when p_publish then now() else null end,
+      -- Stamped on the FIRST publish, here as well as in the update branch.
+      -- Setting it only on update left every first-time publish with a null
+      -- first_published_at, which is the one value this column exists to hold.
       case when p_publish then now() else null end
     )
     returning * into v_row;
@@ -227,8 +251,16 @@ begin
         mirror_to_discord = coalesce(p_mirror_to_discord, a.mirror_to_discord),
         status = case when p_publish then 'published' else a.status end,
         published_at = case
+          -- A transition INTO published: stamp it now. Covers both the first
+          -- publish and a deliberate republish after a retraction.
+          when p_publish and a.status <> 'published' then now()
+          -- Already live, so this is an edit. Keep the date.
           when p_publish then coalesce(a.published_at, now())
           else a.published_at
+        end,
+        first_published_at = case
+          when p_publish then coalesce(a.first_published_at, a.published_at, now())
+          else a.first_published_at
         end
     where a.id = v_row.id
     returning * into v_row;
@@ -537,6 +569,79 @@ $$;
 revoke all on function public.complete_announcement_retraction(uuid, text, text)
 from public, anon, authenticated;
 grant execute on function public.complete_announcement_retraction(uuid, text, text) to service_role;
+
+/**
+ * Staff confirmation that a stuck Discord message was removed BY HAND.
+ *
+ * WHY THIS EXISTS
+ * ===============
+ * A failed DELETE deliberately keeps `discord_message_id`, because the message
+ * may still exist and clearing it would let a later publish POST a duplicate
+ * beside it. That is the safe default, but it leaves a trap: once an operator
+ * deletes the message manually in Discord, the row still holds a now-dead id,
+ * and the next publish PATCHes it, 404s, and lands in review.
+ *
+ * This is the only way out, and it is deliberately a HUMAN ASSERTION: "I have
+ * looked at the channel and the message is gone." Nothing here contacts
+ * Discord, because if we could verify it automatically the DELETE would not
+ * have failed in the first place.
+ *
+ * ONLY from `retract_failed`. A timed-out delete sits in `retract_pending` and
+ * is still being retried automatically — offering this there would invite an
+ * operator to clear an id while the message is very much still there.
+ *
+ * It publishes nothing and posts nothing. Its entire effect is to forget a
+ * message id, which is what lets the NEXT publish POST exactly one new message.
+ */
+create or replace function public.confirm_announcement_discord_removed(p_slug text)
+returns table(slug text, discord_state text, changed boolean)
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_row public.announcements%rowtype;
+begin
+  select * into v_row from public.announcements a where a.slug = p_slug for update;
+
+  if not found then
+    slug := p_slug; discord_state := 'none'; changed := false;
+    return next; return;
+  end if;
+
+  -- Idempotent: already known-retracted is a success, not an error. An operator
+  -- who clicks twice has not done anything wrong.
+  if v_row.discord_state = 'retracted' and v_row.discord_message_id is null then
+    slug := v_row.slug; discord_state := v_row.discord_state; changed := false;
+    return next; return;
+  end if;
+
+  if v_row.discord_state <> 'retract_failed' then
+    -- Includes retract_pending (still retrying) and delivered (still live and
+    -- still public). Neither is something an operator should be able to
+    -- "confirm away".
+    slug := v_row.slug; discord_state := v_row.discord_state; changed := false;
+    return next; return;
+  end if;
+
+  update public.announcements a
+  set discord_state = 'retracted',
+      -- The whole point. From here a publish POSTs rather than PATCHes.
+      discord_message_id = null,
+      discord_next_attempt_at = null,
+      discord_lease_until = null,
+      discord_last_error = null
+  where a.id = v_row.id
+  returning * into v_row;
+
+  slug := v_row.slug; discord_state := v_row.discord_state; changed := true;
+  return next;
+end;
+$$;
+
+revoke all on function public.confirm_announcement_discord_removed(text)
+from public, anon, authenticated;
+grant execute on function public.confirm_announcement_discord_removed(text) to service_role;
 
 /**
  * Records the outcome of one mirror attempt.

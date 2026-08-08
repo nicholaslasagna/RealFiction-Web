@@ -674,3 +674,229 @@ test("a malformed or unknown slug is refused safely", async () => {
   assert.equal(missing.status, 200)
   assert.equal(((await missing.json()) as { status?: string }).status, "missing")
 })
+
+// ===========================================================================
+// Republish timestamp semantics, and manual recovery from a stuck retraction
+// ===========================================================================
+
+const confirmRemoved = (slug: string) => post({ action: "confirm_discord_removed", slug })
+
+/** now() is TRANSACTION time, so two publishes in one statement tie. */
+const backdate = (slug: string, interval: string) =>
+  sql(DB, `update public.announcements
+           set published_at = now() - interval '${interval}',
+               first_published_at = now() - interval '${interval}'
+           where slug='${slug}'`)
+
+test("REPUBLISH moves an announcement back to the top of the feed", async () => {
+  sql(DB, "delete from public.announcements")
+  asStaff()
+
+  await post({ ...VALID, slug: "older", publish: true })
+  backdate("older", "10 days")
+  await post({ ...VALID, slug: "newer", publish: true })
+  backdate("newer", "2 days")
+
+  assert.equal(sql(DB, "select slug from public.latest_announcement()"), "newer")
+
+  await unpublish("older")
+  await post({ ...VALID, slug: "older", publish: true })
+
+  assert.equal(
+    sql(DB, "select slug from public.latest_announcement()"),
+    "older",
+    "a deliberately republished announcement stayed buried under its original date"
+  )
+  assert.equal(
+    sql(DB, "select string_agg(slug, ',' order by published_at desc) from public.published_announcements(50)"),
+    "older,newer"
+  )
+})
+
+test("republish RESTAMPS published_at but PRESERVES first_published_at", async () => {
+  sql(DB, "delete from public.announcements")
+  asStaff()
+
+  await post({ ...VALID, slug: "history", publish: true })
+  backdate("history", "30 days")
+
+  await unpublish("history")
+  await post({ ...VALID, slug: "history", publish: true })
+
+  assert.equal(
+    sql(DB, "select (published_at > first_published_at)::text from public.announcements where slug='history'"),
+    "true",
+    "publication was not restamped, or history was overwritten"
+  )
+  assert.equal(
+    sql(DB, "select (first_published_at < now() - interval '20 days')::text from public.announcements where slug='history'"),
+    "true",
+    "the original publication date was lost"
+  )
+})
+
+test("a FIRST publish sets first_published_at (the insert path)", async () => {
+  sql(DB, "delete from public.announcements")
+  asStaff()
+  await post({ ...VALID, slug: "brand-new", publish: true })
+
+  assert.equal(
+    sql(DB, "select (first_published_at is not null)::text from public.announcements where slug='brand-new'"),
+    "true",
+    "a first-time publish left first_published_at null"
+  )
+})
+
+test("a DRAFT has neither timestamp", async () => {
+  sql(DB, "delete from public.announcements")
+  asStaff()
+  await post({ ...VALID, slug: "unsent", publish: false })
+
+  assert.equal(
+    sql(DB, "select (published_at is null and first_published_at is null)::text from public.announcements where slug='unsent'"),
+    "true"
+  )
+})
+
+test("EDITING a live announcement does not bump it up the feed", async () => {
+  sql(DB, "delete from public.announcements")
+  asStaff()
+
+  await post({ ...VALID, slug: "first", publish: true })
+  backdate("first", "5 days")
+  await post({ ...VALID, slug: "second", publish: true })
+
+  const before = sql(DB, "select published_at from public.announcements where slug='first'")
+  await post({ ...VALID, slug: "first", title: "Typo fixed", publish: true })
+  const after = sql(DB, "select published_at from public.announcements where slug='first'")
+
+  assert.equal(before, after, "a typo fix reordered the feed")
+  assert.equal(sql(DB, "select slug from public.latest_announcement()"), "second")
+})
+
+// ---- Manual recovery -------------------------------------------------------
+
+async function stickARetraction(slug: string) {
+  await post({ ...VALID, slug, publish: true })
+  sql(DB, `update public.announcements set discord_state='delivered', discord_message_id='m-${slug}' where slug='${slug}'`)
+  await unpublish(slug)
+  const id = sql(DB, `select id from public.announcements where slug='${slug}'`)
+  sql(DB, `select public.complete_announcement_retraction('${id}','failed','provider_403')`)
+}
+
+test("a failed retraction KEEPS the id, and republish before confirmation cannot duplicate", async () => {
+  sql(DB, "delete from public.announcements")
+  asStaff()
+  await stickARetraction("stuck")
+
+  assert.equal(sql(DB, "select discord_message_id from public.announcements where slug='stuck'"), "m-stuck")
+
+  // Republishing now must PATCH the id we still hold, never POST beside it.
+  await post({ ...VALID, slug: "stuck", publish: true })
+  assert.equal(
+    sql(DB, "select discord_message_id from public.announcements where slug='stuck'"),
+    "m-stuck",
+    "republishing before confirmation lost the id and would POST a duplicate"
+  )
+})
+
+test("CONFIRMING manual removal clears the message identity", async () => {
+  sql(DB, "delete from public.announcements")
+  asStaff()
+  await stickARetraction("cleanup")
+
+  const response = await confirmRemoved("cleanup")
+  assert.equal(response.status, 200)
+  assert.equal(((await response.json()) as { changed?: boolean }).changed, true)
+
+  assert.equal(sql(DB, "select discord_state from public.announcements where slug='cleanup'"), "retracted")
+  assert.equal(
+    sql(DB, "select coalesce(discord_message_id,'CLEARED') from public.announcements where slug='cleanup'"),
+    "CLEARED"
+  )
+  // And it published nothing.
+  assert.equal(sql(DB, "select status from public.announcements where slug='cleanup'"), "draft")
+  assert.equal(sql(DB, "select count(*) from public.published_announcements(50)"), "0")
+})
+
+test("after confirmation, publishing posts EXACTLY ONE new message", async () => {
+  sql(DB, "delete from public.announcements")
+  asStaff()
+  await stickARetraction("reborn")
+  await confirmRemoved("reborn")
+
+  await post({ ...VALID, slug: "reborn", publish: true })
+
+  assert.equal(sql(DB, "select discord_state from public.announcements where slug='reborn'"), "pending")
+  assert.equal(
+    sql(DB, "select coalesce(discord_message_id,'NONE') from public.announcements where slug='reborn'"),
+    "NONE",
+    "an id survived confirmation, so the worker would PATCH instead of posting anew"
+  )
+  assert.equal(sql(DB, "select operation from public.claim_announcement_mirrors('w',5,120,6)"), "mirror")
+  assert.equal(sql(DB, "select count(*) from public.announcements where slug='reborn'"), "1")
+})
+
+test("UNAUTHORIZED users cannot confirm removal", async () => {
+  sql(DB, "delete from public.announcements")
+  asStaff()
+  await stickARetraction("guarded")
+
+  for (const who of [signedOut, asPlayer]) {
+    who()
+    assert.equal((await confirmRemoved("guarded")).status, 404)
+  }
+
+  assert.equal(
+    sql(DB, "select discord_message_id from public.announcements where slug='guarded'"),
+    "m-guarded",
+    "a non-staff request cleared the message identity"
+  )
+})
+
+test("REPEATED confirmation is safe", async () => {
+  sql(DB, "delete from public.announcements")
+  asStaff()
+  await stickARetraction("twice-confirmed")
+
+  const first = (await (await confirmRemoved("twice-confirmed")).json()) as { changed?: boolean }
+  const second = (await (await confirmRemoved("twice-confirmed")).json()) as { changed?: boolean }
+
+  assert.equal(first.changed, true)
+  assert.equal(second.changed, false)
+  assert.equal(
+    sql(DB, "select discord_state from public.announcements where slug='twice-confirmed'"),
+    "retracted"
+  )
+})
+
+test("confirmation is NOT available merely because a delete timed out", async () => {
+  sql(DB, "delete from public.announcements")
+  asStaff()
+  await post({ ...VALID, slug: "still-trying", publish: true })
+  sql(DB, "update public.announcements set discord_state='delivered', discord_message_id='m-live' where slug='still-trying'")
+  await unpublish("still-trying")
+
+  // retract_pending: the worker is still retrying, and the message is very
+  // probably still there.
+  assert.equal(sql(DB, "select discord_state from public.announcements where slug='still-trying'"), "retract_pending")
+
+  const response = await confirmRemoved("still-trying")
+  assert.equal(((await response.json()) as { changed?: boolean }).changed, false)
+  assert.equal(
+    sql(DB, "select discord_message_id from public.announcements where slug='still-trying'"),
+    "m-live",
+    "a still-retrying retraction had its id cleared, which would duplicate the message"
+  )
+})
+
+test("confirmation cannot clear a LIVE delivered message", async () => {
+  sql(DB, "delete from public.announcements")
+  asStaff()
+  await post({ ...VALID, slug: "live-one", publish: true })
+  sql(DB, "update public.announcements set discord_state='delivered', discord_message_id='m-current' where slug='live-one'")
+
+  const response = await confirmRemoved("live-one")
+  assert.equal(((await response.json()) as { changed?: boolean }).changed, false)
+  assert.equal(sql(DB, "select discord_message_id from public.announcements where slug='live-one'"), "m-current")
+})

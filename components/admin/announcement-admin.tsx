@@ -76,6 +76,7 @@ export function AnnouncementAdmin({ announcements }: { announcements: AdminAnnou
   // project, and window.confirm is unstyled, unannounced to some screen
   // readers, and impossible to test.
   const [confirmingUnpublish, setConfirmingUnpublish] = useState<string | null>(null)
+  const [confirmingRemoved, setConfirmingRemoved] = useState<string | null>(null)
 
   function loadForEdit(entry: AdminAnnouncement) {
     setEditing(entry.slug)
@@ -161,6 +162,35 @@ export function AnnouncementAdmin({ announcements }: { announcements: AdminAnnou
       router.refresh()
     } catch {
       setMessage({ tone: "error", text: "That could not be unpublished. Check your connection." })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function confirmDiscordRemoved(slug: string) {
+    setBusy(true)
+    setMessage(null)
+    try {
+      const response = await fetch("/api/admin/announcements", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "confirm_discord_removed", slug })
+      })
+      const result = (await response.json().catch(() => ({}))) as { error?: string }
+
+      if (!response.ok) {
+        setMessage({ tone: "error", text: result.error ?? "That could not be recorded." })
+        return
+      }
+
+      setMessage({
+        tone: "ok",
+        text: "Recorded. Publishing this again will post one new Discord message."
+      })
+      setConfirmingRemoved(null)
+      router.refresh()
+    } catch {
+      setMessage({ tone: "error", text: "That could not be recorded. Check your connection." })
     } finally {
       setBusy(false)
     }
@@ -356,6 +386,50 @@ export function AnnouncementAdmin({ announcements }: { announcements: AdminAnnou
                     {entry.discordAttempts > 1 ? <span>({entry.discordAttempts} tries)</span> : null}
                   </span>
                 </button>
+
+                {/* The stuck-retraction escape hatch. Offered ONLY for
+                    `retract_failed` — never for `retract_pending`, which is
+                    still retrying automatically and whose message is very
+                    probably still there. */}
+                {entry.discordState === "retract_failed" ? (
+                  confirmingRemoved === entry.slug ? (
+                    <div className="mt-2 border border-amber-300/30 bg-amber-300/[0.06] p-2.5">
+                      <p id={`removed-${entry.id}`} className="text-xs leading-5 text-amber-100">
+                        We could not delete the Discord copy automatically. Open{" "}
+                        <strong>#announcements</strong>, confirm the message for “{entry.title}” is
+                        gone, then confirm below. This only updates our record — it does not touch
+                        Discord and does not publish anything. Afterwards, publishing this again
+                        posts one new message.
+                      </p>
+                      <div className="mt-2 flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => confirmDiscordRemoved(entry.slug)}
+                          disabled={busy}
+                          aria-describedby={`removed-${entry.id}`}
+                          className="border border-amber-300/40 bg-amber-300/15 px-2.5 py-1 text-xs font-bold text-amber-100 hover:bg-amber-300/25 disabled:opacity-50"
+                        >
+                          {busy ? "Recording…" : "I removed it — confirm"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setConfirmingRemoved(null)}
+                          className="px-2.5 py-1 text-xs text-muted-foreground underline underline-offset-4"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setConfirmingRemoved(entry.slug)}
+                      className="mt-1 text-xs text-amber-200/85 underline underline-offset-4 hover:text-amber-100"
+                    >
+                      Confirm Discord message removed
+                    </button>
+                  )
+                ) : null}
 
                 {/* Only a PUBLISHED announcement can be taken down. A draft is
                     already private, so offering Unpublish there is noise. */}
