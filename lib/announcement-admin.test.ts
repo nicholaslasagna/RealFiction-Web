@@ -1037,11 +1037,20 @@ test("TRUNCATION NEVER LEAVES A TRAILING HYPHEN", () => {
   }
 })
 
-test("a truncated slug is ACCEPTED by validateAnnouncement", () => {
+test("a TITLE-DERIVED truncated slug is accepted by validateAnnouncement", () => {
   // End to end, because the old bug only surfaced when the two met: normalise
   // produced a trailing hyphen and SLUG_PATTERN then refused it.
-  const result = validateAnnouncement({ ...VALID, slug: "x".repeat(SLUG_MAX - 1) + "-y" })
-  assert.equal(result.ok, true, "a truncated slug was rejected by its own validator")
+  //
+  // Driven through the title path, which is where truncation legitimately
+  // happens — an explicit slug over LIMITS.slug is now rejected outright rather
+  // than truncated, so it cannot exercise this.
+  const derived = normalizeSlug("x".repeat(SLUG_MAX - 1) + "-y")
+  assert.ok(!derived.endsWith("-"), "truncation left a trailing hyphen")
+  assert.equal(
+    validateAnnouncement({ ...VALID, slug: derived }).ok,
+    true,
+    "a truncated slug was rejected by its own validator"
+  )
 })
 
 test("runs of separators never produce consecutive hyphens", () => {
@@ -1065,4 +1074,112 @@ test("oversized input is bounded BEFORE the scan", () => {
   const title = "Season ".repeat(20).trim()
   assert.ok(title.length <= 140)
   assert.equal(normalizeSlug(title), normalizeSlug(title + "x".repeat(1_000_000)).slice(0, normalizeSlug(title).length))
+})
+
+// ===========================================================================
+// Unicode folding, and the raw-input contract
+// ===========================================================================
+
+test("UNICODE CASE FOLDING is preserved exactly", () => {
+  // `.toLowerCase()` runs before ASCII classification, so a character that
+  // folds INTO the accepted set is still accepted. U+212A KELVIN SIGN folds to
+  // ASCII "k"; treating it as a separator would silently narrow the charset.
+  assert.equal(normalizeSlug("K"), "k", "U+212A KELVIN SIGN must fold to k")
+  assert.equal(normalizeSlug("Kelvin"), "kelvin")
+  // U+0130 LATIN CAPITAL I WITH DOT folds to "i" plus a combining mark; the
+  // "i" survives and the mark becomes a separator, which is then dropped.
+  assert.equal(normalizeSlug("İ"), "i")
+  assert.equal(normalizeSlug("A"), "a")
+
+  // Characters that do NOT fold into [a-z0-9] are separators, as before.
+  for (const ch of ["ſ", "ẞ", "É", "Ａ"]) {
+    assert.equal(normalizeSlug(ch), "", `${JSON.stringify(ch)} should not survive`)
+  }
+})
+
+test("an OVER-LONG raw slug is REJECTED, never silently truncated", () => {
+  // A slug may be supplied directly, independently of a title. Truncating it to
+  // the scan bound would change what the caller asked for — 140 punctuation
+  // characters followed by "abc" would become "" and be refused for the wrong
+  // reason.
+  const overLong = "!".repeat(140) + "abc"
+  const result = validateAnnouncement({ ...VALID, slug: overLong })
+
+  assert.equal(result.ok, false)
+  assert.equal(result.ok === false && result.field, "slug")
+  assert.match(
+    result.ok === false ? result.message : "",
+    /too long/i,
+    "the message must name the real problem, not the character set"
+  )
+})
+
+// ===========================================================================
+// The EXPLICIT-SLUG contract
+//
+// An explicit slug is its own field with its own maximum — the same one the
+// form enforces with maxLength={80}. Measuring it against the title-derived
+// scan bound let a 100-character slug normalise quietly down to 80 and be
+// accepted, handing the caller a slug they never asked for.
+// ===========================================================================
+
+test("an explicit slug of exactly LIMITS.slug is ACCEPTED", () => {
+  const result = validateAnnouncement({ ...VALID, slug: "a".repeat(SLUG_MAX) })
+  assert.equal(result.ok, true)
+  assert.equal(result.ok === true && result.value.slug.length, SLUG_MAX)
+})
+
+test("an explicit slug ONE OVER the limit is rejected with the right message", () => {
+  const result = validateAnnouncement({ ...VALID, slug: "a".repeat(SLUG_MAX + 1) })
+  assert.equal(result.ok, false)
+  assert.equal(result.ok === false && result.field, "slug")
+  assert.match(result.ok === false ? result.message : "", /too long/i)
+})
+
+test("an explicit 100-character slug is REJECTED, not silently truncated", () => {
+  // The exact defect: this used to normalise to 80 characters and pass.
+  const result = validateAnnouncement({ ...VALID, slug: "a".repeat(100) })
+  assert.equal(result.ok, false, "a 100-character slug was silently truncated and accepted")
+  assert.match(result.ok === false ? result.message : "", /too long/i)
+})
+
+test("a TITLE of LIMITS.title still derives a valid slug within LIMITS.slug", () => {
+  // The title path legitimately exceeds the slug limit and is meant to be
+  // normalised down. Tightening the explicit-slug bound must not break it.
+  const title = "Season Four The Return ".repeat(10).slice(0, 140)
+  assert.equal(title.length, 140)
+
+  const derived = normalizeSlug(title)
+  assert.ok(derived.length <= SLUG_MAX, `derived slug was ${derived.length}`)
+  assert.ok(!derived.endsWith("-"))
+  assert.ok(/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(derived), `invalid derived slug: ${derived}`)
+  assert.equal(validateAnnouncement({ ...VALID, slug: derived }).ok, true)
+})
+
+test("length is measured in UTF-16 code units, as HTML maxLength counts", () => {
+  // No separate counting rule introduced for this field. 40 astral characters
+  // are 80 code units to both `.length` and `maxLength`.
+  const astral = "\u{1F600}".repeat(40)
+  assert.equal(astral.length, SLUG_MAX, "the fixture is not 80 code units")
+  // Rejected for its character set, having passed the length gate — which is
+  // the proof that the gate measured it the same way the form does.
+  const result = validateAnnouncement({ ...VALID, slug: astral })
+  assert.equal(result.ok, false)
+  assert.match(result.ok === false ? result.message : "", /lowercase letters/i)
+
+  // One code unit more is refused for LENGTH instead.
+  const tooLong = astral + "a"
+  assert.equal(tooLong.length, SLUG_MAX + 1)
+  assert.match(
+    (() => { const r = validateAnnouncement({ ...VALID, slug: tooLong }); return r.ok === false ? r.message : "" })(),
+    /too long/i
+  )
+})
+
+test("truncation inside normalizeSlug is UNREACHABLE from the request path", () => {
+  // Called directly it still truncates — that is its DoS guard for the title
+  // path. The validator rejects first, so no request can reach it.
+  assert.equal(normalizeSlug("a".repeat(500)).length, SLUG_MAX)
+  assert.equal(validateAnnouncement({ ...VALID, slug: "a".repeat(500) }).ok, false)
+  assert.equal(validateAnnouncement({ ...VALID, slug: "!".repeat(140) + "abc" }).ok, false)
 })

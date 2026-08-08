@@ -33,13 +33,18 @@ const LIMITS = { slug: 80, title: 140, excerpt: 400, body: 20_000, author: 60, i
 const SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
 
 /**
- * The largest input that legitimately reaches `normalizeSlug`.
+ * A DEFENSIVE SCAN BOUND, not a semantic limit.
  *
- * The admin form derives a slug from the TITLE, so a title-length string is a
- * normal input; anything longer is not. Using the existing `LIMITS.title`
- * rather than a new number keeps one canonical bound — a slug derived from a
- * valid title is never truncated early, and a client cannot hand this function
- * a megabyte to scan.
+ * Two things call `normalizeSlug`: the admin form, which derives a slug from
+ * the TITLE (up to `LIMITS.title`), and `validateAnnouncement` with a
+ * client-supplied slug. The second rejects anything over `LIMITS.slug` before
+ * normalising, so truncation is unreachable from the request path; this bound
+ * exists for the TITLE path, which legitimately exceeds `LIMITS.slug` and is
+ * meant to be normalised down.
+ *
+ * It exists only so an unbounded string can never be scanned. `LIMITS.title`
+ * rather than a new number because that is the largest input any legitimate
+ * caller produces.
  */
 const MAX_SLUG_INPUT = LIMITS.title
 
@@ -108,7 +113,24 @@ export function normalizeSlug(raw: string): string {
 }
 
 export function validateAnnouncement(raw: Record<string, unknown>): ValidationResult {
-  const slug = normalizeSlug(String(raw.slug ?? ""))
+  const rawSlug = String(raw.slug ?? "")
+
+  // Rejected BEFORE normalisation, and rejected rather than truncated.
+  //
+  // The bound is `LIMITS.slug`, NOT the scan bound. An explicit slug is its own
+  // field with its own maximum — the same one the form enforces with
+  // `maxLength={80}` — and it is independent of any title. Measuring it against
+  // the title-derived scan bound let a 100-character slug normalise quietly down
+  // to 80 and be accepted, so the caller got a slug they never asked for.
+  //
+  // `.length` counts UTF-16 code units, which is exactly what the HTML
+  // `maxLength` attribute counts. Same field, same number, no separate counting
+  // rule introduced here.
+  if (rawSlug.length > LIMITS.slug) {
+    return { ok: false, field: "slug", message: "That slug is too long." }
+  }
+
+  const slug = normalizeSlug(rawSlug)
   if (!slug || !SLUG_PATTERN.test(slug)) {
     return { ok: false, field: "slug", message: "Use lowercase letters, numbers, and hyphens." }
   }
