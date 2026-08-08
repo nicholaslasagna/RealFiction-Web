@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { RefreshCw } from "lucide-react"
 
+import { formatCurrency } from "@/lib/utils"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -11,7 +12,8 @@ import {
   canRequestCashRedemption,
   cashRedemptionBadge,
   recipientBadge,
-  recipientCreditState
+  recipientCreditState,
+  isCashRedemptionOpen
 } from "@/lib/gift-card/customer-state"
 
 /**
@@ -36,6 +38,7 @@ type StoreCreditPayload = {
   restoredRecently: boolean
   /** Whether any of the balance came from a gift card. Never an amount. */
   hasGiftOriginCredit: boolean
+  giftOriginCents?: number | null
   cashRedemptionState: string | null
 }
 
@@ -116,12 +119,21 @@ function GoldIngotIcon({ size = 24 }: { size?: number }) {
  */
 export function CreditHoldNotice({
   holdCents,
-  restoredRecently
+  restoredRecently,
+  cashRedemptionState
 }: {
   holdCents: number
   restoredRecently: boolean
+  /** Lets the notice say WHY the value is held, rather than assuming payment. */
+  cashRedemptionState?: string | null
 }) {
-  const badge = recipientBadge(recipientCreditState({ holdCents, restoredRecently }))
+  const badge = recipientBadge(
+    recipientCreditState({
+      holdCents,
+      restoredRecently,
+      cashRedemptionOpen: isCashRedemptionOpen(cashRedemptionState)
+    })
+  )
   if (!badge) {
     return null
   }
@@ -159,24 +171,85 @@ export function CreditHoldNotice({
  */
 export function CashRedemptionPanel({
   hasGiftOriginCredit,
+  giftOriginCents,
   state,
   onRequested
 }: {
   hasGiftOriginCredit: boolean
+  /** The customer's own unfrozen gift-origin balance. Null when unknown. */
+  giftOriginCents?: number | null
   state: string | null
   onRequested?: () => void
 }) {
   const [status, setStatus] = useState<"idle" | "submitting" | "done" | "error">("idle")
   const [message, setMessage] = useState<string | null>(null)
+  // The first click OPENS THIS. It performs no request and freezes nothing —
+  // placing a hold on real money is too consequential for one click.
+  const [confirming, setConfirming] = useState(false)
+
+  const openerRef = useRef<HTMLButtonElement | null>(null)
+  const dialogRef = useRef<HTMLDivElement | null>(null)
+  const confirmRef = useRef<HTMLButtonElement | null>(null)
 
   const badge = cashRedemptionBadge(state)
   const canRequest = canRequestCashRedemption({ hasGiftOriginCredit, currentState: state })
+
+  function closeDialog() {
+    setConfirming(false)
+    // Focus returns to the control that opened it, or a keyboard user is
+    // dropped at the top of the document with no idea where they were.
+    openerRef.current?.focus()
+  }
+
+  useEffect(() => {
+    if (!confirming) {
+      return
+    }
+    confirmRef.current?.focus()
+
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        event.preventDefault()
+        // Escape cancels. Nothing has been submitted at this point.
+        setConfirming(false)
+        openerRef.current?.focus()
+        return
+      }
+      if (event.key !== "Tab") {
+        return
+      }
+      // Focus trap: the dialog is modal, so Tab must not walk behind it.
+      const focusable = dialogRef.current?.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+      )
+      if (!focusable || focusable.length === 0) {
+        return
+      }
+      const first = focusable[0]
+      const last = focusable[focusable.length - 1]
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault()
+        last.focus()
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault()
+        first.focus()
+      }
+    }
+
+    document.addEventListener("keydown", onKeyDown)
+    return () => document.removeEventListener("keydown", onKeyDown)
+  }, [confirming])
 
   if (!badge && !canRequest) {
     return null
   }
 
   async function submit() {
+    // Guard the in-flight window as well as the disabled attribute: a second
+    // Enter press can land before React re-renders the button.
+    if (status === "submitting") {
+      return
+    }
     setStatus("submitting")
     try {
       const response = await fetch("/api/store/gift-cards/cash-redemption", {
@@ -192,12 +265,14 @@ export function CashRedemptionPanel({
       // would eventually drift into promising something the server did not.
       setMessage(body?.message ?? body?.error ?? "We could not start that review.")
       setStatus(response.ok ? "done" : "error")
+      setConfirming(false)
       if (response.ok) {
         onRequested?.()
       }
     } catch {
       setMessage("We could not start that review. Please try again later.")
       setStatus("error")
+      setConfirming(false)
     }
   }
 
@@ -220,18 +295,103 @@ export function CashRedemptionPanel({
             applies to you, our team can review your account.
           </p>
           <Button
+            ref={openerRef}
             type="button"
             variant="outline"
-            className="mt-3"
-            disabled={status === "submitting"}
-            onClick={() => void submit()}
+            // `w-full` with `whitespace-normal` so a long label wraps inside the
+            // card instead of overflowing it on a narrow viewport; `sm:w-auto`
+            // keeps the compact desktop shape. `h-auto` lets a wrapped label
+            // grow rather than clip.
+            className="mt-3 h-auto w-full whitespace-normal py-2.5 text-left sm:w-auto sm:text-center"
+            onClick={() => setConfirming(true)}
             data-testid="cash-redemption-request"
           >
-            {status === "submitting" ? "Sending…" : "Request cash redemption review"}
+            Request cash redemption review
           </Button>
           <p className="mt-2 text-xs text-muted-foreground">
             Requesting a review does not guarantee a payout.
           </p>
+
+          {confirming ? (
+            <>
+              {/* Backdrop. Clicking it cancels, like Escape. */}
+              <div
+                className="fixed inset-0 z-40 bg-black/60"
+                onClick={closeDialog}
+                aria-hidden
+              />
+              <div
+                ref={dialogRef}
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="cash-redemption-dialog-title"
+                aria-describedby="cash-redemption-dialog-body"
+                data-testid="cash-redemption-dialog"
+                className="fixed left-1/2 top-1/2 z-50 w-[min(28rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 border border-amber-200/20 bg-[#07203a] p-5 shadow-2xl"
+              >
+                <h3
+                  id="cash-redemption-dialog-title"
+                  className="display-font text-xl font-semibold text-white"
+                >
+                  Request cash redemption review?
+                </h3>
+
+                <div id="cash-redemption-dialog-body" className="mt-3 space-y-3 text-sm leading-6 text-muted-foreground">
+                  {/* The amount is the customer's OWN unfrozen gift-origin
+                      balance, from the server. "up to" because the server
+                      recomputes under a lock and may hold less. When the amount
+                      is unknown the sentence simply omits it rather than
+                      guessing. */}
+                  {typeof giftOriginCents === "number" && giftOriginCents > 0 ? (
+                    <>
+                      <p data-testid="cash-redemption-dialog-amount">
+                        You’re requesting a review of up to{" "}
+                        <strong className="text-amber-100">
+                          {formatCurrency(giftOriginCents)}
+                        </strong>{" "}
+                        in gift-card credit.
+                      </p>
+                      <p>
+                        While your request is being reviewed, this{" "}
+                        {formatCurrency(giftOriginCents)} will be temporarily unavailable to spend.
+                      </p>
+                    </>
+                  ) : (
+                    <p data-testid="cash-redemption-dialog-amount">
+                      Your eligible gift-card credit will be temporarily unavailable to spend while
+                      your request is being reviewed.
+                    </p>
+                  )}
+                  <p>
+                    Submitting this request does not guarantee a cash payout. Eligibility depends on
+                    applicable law and review by the RealFiction team.
+                  </p>
+                </div>
+
+                <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:justify-end">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full sm:w-auto"
+                    onClick={closeDialog}
+                    data-testid="cash-redemption-cancel"
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    ref={confirmRef}
+                    type="button"
+                    className="w-full sm:w-auto"
+                    disabled={status === "submitting"}
+                    onClick={() => void submit()}
+                    data-testid="cash-redemption-confirm"
+                  >
+                    {status === "submitting" ? "Submitting…" : "Submit review request"}
+                  </Button>
+                </div>
+              </div>
+            </>
+          ) : null}
         </div>
       ) : null}
 
@@ -405,12 +565,14 @@ export function AccountEconomyCard() {
           <CreditHoldNotice
             holdCents={state.data.holdCents}
             restoredRecently={state.data.restoredRecently}
+            cashRedemptionState={state.data.cashRedemptionState}
           />
         ) : null}
 
         {state.status === "ready" ? (
           <CashRedemptionPanel
             hasGiftOriginCredit={state.data.hasGiftOriginCredit}
+            giftOriginCents={state.data.giftOriginCents}
             state={state.data.cashRedemptionState}
             onRequested={() => void loadBalance()}
           />
@@ -420,7 +582,8 @@ export function AccountEconomyCard() {
           <div className="rounded-lg border border-white/10 bg-black/24 p-4">
             <div className="font-mono text-4xl font-semibold text-amber-100">$0.00</div>
             <p className="mt-2 text-sm text-muted-foreground">
-              No store credit yet. Redeem a gift card to add credit to your account.
+              No store credit yet. Claim a RealFiction gift card to add its value to your store
+              credit.
             </p>
           </div>
         ) : null}

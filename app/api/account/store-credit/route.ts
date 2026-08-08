@@ -68,12 +68,19 @@ export async function GET() {
     const holdRow = Array.isArray(hold.data) ? hold.data[0] : null
     const holdCents = hold.error ? 0 : Math.max(0, Math.trunc(Number(holdRow?.hold_cents ?? 0)) || 0)
 
-    // Cash-redemption review: a BOOLEAN and a STATE, nothing else. Sending an
-    // eligible amount here would put a number on the account page that reads as
-    // a promise to pay, and the amount is only ever computed under a lock at
-    // request time anyway — a number returned now would already be stale.
-    const [giftOrigin, redemption] = await Promise.all([
+    // Cash-redemption review: a boolean, a state, and — since the confirmation
+    // dialog has to tell a customer what it is about to put on hold — the
+    // gift-origin amount currently available.
+    //
+    // This is NOT an eligibility promise and is not what gets frozen. The
+    // authoritative amount is still computed under a lock inside
+    // `request_cash_redemption_core`, clamped by the ledger, and never returned.
+    // This value is the customer's OWN unfrozen gift-origin balance, which they
+    // can already see, shown so a consequential click is not blind. The dialog
+    // says "up to", and the server remains free to freeze less.
+    const [giftOrigin, giftOriginCents, redemption] = await Promise.all([
       callServiceRoleRpc<boolean | null>("has_gift_origin_credit", { p_user_id: user.id }),
+      callServiceRoleRpc<number | null>("gift_origin_available", { p_user_id: user.id }),
       callServiceRoleRpc<{ state?: string }[] | null>("my_cash_redemption_status", {
         p_user_id: user.id
       })
@@ -89,6 +96,9 @@ export async function GET() {
       restoredRecently: hold.error ? false : holdRow?.restored_recently === true,
       // Best-effort, like the hold: neither may blank out a visible balance.
       hasGiftOriginCredit: giftOrigin.error ? false : giftOrigin.data === true,
+      // Best-effort. A failure here must not blank the balance, and the dialog
+      // falls back to wording with no number rather than showing a wrong one.
+      giftOriginCents: giftOriginCents.error ? null : Number(giftOriginCents.data ?? 0),
       cashRedemptionState: redemption.error ? null : (redemptionRow?.state ?? null)
     })
   } catch (error) {

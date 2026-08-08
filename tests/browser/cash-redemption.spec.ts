@@ -52,6 +52,9 @@ test("submitting reaches the REAL endpoint and shows the server's wording", asyn
 
   await page.goto("/dev/preview/cash-redemption-offer")
   await page.getByTestId("cash-redemption-request").click()
+  // Requesting is now two steps: the first click only opens the confirmation
+  // dialog and sends nothing. See cash-redemption-confirm.spec.ts.
+  await page.getByTestId("cash-redemption-confirm").click()
 
   await expect(page.getByTestId("cash-redemption-message")).toContainText(/we will email you/i)
   expect(posted).toBe(1)
@@ -76,6 +79,9 @@ test("a not-eligible answer says so without a reason, and promises nothing", asy
 
   await page.goto("/dev/preview/cash-redemption-offer")
   await page.getByTestId("cash-redemption-request").click()
+  // Requesting is now two steps: the first click only opens the confirmation
+  // dialog and sends nothing. See cash-redemption-confirm.spec.ts.
+  await page.getByTestId("cash-redemption-confirm").click()
 
   const message = await page.getByTestId("cash-redemption-message").innerText()
   expect(message).toMatch(/could not find/i)

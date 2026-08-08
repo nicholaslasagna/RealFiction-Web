@@ -578,9 +578,35 @@ try {
 
   check("a recipient sees the hold, the amount, and why they cannot spend it", () => {
     assert.match(frozen.html, /data-testid="store-credit-hold"/)
-    assert.ok(frozenText.includes("Frozen during payment review"))
+    // A PAYMENT hold — a refund or chargeback on the funding card. Renamed from
+    // "Frozen during payment review": a cash-redemption hold now has its own
+    // wording, so this one no longer has to cover both.
+    assert.ok(frozenText.includes("On hold during payment review"))
     assert.match(frozenText, /\$25\.00 on hold/)
     assert.match(frozenText, /cannot be spent/i)
+  })
+
+  const redemptionHold = await get("/dev/preview/credit-cash-redemption-hold")
+  const redemptionHoldText = text(redemptionHold.html)
+
+  check("a CASH-REDEMPTION hold is worded as the customer's own request", () => {
+    assert.match(redemptionHold.html, /data-testid="store-credit-hold"/)
+    assert.ok(
+      redemptionHoldText.includes("Cash redemption review pending"),
+      "the redemption hold did not use its own label"
+    )
+    assert.match(redemptionHoldText, /cash-redemption request is being reviewed/i)
+  })
+
+  check("a cash-redemption hold NEVER blames the payment", () => {
+    // The live smoke test surfaced exactly this: a customer who asked for a
+    // review was told their payment was under review, which is untrue and reads
+    // as though their card had a problem.
+    assert.ok(
+      !/payment review/i.test(redemptionHoldText),
+      "a redemption hold still says the payment is under review"
+    )
+    assert.ok(!/payment that funded it/i.test(redemptionHoldText))
   })
 
   check("THE RECIPIENT IS NEVER TOLD A DISPUTE EXISTS", () => {

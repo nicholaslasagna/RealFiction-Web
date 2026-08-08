@@ -52,7 +52,37 @@ export function formatDate(value: string | null) {
   )
 }
 
-export function orderLabel(status: string) {
+/**
+ * A gift card is not a RealCore reward and is never "ready in-game": nothing is
+ * delivered to a Minecraft server, so the ordinary fulfilment wording is wrong
+ * for it. The delivery is an email carrying a private claim link, and the
+ * meaningful states are sent and claimed.
+ */
+export function isGiftCardOrderRow(order: { order_items?: PurchaseItem[] | null }): boolean {
+  return (order.order_items ?? []).some((item) => {
+    const slug = (item.product_snapshot?.slug ?? "").toLowerCase()
+    return slug.startsWith("gift-card") || slug.startsWith("gift_card")
+  })
+}
+
+export function orderLabel(status: string, isGiftCard = false) {
+  if (isGiftCard) {
+    const giftLabels: Record<string, string> = {
+      draft: "Not started",
+      pending: "Waiting for checkout",
+      paid: "Sending",
+      // The card exists and its delivery email has been queued. "Sent" is what
+      // the purchaser can actually act on; whether the recipient has claimed it
+      // is the recipient's business and is not reported here.
+      fulfilled: "Sent",
+      refunded: "Refunded",
+      chargeback: "Closed",
+      cancelled: "Cancelled",
+      under_review: "Being reviewed"
+    }
+    return giftLabels[status] ?? "Checking"
+  }
+
   const labels: Record<string, string> = {
     draft: "Not started",
     pending: "Waiting for checkout",
@@ -68,7 +98,7 @@ export function orderLabel(status: string) {
   return labels[status] ?? "Checking"
 }
 
-export function OrderStatusBadge({ status }: { status: string }) {
+export function OrderStatusBadge({ status, isGiftCard = false }: { status: string; isGiftCard?: boolean }) {
   const warning = status === "refunded" || status === "chargeback" || status === "under_review"
   const Icon = status === "fulfilled" ? CheckIcon : warning ? WarningIcon : ClockIcon
   const variant: "success" | "warning" | "outline" =
@@ -76,7 +106,7 @@ export function OrderStatusBadge({ status }: { status: string }) {
   return (
     <Badge variant={variant}>
       <Icon size={12} />
-      {orderLabel(status)}
+      {orderLabel(status, isGiftCard)}
     </Badge>
   )
 }
@@ -155,7 +185,7 @@ export function PurchaseRowCard({ order }: { order: PurchaseRow }) {
             </p>
           ) : null}
         </div>
-        <OrderStatusBadge status={order.status} />
+        <OrderStatusBadge status={order.status} isGiftCard={isGiftCardOrderRow(order)} />
       </div>
       <OrderAccounting order={order} />
     </div>

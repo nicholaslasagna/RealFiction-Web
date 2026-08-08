@@ -51,7 +51,12 @@ type RefundFixture = {
   note: string
   cards: GiftCardEntry[]
   /** What the RECIPIENT of a gift card sees about their own credit. */
-  hold: { holdCents: number; restoredRecently: boolean } | null
+  hold: {
+    holdCents: number
+    restoredRecently: boolean
+    /** Present when the hold is caused by the customer's own redemption review. */
+    cashRedemptionState?: string | null
+  } | null
   /** The cash-redemption review entry point and status, when either applies. */
   cashRedemption: { hasGiftOriginCredit: boolean; state: string | null } | null
 }
@@ -341,6 +346,17 @@ export const PREVIEW_STATES = {
     cards: REFUND_CARDS,
     hold: null,
     cashRedemption: null
+  },
+
+  // The SAME hold amount, but caused by the customer's own redemption request.
+  // The wording must differ: nothing is wrong with their payment.
+  "credit-cash-redemption-hold": {
+    surface: "refunds",
+    title: "Credit on hold for a cash-redemption review",
+    note: "The customer asked for this hold. It must not read as a payment problem.",
+    cards: [],
+    hold: { holdCents: 500, restoredRecently: false, cashRedemptionState: "requested" },
+    cashRedemption: { hasGiftOriginCredit: false, state: "requested" }
   },
 
   "credit-frozen": {

@@ -54,7 +54,9 @@ test("the recipient's frozen notice renders, announces itself, and passes axe", 
   const notice = page.getByTestId("store-credit-hold")
   await expect(notice).toBeVisible()
   await expect(notice).toHaveAttribute("role", "status")
-  await expect(notice).toContainText("Frozen during payment review")
+  // Renamed: a cash-redemption hold now has its own wording, so this label no
+  // longer has to cover both causes.
+  await expect(notice).toContainText("On hold during payment review")
   await expect(notice).toContainText("$25.00 on hold")
 
   // The recipient is not a party to the chargeback and is never told about one.

@@ -19,7 +19,7 @@
 export type PurchaserRefundState = "refund_processing" | "refunded" | "refund_review" | "disputed"
 
 /** Exactly the states a recipient can be shown about their own credit. */
-export type RecipientCreditState = "frozen" | "restored"
+export type RecipientCreditState = "frozen" | "restored" | "cash_redemption_hold"
 
 export type StateBadge = {
   label: string
@@ -55,14 +55,31 @@ const PURCHASER_BADGES: Record<PurchaserRefundState, StateBadge> = {
 
 const RECIPIENT_BADGES: Record<RecipientCreditState, StateBadge> = {
   frozen: {
-    label: "Frozen during payment review",
+    // A PAYMENT hold: a refund or a chargeback on the card that funded this
+    // credit. Distinct from a cash-redemption hold, which the customer asked
+    // for themselves — see CASH_REDEMPTION_BADGES. Saying "the payment behind
+    // it is under review" about a redemption the customer initiated is simply
+    // untrue, and it reads as though something went wrong with their card.
+    label: "On hold during payment review",
     tone: "warning",
-    detail: "This part of your balance cannot be spent while the payment behind it is under review."
+    detail:
+      "This part of your balance cannot be spent while the payment that funded it is under review."
   },
   restored: {
     label: "Restored after dispute resolution",
     tone: "success",
     detail: "The review closed and your credit is available again."
+  },
+  // A hold the customer ASKED FOR. Architecturally distinct from `frozen`: that
+  // one is imposed by a refund or chargeback on the funding payment, this one
+  // is the direct consequence of their own cash-redemption request. Conflating
+  // them told customers their payment was under review when nothing was wrong
+  // with it.
+  cash_redemption_hold: {
+    label: "Cash redemption review pending",
+    tone: "warning",
+    detail:
+      "This gift-card credit cannot be spent while your cash-redemption request is being reviewed."
   }
 }
 
@@ -95,11 +112,25 @@ export function recipientBadge(state: string | null | undefined): StateBadge | n
 export function recipientCreditState(input: {
   holdCents: number
   restoredRecently: boolean
+  /** True while the customer has an OPEN cash-redemption review. */
+  cashRedemptionOpen?: boolean
 }): RecipientCreditState | null {
   if (input.holdCents > 0) {
-    return "frozen"
+    // An open redemption review explains the hold precisely. Only fall back to
+    // the payment wording when there is no redemption to attribute it to.
+    return input.cashRedemptionOpen ? "cash_redemption_hold" : "frozen"
   }
   return input.restoredRecently ? "restored" : null
+}
+
+/** The redemption states during which value is actually on hold. */
+export function isCashRedemptionOpen(state: string | null | undefined): boolean {
+  return (
+    state === "requested" ||
+    state === "eligibility_review" ||
+    state === "eligible" ||
+    state === "manual_payout_required"
+  )
 }
 
 // ---------------------------------------------------------------------------
