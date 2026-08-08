@@ -14,10 +14,11 @@ import { processEmailQueue, type ProcessorEnv } from "./email/processor"
 import { reconcilePendingStripeOrders, type ReconcileEnv } from "./store/reconcile-pending"
 import { reconcileGiftCardRefunds, type RefundReconcileEnv } from "./gift-card/reconcile-refunds"
 import { purgeAbuseEvents, type RetentionEnv } from "./abuse/retention"
+import { mirrorAnnouncements, type MirrorEnv } from "./announcements/mirror"
 
 export type ScheduledController = { scheduledTime: number; cron: string }
 export type ScheduledCtx = { waitUntil(promise: Promise<unknown>): void }
-export type ScheduledEnv = ProcessorEnv & ReconcileEnv & RefundReconcileEnv & RetentionEnv
+export type ScheduledEnv = ProcessorEnv & ReconcileEnv & RefundReconcileEnv & RetentionEnv & MirrorEnv
 
 /**
  * Registers the scheduled work for the Worker's lifetime.
@@ -36,6 +37,7 @@ export function runScheduledJobs(
     reconcilePendingStripeOrders?: typeof reconcilePendingStripeOrders
     reconcileGiftCardRefunds?: typeof reconcileGiftCardRefunds
     purgeAbuseEvents?: typeof purgeAbuseEvents
+    mirrorAnnouncements?: typeof mirrorAnnouncements
     /**
      * The shared fulfilment dispatch. Injected because it is `server-only` and
      * this module is executed directly by tests; the Worker entry supplies the
@@ -51,6 +53,7 @@ export function runScheduledJobs(
   const reconcile = deps.reconcilePendingStripeOrders ?? reconcilePendingStripeOrders
   const reconcileRefunds = deps.reconcileGiftCardRefunds ?? reconcileGiftCardRefunds
   const purge = deps.purgeAbuseEvents ?? purgeAbuseEvents
+  const mirror = deps.mirrorAnnouncements ?? mirrorAnnouncements
 
   // `env` is passed explicitly: `process.env` is not populated in a scheduled
   // invocation, so anything reading it there sees undefined.
@@ -121,7 +124,26 @@ export function runScheduledJobs(
       return null
     })
 
-  const registered = [emails, reconciliation, refunds, retention]
+  // A FIFTH isolated job on the same Cron. Announcements are already live on
+  // the website before this runs, so a Discord outage delays a mirror and
+  // nothing else — and its own terminal catch keeps it from disturbing the
+  // four jobs that move money.
+  const announcements = mirror(env, { workerId: `cron-${controller.scheduledTime}` })
+    .then((result) => {
+      if (result.claimed > 0) {
+        console.info("announcement_mirror_summary", result)
+      }
+      return result
+    })
+    .catch((error) => {
+      console.error(
+        "announcement_mirror_failed",
+        error instanceof Error ? error.message : "unknown"
+      )
+      return null
+    })
+
+  const registered = [emails, reconciliation, refunds, retention, announcements]
   for (const promise of registered) {
     ctx.waitUntil(promise)
   }

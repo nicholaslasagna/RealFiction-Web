@@ -50,10 +50,10 @@ test("the drain is registered with ctx.waitUntil, not merely started", async () 
   // registered.
   assert.equal(
     registered.length,
-    4,
-    "email, payment reconciliation, refund reconciliation, and abuse retention are registered separately"
+    5,
+    "email, payment reconciliation, refund reconciliation, abuse retention, and the announcement mirror are registered separately"
   )
-  assert.equal(returned.length, 4)
+  assert.equal(returned.length, 5)
 
   await Promise.all(registered)
   assert.equal(emails, 1)

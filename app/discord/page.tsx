@@ -4,7 +4,7 @@ import { ExternalLink } from "lucide-react"
 
 import { Reveal } from "@/components/reveal"
 import { Button } from "@/components/ui/button"
-import { getLatestAnnouncement } from "@/lib/discord/announcements"
+import { getLatestAnnouncement } from "@/lib/announcements/read"
 import { DISCORD_INVITE_URL, fetchDiscordCounts } from "@/lib/discord/counts"
 import { updates } from "@/lib/data"
 
@@ -27,6 +27,8 @@ function formatWhen(iso: string): string {
 }
 
 export default async function DiscordPage() {
+  // The announcement comes from OUR database, not from reading Discord.
+  // RealFiction publishes; Discord receives a copy.
   const [counts, announcement] = await Promise.all([fetchDiscordCounts(), getLatestAnnouncement()])
 
   return (
@@ -79,63 +81,44 @@ export default async function DiscordPage() {
             Latest announcement
           </h2>
 
-          {announcement.status === "ok" ? (
+          {announcement ? (
             <article className="mt-3" data-testid="discord-announcement">
               <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-xs text-muted-foreground">
-                <span className="font-semibold text-amber-100">{announcement.announcement.author}</span>
-                <time dateTime={announcement.announcement.postedAt}>
-                  {formatWhen(announcement.announcement.postedAt)}
-                </time>
+                <span className="font-semibold text-amber-100">
+                  {announcement.authorDisplay || "RealFiction"}
+                </span>
+                {announcement.publishedAt ? (
+                  <time dateTime={announcement.publishedAt}>{formatWhen(announcement.publishedAt)}</time>
+                ) : null}
+                <span>{announcement.category}</span>
+                {announcement.mirrored ? (
+                  <span className="text-muted-foreground">· also posted in Discord</span>
+                ) : null}
               </div>
 
-              {/* Plain text in a text node. Nothing from Discord is ever passed
-                  to dangerouslySetInnerHTML — see lib/discord/announcements.ts. */}
-              <p className="mt-2 whitespace-pre-line border-l-2 border-amber-200/40 pl-4 text-[15px] leading-7 text-slate-200">
-                {announcement.announcement.text}
-              </p>
+              <h3 className="display-font mt-1.5 text-xl leading-snug text-white">
+                <Link href={`/updates/${announcement.slug}`} className="transition hover:text-amber-100">
+                  {announcement.title}
+                </Link>
+              </h3>
 
-              {announcement.announcement.images.length > 0 ? (
-                <div className="mt-4">
-                  {announcement.announcement.images.map((image) => (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      key={image.url}
-                      src={image.url}
-                      alt={image.alt}
-                      loading="lazy"
-                      className="max-h-80 w-auto max-w-full border border-white/10"
-                    />
-                  ))}
-                </div>
+              {/* Plain text in a text node. There is no HTML sink on this page. */}
+              {announcement.excerpt ? (
+                <p className="mt-1.5 border-l-2 border-amber-200/40 pl-4 text-[15px] leading-7 text-slate-200">
+                  {announcement.excerpt}
+                </p>
               ) : null}
 
-              {announcement.announcement.links.length > 0 ? (
-                <ul className="mt-4 flex flex-wrap gap-x-4 gap-y-2">
-                  {announcement.announcement.links.map((link) => (
-                    <li key={link.url}>
-                      <a
-                        href={link.url}
-                        target="_blank"
-                        rel="noopener noreferrer nofollow ugc"
-                        className="inline-flex items-center gap-1.5 text-sm text-amber-100 underline underline-offset-4"
-                      >
-                        {link.label}
-                        <ExternalLink className="h-3.5 w-3.5" aria-hidden />
-                      </a>
-                    </li>
-                  ))}
-                </ul>
-              ) : null}
+              <Link
+                href={`/updates/${announcement.slug}`}
+                className="mt-3 inline-block text-sm text-amber-100 underline underline-offset-4"
+              >
+                Read the full update
+              </Link>
             </article>
           ) : (
             <p className="mt-3 border-l-2 border-white/10 pl-4 text-[15px] leading-7 text-muted-foreground">
-              {/* One honest sentence per state. The page never claims an
-                  integration is "ready" for something that is not wired up. */}
-              {announcement.status === "unavailable"
-                ? "We couldn't reach Discord just now. Announcements are posted in the server."
-                : announcement.status === "empty"
-                  ? "No announcements yet. New ones appear here automatically."
-                  : "Announcements are posted in the Discord server."}{" "}
+              No announcements yet. New ones appear here and in the Discord server.{" "}
               <Link href={DISCORD_INVITE_URL} className="text-amber-100 underline underline-offset-4">
                 Open Discord
               </Link>

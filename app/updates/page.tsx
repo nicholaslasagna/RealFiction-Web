@@ -2,14 +2,18 @@ import type { Metadata } from "next"
 import Link from "next/link"
 
 import { Reveal } from "@/components/reveal"
-import { updates } from "@/lib/data"
+import { getUpdatesFeed } from "@/lib/announcements/feed"
 
 export const metadata: Metadata = {
   title: "Updates",
   description: "RealFiction news, announcements, event posts, changelogs, and store policy updates."
 }
 
-export default function UpdatesPage() {
+export const dynamic = "force-dynamic"
+
+export default async function UpdatesPage() {
+  const feed = await getUpdatesFeed()
+
   return (
     <section className="container-shell py-10 md:py-14">
       <Reveal className="border-b border-amber-200/15 pb-6">
@@ -23,7 +27,7 @@ export default function UpdatesPage() {
           rule under it; the version sits in the left gutter where a reader can
           scan it without it becoming a boxed-off chip. */}
       <ol className="mt-2">
-        {updates.map((update, index) => (
+        {feed.map((update, index) => (
           <li key={update.slug}>
             <Reveal delay={Math.min(index * 0.04, 0.2)}>
               <Link
@@ -33,7 +37,9 @@ export default function UpdatesPage() {
               >
                 {/* Left gutter: version + date, compact metadata. */}
                 <div className="flex items-baseline gap-3 sm:block">
-                  <div className="font-mono text-sm text-amber-100">{update.version}</div>
+                  <div className="font-mono text-sm text-amber-100">
+                    {update.version || update.type}
+                  </div>
                   <time
                     dateTime={update.date}
                     className="block text-xs text-muted-foreground sm:mt-1"
