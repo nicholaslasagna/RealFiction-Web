@@ -1,9 +1,10 @@
 import type { Metadata } from "next"
 import { notFound } from "next/navigation"
 
-import { listCashRedemptionsForStaff } from "@/lib/announcements/cash-redemption-admin-read"
+import { readCashRedemptionsForStaff } from "@/lib/announcements/cash-redemption-admin-read"
 import { requireStaff } from "@/lib/auth/staff"
 import { Badge } from "@/components/ui/badge"
+import { CashRedemptionActions } from "@/components/admin/cash-redemption-actions"
 import { formatCurrency } from "@/lib/utils"
 
 export const metadata: Metadata = {
@@ -15,14 +16,23 @@ export const metadata: Metadata = {
 export const dynamic = "force-dynamic"
 
 /** The real `email_deliveries.delivery_outcome` values, not invented ones. */
+/**
+ * The REAL `email_deliveries.delivery_outcome` values.
+ *
+ * `pending` is "Queued", not "Retrying". The queue drains on a five-minute
+ * cron, so a freshly created notification sits in `pending` for up to five
+ * minutes by design — that is a normal state, and labelling it as a retry made
+ * a working system look broken. Only `failed_retryable` is an actual retry.
+ */
 const DELIVERY_LABEL: Record<string, string> = {
   pending: "Queued",
   processing: "Sending",
   sent: "Sent",
-  failed_retryable: "Retrying",
+  failed_retryable: "Retry scheduled",
   failed_permanent: "Failed",
-  delivery_uncertain: "Unconfirmed",
+  delivery_uncertain: "Delivery uncertain",
   unconfigured: "Not configured",
+  status_unavailable: "Status unavailable",
   not_queued: "Not queued"
 }
 
@@ -38,7 +48,8 @@ function when(value: string | null) {
  * that visible rather than implicit — an operator can see that an email failed
  * and still work the queue.
  *
- * READ-ONLY IN THIS VERSION. See the note in the page body for why.
+ * Rejection is the only mutation exposed here. It releases a hold through the
+ * canonical resolver; no payout or direct accounting write is available.
  */
 export default async function CashRedemptionAdminPage() {
   const staff = await requireStaff()
@@ -48,7 +59,8 @@ export default async function CashRedemptionAdminPage() {
     notFound()
   }
 
-  const rows = await listCashRedemptionsForStaff()
+  const queue = await readCashRedemptionsForStaff()
+  const rows = queue.rows
   const open = rows.filter((row) => row.isOpen)
 
   return (
@@ -58,8 +70,11 @@ export default async function CashRedemptionAdminPage() {
           <h1 className="display-font text-3xl font-semibold leading-tight md:text-4xl">
             Cash redemptions
           </h1>
-          <Badge variant={open.length > 0 ? "warning" : "outline"} data-testid="cash-redemption-open-count">
-            {open.length} awaiting review
+          <Badge
+            variant={queue.ok && open.length > 0 ? "warning" : "outline"}
+            data-testid="cash-redemption-open-count"
+          >
+            {queue.ok ? `${open.length} awaiting review` : "Queue unavailable"}
           </Badge>
         </div>
         <p className="mt-2 max-w-2xl text-base leading-7 text-muted-foreground">
@@ -68,7 +83,16 @@ export default async function CashRedemptionAdminPage() {
         </p>
       </div>
 
-      {rows.length === 0 ? (
+      {!queue.ok ? (
+        <p
+          className="mt-8 border border-rose-200/20 bg-rose-200/[0.04] p-4 text-sm leading-6 text-rose-100"
+          role="alert"
+          data-testid="cash-redemption-queue-error"
+        >
+          The cash-redemption queue could not be read. No review action is available until the
+          queue is reachable again.
+        </p>
+      ) : rows.length === 0 ? (
         <p className="mt-8 text-sm text-muted-foreground" data-testid="cash-redemption-empty">
           No cash-redemption requests yet.
         </p>
@@ -120,6 +144,14 @@ export default async function CashRedemptionAdminPage() {
                   </td>
                   <td className="py-3 text-muted-foreground">
                     {row.reviewNote ?? row.ineligibleReason ?? "—"}
+                    {row.isOpen ? (
+                      <CashRedemptionActions
+                        requestId={row.requestId}
+                        requester={row.minecraftUsername ?? row.claimantEmail ?? "Unknown"}
+                        requestedCents={row.requestedCents}
+                        frozenCents={row.frozenCents}
+                      />
+                    ) : null}
                   </td>
                 </tr>
               ))}
@@ -129,23 +161,14 @@ export default async function CashRedemptionAdminPage() {
       )}
 
       <div className="mt-8 border-t border-white/10 pt-5">
-        <h2 className="text-xs font-bold uppercase tracking-[0.14em] text-muted-foreground">
-          Closing a review
-        </h2>
-        <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
-          This queue is read-only for now, so a review is closed with SQL. Rejecting releases the
-          hold and emails the customer; both happen inside{" "}
-          <code className="font-mono text-amber-100">resolve_cash_redemption</code>, which is the
-          only supported way to change a request.
+        <p className="max-w-3xl text-sm leading-6 text-muted-foreground">
+          Rejecting a request releases the held store credit and emails the customer. No payout
+          occurs, and nothing on this page can move money. Recording an out-of-band payout is a
+          separate workflow.
         </p>
-        <pre className="mt-3 overflow-x-auto border border-white/10 bg-black/30 p-3 font-mono text-xs leading-5 text-slate-200">
-{`-- Release the hold and close the review
-select * from public.resolve_cash_redemption(
-  '<request-id>'::uuid, 'rejected', 'Not eligible in this jurisdiction');`}
-        </pre>
-        <p className="mt-3 max-w-3xl text-sm leading-6 text-muted-foreground">
-          No payout happens automatically, and nothing on this page can move money. A completed
-          payout is arranged by hand and only then recorded.
+        <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
+          Email status updates when the delivery worker next runs, within five minutes.
+          <span className="text-slate-300"> Queued</span> is normal for a new notification.
         </p>
       </div>
     </section>
