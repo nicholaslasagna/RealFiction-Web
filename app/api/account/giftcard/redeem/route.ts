@@ -2,6 +2,7 @@ import { z } from "zod"
 
 import { giftCodeHash, normalizeGiftCode } from "@/lib/gift-card"
 import { safeJsonError } from "@/lib/security"
+import { checkSameOrigin } from "@/lib/auth/same-origin"
 import { callServiceRoleRpc } from "@/lib/supabase/service-role-rest"
 import { getAuthenticatedUser } from "@/lib/supabase/server"
 
@@ -39,6 +40,15 @@ function formatUsd(cents: number) {
 }
 
 export async function POST(request: Request) {
+  // Same-origin boundary for a browser-session mutation. SameSite=Lax
+  // already blocks CSRF today, but that is a library default this
+  // application does not control. See lib/auth/same-origin.ts.
+  const sameOrigin = checkSameOrigin(request)
+  if (!sameOrigin.ok) {
+    console.warn("cross_origin_mutation_rejected", { route: "account/giftcard/redeem", reason: sameOrigin.reason })
+    return safeJsonError("Something in your request does not look right.", 403)
+  }
+
   const user = await getAuthenticatedUser().catch(() => null)
   if (!user) {
     return Response.json({ error: "Sign in before redeeming a gift card." }, { status: 401 })

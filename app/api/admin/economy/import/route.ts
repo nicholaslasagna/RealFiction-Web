@@ -1,6 +1,7 @@
 import { z } from "zod"
 
 import { constantTimeEqual, describeError, safeJsonError } from "@/lib/security"
+import { checkSameOrigin } from "@/lib/auth/same-origin"
 import { requireStaff } from "@/lib/auth/staff"
 import { callServiceRoleRpc } from "@/lib/supabase/service-role-rest"
 
@@ -158,6 +159,15 @@ function rpcStatus(error: { code?: string; status: number }) {
 }
 
 export async function POST(request: Request) {
+  // Same-origin boundary for a browser-session mutation. SameSite=Lax
+  // already blocks CSRF today, but that is a library default this
+  // application does not control. See lib/auth/same-origin.ts.
+  const sameOrigin = checkSameOrigin(request)
+  if (!sameOrigin.ok) {
+    console.warn("cross_origin_mutation_rejected", { route: "admin/economy/import", reason: sameOrigin.reason })
+    return safeJsonError("Something in your request does not look right.", 403)
+  }
+
   try {
     const actor = await authorizeImport(request)
 

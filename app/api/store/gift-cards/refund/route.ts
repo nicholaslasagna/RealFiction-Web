@@ -16,6 +16,7 @@
 import { getAuthenticatedUser } from "@/lib/supabase/server"
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role"
 import { safeJsonError } from "@/lib/security"
+import { checkSameOrigin } from "@/lib/auth/same-origin"
 import { giftCardForOrder, requestGiftCardRefund } from "@/lib/gift-card/refunds"
 import {
   ABUSE_BLOCKED_MESSAGE,
@@ -50,6 +51,15 @@ const FORBIDDEN = [
 ]
 
 export async function POST(request: Request) {
+  // Same-origin boundary for a browser-session mutation. SameSite=Lax
+  // already blocks CSRF today, but that is a library default this
+  // application does not control. See lib/auth/same-origin.ts.
+  const sameOrigin = checkSameOrigin(request)
+  if (!sameOrigin.ok) {
+    console.warn("cross_origin_mutation_rejected", { route: "store/gift-cards/refund", reason: sameOrigin.reason })
+    return safeJsonError("Something in your request does not look right.", 403)
+  }
+
   const user = await getAuthenticatedUser().catch(() => null)
   if (!user) {
     return safeJsonError("Please sign in to request a refund.", 401)

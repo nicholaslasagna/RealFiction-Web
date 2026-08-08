@@ -93,8 +93,16 @@ select is((select params from public.email_deliveries
 delete from public.email_deliveries;
 -- More gift-origin value on the SAME lot: one lot per card is enforced by a
 -- unique index, so a second card would be needed to make a second lot.
+--
+-- The LEDGER is credited to match. Eligibility is now bounded by the ledger as
+-- well as the lot (see 202608100002 — a lot richer than the account's actual
+-- balance is how the same cent got both spent and paid out), so bumping the lot
+-- alone would model a state the application cannot produce.
 update public.store_credit_lots set remaining_cents = 1000, frozen_cents = 0
 where user_id='7a000000-0000-4000-8000-000000000002';
+insert into public.store_credit_ledger (user_id, delta_cents, source, source_ref, idempotency_key, note)
+values ('7a000000-0000-4000-8000-000000000002', 1000, 'manual_grant', 'test-topup',
+        'test-topup:cash-redemption-emails', 'Fixture top-up to match the lot');
 
 select public.request_cash_redemption('7a000000-0000-4000-8000-000000000002');
 select public.resolve_cash_redemption(

@@ -1,6 +1,7 @@
 import { z } from "zod"
 
 import { createVerificationCode, safeJsonError, sha256Hex } from "@/lib/security"
+import { checkSameOrigin } from "@/lib/auth/same-origin"
 import { getAuthenticatedUser } from "@/lib/supabase/server"
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role"
 import { ensureProfileForUser } from "@/lib/store-server"
@@ -11,6 +12,15 @@ const startLinkSchema = z.object({
 })
 
 export async function POST(request: Request) {
+  // Same-origin boundary for a browser-session mutation. SameSite=Lax
+  // already blocks CSRF today, but that is a library default this
+  // application does not control. See lib/auth/same-origin.ts.
+  const sameOrigin = checkSameOrigin(request)
+  if (!sameOrigin.ok) {
+    console.warn("cross_origin_mutation_rejected", { route: "account/link/start", reason: sameOrigin.reason })
+    return safeJsonError("Something in your request does not look right.", 403)
+  }
+
   const body = await request.json().catch(() => null)
   const parsed = startLinkSchema.safeParse(body)
 

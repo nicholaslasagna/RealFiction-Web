@@ -26,6 +26,7 @@
 
 import { getAuthenticatedUser } from "@/lib/supabase/server"
 import { safeJsonError } from "@/lib/security"
+import { checkSameOrigin } from "@/lib/auth/same-origin"
 import {
   attachCheckoutAttemptOrder,
   attachCheckoutSession,
@@ -59,6 +60,15 @@ function siteUrl() {
 }
 
 export async function POST(request: Request) {
+  // Same-origin boundary for a browser-session mutation. SameSite=Lax
+  // already blocks CSRF today, but that is a library default this
+  // application does not control. See lib/auth/same-origin.ts.
+  const sameOrigin = checkSameOrigin(request)
+  if (!sameOrigin.ok) {
+    console.warn("cross_origin_mutation_rejected", { route: "store/gift-cards/checkout", reason: sameOrigin.reason })
+    return safeJsonError("Something in your request does not look right.", 403)
+  }
+
   // ---- Gate first. Nothing below runs if gift cards are not fully ready. ----
   const availability = evaluateGiftCardAvailability(process.env, {
     cryptoConfigured: isGiftCardCryptoConfigured(process.env)
