@@ -1,6 +1,11 @@
 import "server-only"
 
-// Staff authorization for the announcement admin.
+// THE staff authorization boundary for the whole application.
+//
+// Every privileged human-facing surface must go through this. It lived under
+// lib/announcements/ when the admin surface was the only caller; it moved here
+// after /api/admin/economy/import was found treating ANY authenticated account
+// as an admin. One implementation means a route cannot invent a weaker check.
 //
 // THE CHECK IS SERVER-SIDE AND ASKS THE DATABASE
 // ==============================================

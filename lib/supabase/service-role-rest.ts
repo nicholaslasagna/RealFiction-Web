@@ -7,9 +7,16 @@ export type SupabaseRestError = {
 }
 
 export class ServiceRoleRestConfigError extends Error {
-  constructor(public readonly missing: string[]) {
+  // A plain field, not a constructor parameter property: Node's type-stripping
+  // (used by `node --test`) cannot parse parameter properties, which made this
+  // whole module — and therefore every route importing it — unloadable from any
+  // test. The same fix was already applied to lib/supabase/service-role.ts.
+  readonly missing: string[]
+
+  constructor(missing: string[]) {
     super(`Supabase REST service-role configuration is missing: ${missing.join(", ")}`)
     this.name = "ServiceRoleRestConfigError"
+    this.missing = missing
   }
 }
 

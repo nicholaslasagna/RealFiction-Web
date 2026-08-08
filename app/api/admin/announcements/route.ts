@@ -12,7 +12,7 @@
 // request can influence which Discord webhook the mirror later uses — the
 // worker reads that from the environment.
 
-import { requireStaff } from "@/lib/announcements/staff"
+import { requireStaff } from "@/lib/auth/staff"
 import { validateAnnouncement } from "@/lib/announcements/validate"
 import { safeJsonError } from "@/lib/security"
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role"

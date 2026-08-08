@@ -3,7 +3,7 @@ import { notFound } from "next/navigation"
 
 import { AnnouncementAdmin } from "@/components/admin/announcement-admin"
 import { listAnnouncementsForStaff } from "@/lib/announcements/admin-read"
-import { requireStaff } from "@/lib/announcements/staff"
+import { requireStaff } from "@/lib/auth/staff"
 
 export const metadata: Metadata = {
   title: "Announcements",

@@ -10,6 +10,17 @@
 // with fixture props. That is the same mechanism the refund-state specs already
 // use: the component tree under test is the production one; only the data is
 // fixed.
+// NAVIGATION: `domcontentloaded`, deliberately not `networkidle`.
+//
+// This spec runs against the DEV-mode preview harness, which holds an HMR
+// websocket open — `networkidle` can never settle there, and a cold route
+// compile pushed the first navigation past the 90s timeout, failing 7 tests
+// that have nothing wrong with them. axe needs a parsed DOM, not a quiet
+// network.
+//
+// tests/browser/a11y-sitewide.spec.ts deliberately still uses `networkidle`:
+// it runs against BUILT servers with no HMR socket, and its homepage scan needs
+// the hero BACKGROUND IMAGE painted before axe measures colour contrast.
 import AxeBuilder from "@axe-core/playwright"
 import { expect, test, type Page } from "@playwright/test"
 
@@ -54,7 +65,7 @@ const AUTHENTICATED = [
 
 for (const [label, fixture] of AUTHENTICATED) {
   test(`${label} has no serious or critical violations`, async ({ page }) => {
-    const response = await page.goto(`/dev/preview/${fixture}`, { waitUntil: "networkidle" })
+    const response = await page.goto(`/dev/preview/${fixture}`, { waitUntil: "domcontentloaded" })
     expect(response?.status(), `${fixture} did not load`).toBeLessThan(400)
     await scan(page, label)
   })
@@ -65,7 +76,7 @@ for (const [label, fixture] of AUTHENTICATED) {
 // ===========================================================================
 
 test("the signed-in store is fully keyboard operable with a visible ring", async ({ page }) => {
-  await page.goto("/dev/preview/active-realvip", { waitUntil: "networkidle" })
+  await page.goto("/dev/preview/active-realvip", { waitUntil: "domcontentloaded" })
 
   for (let i = 0; i < 20; i++) {
     await page.keyboard.press("Tab")
@@ -89,7 +100,7 @@ test("the signed-in store is fully keyboard operable with a visible ring", async
 test("the cash-redemption request is reachable and operable by keyboard alone", async ({ page }) => {
   // This button opens a legal review and freezes value. A customer who cannot
   // reach it with a keyboard cannot exercise a right the law may give them.
-  await page.goto("/dev/preview/cash-redemption-offer", { waitUntil: "networkidle" })
+  await page.goto("/dev/preview/cash-redemption-offer", { waitUntil: "domcontentloaded" })
 
   const button = page.getByTestId("cash-redemption-request")
   await expect(button).toBeVisible()
@@ -114,7 +125,7 @@ test("every money state is announced, not signalled by color alone", async ({ pa
     ["credit-frozen", "store-credit-hold"],
     ["cash-redemption-open", "cash-redemption-status"]
   ] as const) {
-    await page.goto(`/dev/preview/${fixture}`, { waitUntil: "networkidle" })
+    await page.goto(`/dev/preview/${fixture}`, { waitUntil: "domcontentloaded" })
     const block = page.getByTestId(testid)
     await expect(block).toHaveAttribute("role", "status")
     expect((await block.innerText()).trim().length, `${fixture} has no text`).toBeGreaterThan(20)
@@ -124,7 +135,7 @@ test("every money state is announced, not signalled by color alone", async ({ pa
 test("order history tables carry programmatic structure", async ({ page }) => {
   // A table of purchases read as a flat run of text is unusable. If it renders
   // as a table it must have headers; if it renders as cards that is fine too.
-  await page.goto("/dev/preview/orders-all", { waitUntil: "networkidle" })
+  await page.goto("/dev/preview/orders-all", { waitUntil: "domcontentloaded" })
 
   const problems = await page.evaluate(() =>
     [...document.querySelectorAll("table")]

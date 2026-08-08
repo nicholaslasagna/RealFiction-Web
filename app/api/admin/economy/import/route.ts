@@ -1,7 +1,7 @@
 import { z } from "zod"
 
 import { constantTimeEqual, describeError, safeJsonError } from "@/lib/security"
-import { getAuthenticatedUser } from "@/lib/supabase/server"
+import { requireStaff } from "@/lib/auth/staff"
 import { callServiceRoleRpc } from "@/lib/supabase/service-role-rest"
 
 const MISSING_SCHEMA_CODES = new Set(["42883", "42P01", "42704"])
@@ -97,17 +97,36 @@ async function authorizeImport(request: Request): Promise<ImportActor> {
     }
   }
 
-  const user = await getAuthenticatedUser().catch(() => null)
+  // A REAL staff check, against the database, for the caller's own session.
+  //
+  // This previously accepted any authenticated account as "admin": it called
+  // getAuthenticatedUser() and, if anyone was signed in, returned
+  // actorType "admin". The route then invoked admin_import_economy_balances
+  // through the SERVICE ROLE, which bypasses RLS — and the SQL side validates
+  // only the SHAPE of these audit fields (`_economy_assert_import_actor`
+  // checks actor_type is 'admin'|'service' and that an admin id is present),
+  // never that the caller holds the role. Anyone who could register could mint
+  // arbitrary economy balances.
+  //
+  // `actorType`/`actorId` remain AUDIT values. They are derived from the
+  // verified session here and are never read from the request body.
+  const staff = await requireStaff()
 
-  if (!user) {
-    return { ok: false, response: Response.json({ error: "Authentication is required." }, { status: 401 }) }
+  if (!staff.ok) {
+    if (staff.reason === "unavailable") {
+      // Fail closed. An unreachable database is not permission.
+      return { ok: false, response: safeJsonError("We could not verify your access.", 503) }
+    }
+    // Signed-out and not-staff answer identically, so this cannot be used to
+    // discover who holds the role.
+    return { ok: false, response: Response.json({ error: "Unauthorized." }, { status: 401 }) }
   }
 
   return {
     ok: true,
     actorType: "admin",
-    actorId: user.id,
-    adminUserId: user.id
+    actorId: staff.userId,
+    adminUserId: staff.userId
   }
 }
 
