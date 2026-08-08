@@ -179,7 +179,7 @@ export function CashRedemptionPanel({
   /** The customer's own unfrozen gift-origin balance. Null when unknown. */
   giftOriginCents?: number | null
   state: string | null
-  onRequested?: () => void
+  onRequested?: () => void | Promise<void>
 }) {
   const [status, setStatus] = useState<"idle" | "submitting" | "done" | "error">("idle")
   const [message, setMessage] = useState<string | null>(null)
@@ -264,15 +264,23 @@ export function CashRedemptionPanel({
       // The server's message is the ONLY wording shown. Composing our own here
       // would eventually drift into promising something the server did not.
       setMessage(body?.message ?? body?.error ?? "We could not start that review.")
-      setStatus(response.ok ? "done" : "error")
-      setConfirming(false)
-      if (response.ok) {
-        onRequested?.()
+
+      if (!response.ok) {
+        // The dialog STAYS OPEN. Closing it on failure hides the error behind
+        // the card the customer just dismissed, which reads as "nothing
+        // happened" — the same failure mode this whole flow had.
+        setStatus("error")
+        return
       }
+
+      setStatus("done")
+      setConfirming(false)
+      // Awaited, so `done` is only reached once the authoritative state has
+      // been re-read. The database decides what the card shows, not this.
+      await onRequested?.()
     } catch {
       setMessage("We could not start that review. Please try again later.")
       setStatus("error")
-      setConfirming(false)
     }
   }
 
@@ -389,6 +397,16 @@ export function CashRedemptionPanel({
                     {status === "submitting" ? "Submitting…" : "Submit review request"}
                   </Button>
                 </div>
+
+                {status === "error" && message ? (
+                  <p
+                    role="alert"
+                    data-testid="cash-redemption-dialog-error"
+                    className="mt-3 text-sm leading-6 text-rose-200"
+                  >
+                    {message}
+                  </p>
+                ) : null}
               </div>
             </>
           ) : null}
@@ -416,7 +434,15 @@ export function AccountEconomyCard() {
   const codeInputRef = useRef<HTMLInputElement>(null)
 
   const loadBalance = useCallback(async () => {
-    setState({ status: "loading" })
+    // REVALIDATE IN PLACE. Dropping to `loading` unmounted the hold notice, the
+    // redemption panel, and the just-set confirmation message, replacing the
+    // whole card with a skeleton — so a successful request looked like nothing
+    // had happened, and the panel remounted with its state reset.
+    //
+    // The previous data stays on screen until the server answers, and is then
+    // REPLACED by it. The rendered state always reconciles against the
+    // database; nothing here is optimistic.
+    setState((current) => (current.status === "ready" ? current : { status: "loading" }))
     try {
       const response = await fetch("/api/account/store-credit", {
         method: "GET",
@@ -454,6 +480,12 @@ export function AccountEconomyCard() {
               : 0,
           restoredRecently: body?.restoredRecently === true,
           hasGiftOriginCredit: body?.hasGiftOriginCredit === true,
+          // Was missing: the dialog reads this to say what will go on hold, so
+          // without it every confirmation fell back to the amountless wording.
+          giftOriginCents:
+            typeof body?.giftOriginCents === "number" && Number.isFinite(body.giftOriginCents)
+              ? Math.max(0, Math.trunc(body.giftOriginCents))
+              : null,
           cashRedemptionState:
             typeof body?.cashRedemptionState === "string" ? body.cashRedemptionState : null
         }

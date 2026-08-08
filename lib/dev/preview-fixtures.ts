@@ -45,6 +45,12 @@ type IdentityFixture = {
   minecraftUuid: string
 }
 
+type LiveEconomyFixture = {
+  surface: "economy-live"
+  title: string
+  note: string
+}
+
 type RefundFixture = {
   surface: "refunds"
   title: string
@@ -61,7 +67,12 @@ type RefundFixture = {
   cashRedemption: { hasGiftOriginCredit: boolean; state: string | null } | null
 }
 
-export type PreviewFixture = StoreFixture | AccountFixture | IdentityFixture| RefundFixture
+export type PreviewFixture =
+  | StoreFixture
+  | AccountFixture
+  | IdentityFixture
+  | RefundFixture
+  | LiveEconomyFixture
 
 // -- Refund and dispute states ------------------------------------------------
 //
@@ -350,6 +361,16 @@ export const PREVIEW_STATES = {
 
   // The SAME hold amount, but caused by the customer's own redemption request.
   // The wording must differ: nothing is wrong with their payment.
+  // Renders the REAL AccountEconomyCard, which owns loadBalance(). Every other
+  // fixture passes props to the sub-components directly, so the submit ->
+  // refetch -> render loop was never exercised by a test — which is how the
+  // confirmation regression reached production.
+  "account-economy-live": {
+    surface: "economy-live",
+    title: "Account economy card (live data path)",
+    note: "Drives the real fetch loop. Routes are intercepted by the browser test."
+  },
+
   "credit-cash-redemption-hold": {
     surface: "refunds",
     title: "Credit on hold for a cash-redemption review",

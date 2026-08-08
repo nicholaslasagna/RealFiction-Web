@@ -19,7 +19,7 @@ import { FairPlayPromise } from "@/components/store/fair-play"
 import { OrderHistoryPreview } from "@/components/dev/order-history-preview"
 import { GiftCardCodes } from "@/components/gift-card-codes"
 import { AccountLinkCard } from "@/components/account-link-card"
-import { CashRedemptionPanel, CreditHoldNotice } from "@/components/account-economy-card"
+import { AccountEconomyCard, CashRedemptionPanel, CreditHoldNotice } from "@/components/account-economy-card"
 import { PREVIEW_STATES, type PreviewStateId } from "@/lib/dev/preview-fixtures"
 
 export const dynamic = "force-dynamic"
@@ -45,6 +45,13 @@ export default async function PreviewPage({ params }: { params: Promise<{ state:
         <h2 className="display-font text-2xl">{fixture.title}</h2>
         <p className="mt-1 text-sm text-muted-foreground">{fixture.note}</p>
       </header>
+
+      {fixture.surface === "economy-live" ? (
+        // The REAL card, fetching from the real routes. A browser test
+        // intercepts those routes to drive the submit -> refetch -> render loop
+        // that fixture-prop rendering cannot reach.
+        <AccountEconomyCard />
+      ) : null}
 
       {fixture.surface === "refunds" ? (
         <div className="space-y-6">
@@ -74,9 +81,11 @@ export default async function PreviewPage({ params }: { params: Promise<{ state:
           minecraftUsername={fixture.minecraftUsername}
           minecraftUuid={fixture.minecraftUuid}
         />
-      ) : (
+      ) : fixture.surface === "account" ? (
+        // Explicit rather than a trailing else: adding a surface must not
+        // silently fall into whichever branch happens to be last.
         <OrderHistoryPreview orders={fixture.orders} />
-      )}
+      ) : null}
     </div>
   )
 }
