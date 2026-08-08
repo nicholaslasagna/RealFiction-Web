@@ -33,6 +33,8 @@ export type MirrorEnv = {
 export type MirrorResult = {
   claimed: number
   delivered: number
+  /** Discord messages removed for a retracted announcement. */
+  retracted: number
   edited: number
   retried: number
   stopped: number
@@ -51,6 +53,8 @@ type ClaimRow = {
   author_display: string | null
   image_url: string | null
   discord_message_id: string | null
+  /** 'mirror' (POST/PATCH) or 'retract' (DELETE), decided under the claim lock. */
+  operation?: string | null
   attempts: number
 }
 
@@ -81,6 +85,57 @@ type DeliveryOutcome =
  * A 4xx that is not a rate limit is permanent — a malformed embed or a deleted
  * message will not fix itself — so it stops rather than burning six attempts.
  */
+type RetractOutcome =
+  | { kind: "deleted" }
+  | { kind: "retry"; error: string }
+  | { kind: "failed"; error: string }
+
+/**
+ * Deletes one previously mirrored message.
+ *
+ * A 404 is SUCCESS. The message is gone, which is the outcome we wanted —
+ * treating it as a failure would strand the row in `retract_failed` and force a
+ * human to confirm something Discord already told us.
+ *
+ * This never posts. There is no code path here that creates a message, because
+ * a retraction that accidentally produced a replacement announcement would be
+ * the worst possible outcome of asking to take one down.
+ */
+async function retract(
+  webhookUrl: string,
+  messageId: string,
+  fetchImpl: typeof fetch
+): Promise<RetractOutcome> {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS)
+
+  try {
+    const response = await fetchImpl(
+      `${webhookUrl}/messages/${encodeURIComponent(messageId)}`,
+      { method: "DELETE", signal: controller.signal }
+    )
+
+    // 204 is the documented success; 404 means someone already removed it.
+    if (response.ok || response.status === 404) {
+      return { kind: "deleted" }
+    }
+
+    if (response.status === 429 || response.status >= 500) {
+      return { kind: "retry", error: `provider_${response.status}` }
+    }
+
+    // 401/403: the webhook cannot touch that message. A human decides, and the
+    // message id is kept so a later publish PATCHes rather than duplicating.
+    return { kind: "failed", error: `provider_${response.status}` }
+  } catch {
+    // Unknown. Retry — a DELETE is idempotent, so a retry is safe even if the
+    // first one actually landed.
+    return { kind: "retry", error: "unreachable" }
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
 async function deliver(
   webhookUrl: string,
   payload: Record<string, unknown>,
@@ -147,6 +202,7 @@ export async function mirrorAnnouncements(
   const result: MirrorResult = {
     claimed: 0,
     delivered: 0,
+    retracted: 0,
     edited: 0,
     retried: 0,
     stopped: 0,
@@ -184,6 +240,46 @@ export async function mirrorAnnouncements(
   result.claimed = rows.length
 
   for (const row of rows) {
+    // ---- Retraction. Deletes, never posts. --------------------------------
+    if (row.operation === "retract") {
+      if (!row.discord_message_id) {
+        // Nothing to delete. Should not be claimable, but a row that reached
+        // here without an id must not fall through into the mirror path below,
+        // which would POST a message for an announcement we are retracting.
+        try {
+          await supabase.rpc("complete_announcement_retraction", {
+            p_id: row.id,
+            p_outcome: "deleted",
+            p_error: null
+          })
+        } catch {
+          // Bookkeeping only; the lease expires on its own.
+        }
+        continue
+      }
+
+      const removal = await retract(webhookUrl, row.discord_message_id, fetchImpl)
+
+      try {
+        await supabase.rpc("complete_announcement_retraction", {
+          p_id: row.id,
+          p_outcome: removal.kind === "deleted" ? "deleted" : removal.kind === "retry" ? "retry" : "failed",
+          p_error: removal.kind === "deleted" ? null : removal.error
+        })
+      } catch {
+        continue
+      }
+
+      if (removal.kind === "deleted") {
+        result.retracted++
+      } else if (removal.kind === "retry") {
+        result.retried++
+      } else {
+        result.stopped++
+      }
+      continue
+    }
+
     const announcement: AnnouncementForDiscord = {
       slug: row.slug,
       title: row.title,

@@ -68,8 +68,20 @@ create table if not exists public.announcements (
   --   failed           attempts exhausted; a human decides
   --   review_required  we cannot safely proceed (e.g. an edit whose PATCH fails)
   --   skipped          mirroring disabled or no webhook configured
+  --
+  -- Retraction states. An unpublish is a SEPARATE lifecycle from delivery:
+  --   retract_pending  the website is already private; Discord still holds a
+  --                    message that must be deleted
+  --   retracted        Discord confirmed the delete. `discord_message_id` is
+  --                    cleared, so a later publish POSTs a NEW message rather
+  --                    than PATCHing an id we know is gone
+  --   retract_failed   the delete did not succeed. The message MAY still exist,
+  --                    so the id is deliberately KEPT: a later publish PATCHes
+  --                    it (harmless if it exists, review_required if it does
+  --                    not) instead of POSTing a duplicate
   discord_state text not null default 'pending' check (discord_state in (
-    'pending', 'delivered', 'retrying', 'failed', 'review_required', 'skipped'
+    'pending', 'delivered', 'retrying', 'failed', 'review_required', 'skipped',
+    'retract_pending', 'retracted', 'retract_failed'
   )),
   -- Set EXACTLY once, by the first successful POST. Its presence is what makes
   -- every later delivery an edit rather than a new post.
@@ -98,7 +110,7 @@ where status = 'published';
 
 create index if not exists announcements_mirror_due_idx
 on public.announcements(discord_next_attempt_at)
-where discord_state in ('pending', 'retrying');
+where discord_state in ('pending', 'retrying', 'retract_pending');
 
 drop trigger if exists announcements_set_updated_at on public.announcements;
 create trigger announcements_set_updated_at
@@ -325,7 +337,10 @@ create or replace function public.claim_announcement_mirrors(
 returns table(
   id uuid, slug text, title text, excerpt text, category text,
   published_at timestamptz, author_display text, image_url text,
-  discord_message_id text, attempts integer
+  discord_message_id text, attempts integer,
+  -- 'mirror' (POST/PATCH) or 'retract' (DELETE). Decided HERE, under the same
+  -- lock as the claim, so the worker cannot infer it from stale row state.
+  operation text
 )
 language plpgsql
 security definer
@@ -338,13 +353,21 @@ begin
   with due as (
     select a.id
     from public.announcements a
-    where a.status = 'published'
-      and a.mirror_to_discord
-      and a.discord_state in ('pending', 'retrying')
+    where (
+        -- A normal mirror: the row is public and needs posting or editing.
+        (a.status = 'published' and a.mirror_to_discord and a.discord_state in ('pending', 'retrying'))
+        -- A RETRACTION: the row is already private on the website, and Discord
+        -- still holds a message. The status filter above would never see it,
+        -- which is exactly the bug that would leave a retracted announcement
+        -- visible in Discord forever.
+        or (a.discord_state = 'retract_pending' and a.discord_message_id is not null)
+      )
       and a.discord_attempts < greatest(1, coalesce(p_max_attempts, 6))
       and coalesce(a.discord_next_attempt_at, '-infinity'::timestamptz) <= now()
       and coalesce(a.discord_lease_until, '-infinity'::timestamptz) <= now()
-    order by a.published_at
+    -- Retractions first: leaving a retracted announcement visible in Discord is
+    -- worse than delaying a new one by one cron tick.
+    order by (a.discord_state = 'retract_pending') desc, a.published_at nulls last
     limit greatest(1, least(coalesce(p_limit, 5), 25))
     for update of a skip locked
   ),
@@ -361,7 +384,8 @@ begin
 
   return query
   select a.id, a.slug, a.title, a.excerpt, a.category, a.published_at,
-         a.author_display, a.image_url, a.discord_message_id, a.discord_attempts
+         a.author_display, a.image_url, a.discord_message_id, a.discord_attempts,
+         case when a.discord_state = 'retract_pending' then 'retract' else 'mirror' end
   from public.announcements a
   where a.id = any(coalesce(v_ids, '{}'::uuid[]));
 end;
@@ -370,6 +394,149 @@ $$;
 revoke all on function public.claim_announcement_mirrors(text, integer, integer, integer)
 from public, anon, authenticated;
 grant execute on function public.claim_announcement_mirrors(text, integer, integer, integer) to service_role;
+
+/**
+ * Retracts a published announcement.
+ *
+ * THE WEBSITE IS PRIVATE THE MOMENT THIS COMMITS
+ * ==============================================
+ * `status` goes back to `draft` in this transaction, so `/updates`,
+ * `/discord`, and `/updates/<slug>` stop serving it immediately. Discord
+ * deletion is scheduled, never awaited: a Discord outage must not be able to
+ * keep an announcement public on our own site, which is the surface we control
+ * and the one that matters.
+ *
+ * NOTHING IS DELETED. The row, its body, its slug, and its timestamps all
+ * remain — `published_at` is deliberately kept as the record of when it went
+ * out. Only `status` changes.
+ *
+ * Idempotent: retracting an already-private announcement is a no-op that does
+ * not re-arm a second Discord delete.
+ */
+create or replace function public.unpublish_announcement(p_slug text)
+returns table(slug text, status text, discord_state text, changed boolean)
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_row public.announcements%rowtype;
+begin
+  select * into v_row from public.announcements a where a.slug = p_slug for update;
+
+  if not found then
+    slug := p_slug; status := 'missing'; discord_state := 'none'; changed := false;
+    return next; return;
+  end if;
+
+  if v_row.status <> 'published' then
+    -- Already private. Report the current state without touching the mirror:
+    -- re-arming would schedule a second DELETE for a message that a previous
+    -- retraction may already have removed.
+    slug := v_row.slug; status := v_row.status;
+    discord_state := v_row.discord_state; changed := false;
+    return next; return;
+  end if;
+
+  update public.announcements a
+  set status = 'draft',
+      -- published_at is KEPT. It is history, and clearing it would also break
+      -- the announcements_published_has_timestamp constraint's intent.
+      discord_state = case
+        -- Discord holds a message: schedule its deletion.
+        when a.discord_message_id is not null then 'retract_pending'
+        -- Never mirrored, so there is nothing in Discord to remove.
+        else 'skipped'
+      end,
+      discord_next_attempt_at = case when a.discord_message_id is not null then now() else null end,
+      discord_attempts = 0,
+      discord_lease_until = null,
+      discord_last_error = null,
+      -- The delivered hash is cleared either way: whatever Discord holds (or
+      -- held) no longer corresponds to a published announcement, so a later
+      -- publish must re-evaluate rather than treat it as already delivered.
+      discord_delivered_hash = null
+  where a.id = v_row.id
+  returning * into v_row;
+
+  slug := v_row.slug; status := v_row.status;
+  discord_state := v_row.discord_state; changed := true;
+  return next;
+end;
+$$;
+
+revoke all on function public.unpublish_announcement(text) from public, anon, authenticated;
+grant execute on function public.unpublish_announcement(text) to service_role;
+
+/**
+ * Records the outcome of one Discord DELETE.
+ *
+ * THE REPUBLISH-SAFETY DECISION LIVES HERE
+ * ========================================
+ *   success -> `discord_message_id` is CLEARED. The message is known gone, so a
+ *              later publish must POST a new one. PATCHing a deleted id would
+ *              404 and strand the announcement in review.
+ *
+ *   failure -> the id is deliberately KEPT. The message may still exist, and
+ *              clearing it would make the next publish POST a SECOND message
+ *              beside the one still sitting in the channel. Keeping it means
+ *              the next publish PATCHes: harmless if the message is there, and
+ *              a clean review_required if it is not. Never a duplicate.
+ *
+ * A 404 from Discord counts as SUCCESS: the message is gone, which is the
+ * outcome we wanted.
+ */
+create or replace function public.complete_announcement_retraction(
+  p_id uuid,
+  p_outcome text,
+  p_error text default null
+)
+returns text
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_state text;
+begin
+  if p_outcome = 'deleted' then
+    update public.announcements a
+    set discord_state = 'retracted',
+        -- Known gone. This is what makes the next publish a POST.
+        discord_message_id = null,
+        discord_lease_until = null,
+        discord_next_attempt_at = null,
+        discord_last_error = null
+    where a.id = p_id
+    returning a.discord_state into v_state;
+
+  elsif p_outcome = 'retry' then
+    update public.announcements a
+    set discord_state = 'retract_pending',
+        discord_lease_until = null,
+        discord_next_attempt_at = now() + make_interval(secs => least(3600, 60 * power(2, a.discord_attempts)::int)),
+        discord_last_error = left(coalesce(p_error, 'retry'), 200)
+    where a.id = p_id
+    returning a.discord_state into v_state;
+
+  else
+    -- Exhausted or refused. The id stays; a human decides.
+    update public.announcements a
+    set discord_state = 'retract_failed',
+        discord_lease_until = null,
+        discord_next_attempt_at = null,
+        discord_last_error = left(coalesce(p_error, 'failed'), 200)
+    where a.id = p_id
+    returning a.discord_state into v_state;
+  end if;
+
+  return coalesce(v_state, 'missing');
+end;
+$$;
+
+revoke all on function public.complete_announcement_retraction(uuid, text, text)
+from public, anon, authenticated;
+grant execute on function public.complete_announcement_retraction(uuid, text, text) to service_role;
 
 /**
  * Records the outcome of one mirror attempt.

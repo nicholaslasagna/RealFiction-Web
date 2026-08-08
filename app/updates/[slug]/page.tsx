@@ -6,12 +6,21 @@ import { ArrowLeft, CalendarDays, Tag } from "lucide-react"
 import { Reveal } from "@/components/reveal"
 import { Badge } from "@/components/ui/badge"
 import { updates } from "@/lib/data"
+import { getAnnouncementBySlug } from "@/lib/announcements/read"
+import { AnnouncementBody } from "@/components/announcement-body"
 
 type Params = { slug: string }
 
 /**
  * Pre-render every known update at build time so the patch-note pages
  * are static and fast. Unknown slugs fall through to notFound().
+ */
+/**
+ * Pre-renders the LEGACY updates at build time, exactly as before.
+ *
+ * Canonical announcements are deliberately absent: they are published after a
+ * build, so they resolve on demand instead (`dynamicParams` stays at its
+ * default of true). Every existing static page keeps its build-time render.
  */
 export function generateStaticParams(): Params[] {
   return updates.map((update) => ({ slug: update.slug }))
@@ -25,16 +34,27 @@ export async function generateMetadata({
   const { slug } = await params
   const update = updates.find((entry) => entry.slug === slug)
 
-  if (!update) {
+  if (update) {
     return {
-      title: "Update not found",
-      description: "This RealFiction update could not be found."
+      title: `${update.title} · ${update.version}`,
+      description: update.summary
+    }
+  }
+
+  // Canonical announcements get the same metadata treatment as the legacy
+  // pages: this URL is what /updates, /discord, and the Discord embed all link
+  // to, so it is the one that gets shared and unfurled.
+  const announcement = await getAnnouncementBySlug(slug)
+  if (announcement) {
+    return {
+      title: `${announcement.title} · ${announcement.category}`,
+      description: announcement.excerpt || announcement.title
     }
   }
 
   return {
-    title: `${update.title} · ${update.version}`,
-    description: update.summary
+    title: "Update not found",
+    description: "This RealFiction update could not be found."
   }
 }
 
@@ -46,8 +66,17 @@ export default async function UpdateDetailPage({
   const { slug } = await params
   const update = updates.find((entry) => entry.slug === slug)
 
+  // Legacy static updates win. They were here first, their URLs are in the
+  // wild, and `publish_announcement` cannot create a colliding slug without
+  // somebody typing one deliberately.
   if (!update) {
-    notFound()
+    const announcement = await getAnnouncementBySlug(slug)
+    if (!announcement) {
+      // Drafts and future-dated rows land here too: the SQL never returned
+      // them, so they 404 exactly like an unknown slug.
+      notFound()
+    }
+    return <AnnouncementDetail announcement={announcement} />
   }
 
   // Previous / next in chronological order (descending by date is the
@@ -173,6 +202,61 @@ export default async function UpdateDetailPage({
           ) : null}
         </div>
       )}
+    </section>
+  )
+}
+
+/**
+ * A canonical announcement.
+ *
+ * Body text goes through `AnnouncementBody`, which renders text nodes and
+ * anchors it builds itself. There is no HTML sink on this page.
+ */
+function AnnouncementDetail({
+  announcement
+}: {
+  announcement: NonNullable<Awaited<ReturnType<typeof getAnnouncementBySlug>>>
+}) {
+  return (
+    <section className="container-shell py-10 md:py-14">
+      <Reveal className="max-w-3xl">
+        <Link
+          href="/updates"
+          className="inline-flex items-center gap-2 text-sm text-muted-foreground transition hover:text-amber-100"
+          style={{ fontFamily: "rf-bold, sans-serif", textTransform: "uppercase", letterSpacing: "0.1em" }}
+        >
+          <ArrowLeft className="h-4 w-4" />
+          All updates
+        </Link>
+
+        <div className="mt-6 flex flex-wrap items-center gap-3">
+          <Badge variant="outline">{announcement.category}</Badge>
+        </div>
+
+        <h1 className="display-font mt-5 text-3xl font-semibold leading-tight md:text-5xl">
+          {announcement.title}
+        </h1>
+
+        {announcement.excerpt ? (
+          <p className="mt-3 text-lg leading-8 text-muted-foreground">{announcement.excerpt}</p>
+        ) : null}
+
+        <div className="mt-4 flex flex-wrap gap-x-4 gap-y-2 text-sm text-muted-foreground">
+          {announcement.publishedAt ? (
+            <span className="inline-flex items-center gap-1.5">
+              <CalendarDays className="h-4 w-4 text-amber-200" />
+              <time dateTime={announcement.publishedAt}>
+                {announcement.publishedAt.slice(0, 10)}
+              </time>
+            </span>
+          ) : null}
+          {announcement.authorDisplay ? <span>{announcement.authorDisplay}</span> : null}
+        </div>
+      </Reveal>
+
+      <Reveal className="mt-8 max-w-3xl">
+        <AnnouncementBody body={announcement.body} imageUrl={announcement.imageUrl} />
+      </Reveal>
     </section>
   )
 }

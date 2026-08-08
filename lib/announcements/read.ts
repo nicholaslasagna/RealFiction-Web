@@ -54,3 +54,51 @@ export async function getLatestAnnouncement(): Promise<LatestAnnouncement | null
     return null
   }
 }
+
+export type AnnouncementDetail = {
+  slug: string
+  title: string
+  excerpt: string
+  body: string
+  category: string
+  publishedAt: string | null
+  authorDisplay: string | null
+  imageUrl: string | null
+}
+
+/**
+ * One PUBLISHED announcement by slug, or null.
+ *
+ * Drafts and future-dated rows are excluded by `published_announcements` in
+ * SQL. Filtering here instead would put the rule one refactor away from being
+ * dropped, and a leaked draft is a public mistake — so the database decides.
+ */
+export async function getAnnouncementBySlug(slug: string): Promise<AnnouncementDetail | null> {
+  if (!slug || !/^[a-z0-9][a-z0-9-]{0,80}$/i.test(slug)) {
+    return null
+  }
+
+  try {
+    const supabase = getSupabaseServiceRoleClient()
+    const { data, error } = await supabase.rpc("published_announcements", { p_limit: 200 })
+    if (error || !Array.isArray(data)) {
+      return null
+    }
+    const row = (data as Record<string, unknown>[]).find((entry) => entry.slug === slug)
+    if (!row) {
+      return null
+    }
+    return {
+      slug: String(row.slug),
+      title: String(row.title ?? ""),
+      excerpt: String(row.excerpt ?? ""),
+      body: String(row.body ?? ""),
+      category: String(row.category ?? "Announcement"),
+      publishedAt: (row.published_at as string | null) ?? null,
+      authorDisplay: (row.author_display as string | null) ?? null,
+      imageUrl: (row.image_url as string | null) ?? null
+    }
+  } catch {
+    return null
+  }
+}
