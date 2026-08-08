@@ -53,24 +53,32 @@ select is((select count(*)::integer from public.email_deliveries
   'A DUPLICATE REQUEST QUEUES NOTHING FURTHER');
 
 -- ===========================================================================
--- Intermediate states are SILENT
+-- Intermediate states are SILENT *to the customer*
+--
+-- Counted over CUSTOMER templates only. A new request also notifies operations
+-- (`cash_redemption_admin_review`), which is a different audience — counting
+-- every outbox row would make this assertion fail for a reason that has nothing
+-- to do with what the customer is told.
 -- ===========================================================================
 select public.resolve_cash_redemption(
   (select id from public.cash_redemption_requests where claimant_user_id='7a000000-0000-4000-8000-000000000002'),
   'eligibility_review', 'looking');
-select is((select count(*)::integer from public.email_deliveries), 1,
-  'eligibility_review sends NOTHING');
+select is((select count(*)::integer from public.email_deliveries
+  where template like 'cash_redemption_%' and template <> 'cash_redemption_admin_review'), 1,
+  'eligibility_review sends NOTHING to the customer');
 
 select public.resolve_cash_redemption(
   (select id from public.cash_redemption_requests where claimant_user_id='7a000000-0000-4000-8000-000000000002'),
   'eligible', 'qualifies');
-select is((select count(*)::integer from public.email_deliveries), 1,
+select is((select count(*)::integer from public.email_deliveries
+  where template like 'cash_redemption_%' and template <> 'cash_redemption_admin_review'), 1,
   'and NEITHER DOES "eligible" — it is not a promise we have made');
 
 select public.resolve_cash_redemption(
   (select id from public.cash_redemption_requests where claimant_user_id='7a000000-0000-4000-8000-000000000002'),
   'manual_payout_required', 'queue for payment');
-select is((select count(*)::integer from public.email_deliveries), 1,
+select is((select count(*)::integer from public.email_deliveries
+  where template like 'cash_redemption_%' and template <> 'cash_redemption_admin_review'), 1,
   'nor does manual_payout_required');
 
 -- ===========================================================================

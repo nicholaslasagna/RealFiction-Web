@@ -31,6 +31,7 @@ import {
   buildGiftCardRestoredRecipientEmail
 } from "./gift-card-templates"
 import { openClaimSecret } from "../gift-card/crypto"
+import { buildCashRedemptionAdminReviewEmail } from "./cash-redemption-admin-template"
 
 export type ProcessorEnv = {
   SUPABASE_URL?: string
@@ -42,6 +43,15 @@ export type ProcessorEnv = {
   GIFT_CARD_ENCRYPTION_KEY?: string
   GIFT_CARD_ENCRYPTION_KEY_VERSION?: string
   EMAIL_SUPPORT_ADDRESS?: string
+  /**
+   * Operations mailbox for cash-redemption reviews.
+   *
+   * Resolved HERE rather than in SQL: the destination is deployment
+   * configuration, and baking it into a migration would mean a schema change to
+   * redirect a mailbox. The outbox row carries an EMPTY recipient for these,
+   * which is why it can only ever be delivered somewhere this resolves.
+   */
+  CASH_REDEMPTION_ADMIN_EMAIL?: string
   NEXT_PUBLIC_SITE_URL?: string
 }
 
@@ -90,6 +100,27 @@ function supabaseFor(env: ProcessorEnv): SupabaseClient | null {
  * Renders one delivery. Returns null when the row can never be rendered (e.g.
  * its order vanished), which the caller treats as a permanent failure.
  */
+/** Templates whose destination is configuration rather than a stored address. */
+const ADMIN_TEMPLATES = new Set(["cash_redemption_admin_review"])
+
+/**
+ * The address this delivery actually goes to.
+ *
+ * Returns null when an admin template has no configured mailbox — the caller
+ * parks the row rather than inventing a destination. An ordinary delivery keeps
+ * using its stored recipient.
+ */
+export function resolveDestination(
+  row: { template: string; recipient: string },
+  env: ProcessorEnv
+): string | null {
+  if (!ADMIN_TEMPLATES.has(row.template)) {
+    return row.recipient
+  }
+  const configured = env.CASH_REDEMPTION_ADMIN_EMAIL?.trim()
+  return configured ? configured : null
+}
+
 async function renderDelivery(
   supabase: SupabaseClient,
   row: DeliveryRow,
@@ -97,6 +128,19 @@ async function renderDelivery(
 ): Promise<{ subject: string; text: string; html: string } | null> {
   const supportEmail = env.EMAIL_SUPPORT_ADDRESS?.trim() || "support@realfiction.live"
   const siteUrl = env.NEXT_PUBLIC_SITE_URL?.trim() || "https://realfiction.live"
+
+  if (row.template === "cash_redemption_admin_review") {
+    const params = row.params ?? {}
+    return buildCashRedemptionAdminReviewEmail({
+      requestId: String(params.request_id ?? ""),
+      claimantUserId: String(params.claimant_user_id ?? ""),
+      requestedCents: Number(params.requested_cents ?? 0),
+      frozenCents: Number(params.frozen_cents ?? 0),
+      state: String(params.state ?? "requested"),
+      requestedAt: typeof params.requested_at === "string" ? params.requested_at : null,
+      siteUrl
+    })
+  }
 
   if (row.template === "refund_confirmation") {
     const params = row.params ?? {}
@@ -364,6 +408,19 @@ export async function processEmailQueue(
         continue
       }
 
+      // ADMIN templates carry an empty recipient by design; their destination
+      // is configuration, not data. Resolve it before anything is rendered.
+      const destination = resolveDestination(row, env)
+      if (destination === null) {
+        // Configured-missing is an operator state, not a delivery failure.
+        // Park it WITHOUT consuming the attempt budget, exactly as a missing
+        // API key is parked, so the alert survives until the binding exists.
+        console.error("email_admin_destination_unconfigured", { template: row.template })
+        await supabase.rpc("mark_email_unconfigured", { p_delivery_id: row.id, p_retry_seconds: 300 })
+        result.unconfigured++
+        continue
+      }
+
       const content = await renderDelivery(supabase, row, env)
 
       if (!content) {
@@ -386,7 +443,7 @@ export async function processEmailQueue(
 
       const attempt = await sendProviderEmail(
         {
-          to: row.recipient,
+          to: destination,
           subject: content.subject,
           text: content.text,
           html: content.html,
