@@ -25,6 +25,16 @@
 
 /** Methods that can change state. GET/HEAD/OPTIONS are not gated. */
 const MUTATING = new Set(["POST", "PUT", "PATCH", "DELETE"])
+const LOCAL_HTTP_HOSTNAMES = new Set(["localhost", "127.0.0.1", "[::1]"])
+
+function isLocalHttpOrigin(value: string): boolean {
+  try {
+    const parsed = new URL(value)
+    return parsed.protocol === "http:" && LOCAL_HTTP_HOSTNAMES.has(parsed.hostname)
+  } catch {
+    return false
+  }
+}
 
 /**
  * Origins allowed to drive a session mutation.
@@ -59,9 +69,7 @@ export function allowedOrigins(env: Record<string, string | undefined> = process
   // if a real site origin is configured, it is the ONLY trusted origin.
   // Localhost is trusted only when there is no configured origin at all, or
   // when the configured origin is itself local.
-  const isLocalConfig =
-    !configured || origins.has("http://localhost:3000") ||
-    [...origins].some((o) => o.startsWith("http://localhost:") || o.startsWith("http://127.0.0.1:"))
+  const isLocalConfig = !configured || [...origins].some(isLocalHttpOrigin)
 
   if (isLocalConfig) {
     for (const port of ["3000", "3311", "3312", "3313"]) {
@@ -127,5 +135,7 @@ export function checkSameOrigin(
     return { ok: false, reason: "cross_origin" }
   }
 
-  return allowedOrigins(env).includes(parsed) ? { ok: true } : { ok: false, reason: "cross_origin" }
+  return new Set(allowedOrigins(env)).has(parsed)
+    ? { ok: true }
+    : { ok: false, reason: "cross_origin" }
 }

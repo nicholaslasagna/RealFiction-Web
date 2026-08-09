@@ -27,7 +27,17 @@ test("the CORRECT production origin is allowed", () => {
 })
 
 test("a MALICIOUS origin is denied", () => {
-  for (const evil of ["https://evil.example", "http://attacker.test", "https://realfiction.live.evil.example"]) {
+  for (const evil of [
+    "https://evil.example",
+    "http://attacker.test",
+    "https://realfiction.live.evil.example",
+    "https://evilrealfiction.live",
+    "https://evil-realfiction.live",
+    "https://evil.example/?next=https://realfiction.live",
+    "https://realfiction.live@evil.example",
+    "http://localhost.evil.example",
+    "http://127.0.0.1.evil.example"
+  ]) {
     const result = checkSameOrigin(req("POST", evil), PROD)
     assert.equal(result.ok, false, `${evil} was allowed`)
   }

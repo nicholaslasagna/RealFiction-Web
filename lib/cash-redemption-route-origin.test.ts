@@ -125,8 +125,13 @@ test("HOSTILE origins are rejected before the RPC", async () => {
   const hostile = [
     "https://evil.example",
     "https://realfiction.live.evil.example",   // suffix trick
+    "https://evilrealfiction.live",             // missing hostname boundary
     "https://evil-realfiction.live",           // prefix trick
     "https://realfictionXlive",                // unescaped-dot trick
+    "https://evil.example/?next=https://realfiction.live", // URL in a path is not an origin
+    "https://realfiction.live@evil.example",   // userinfo confusion
+    "http://localhost.evil.example",           // localhost lookalike
+    "http://127.0.0.1.evil.example",           // loopback lookalike
     "http://realfiction.live",                 // wrong scheme
     "https://sub.realfiction.live",            // subdomain, not intended
     "null",                                    // sandboxed iframe
@@ -227,8 +232,18 @@ test("with the site URL configured, the production origin is the ONLY web origin
   reset()
   const { allowedOrigins } = await import("./auth/same-origin.ts")
   const origins = allowedOrigins({ NEXT_PUBLIC_SITE_URL: SITE })
+  const expectedOrigin = new URL(SITE).origin
 
-  assert.ok(origins.includes(SITE), "the configured origin is missing from the allowlist")
-  assert.ok(!origins.some((o) => o.startsWith("http://localhost")), "localhost is trusted in production")
-  assert.ok(!origins.some((o) => o.startsWith("http://127.0.0.1")))
+  assert.ok(
+    origins.some((candidate) => new URL(candidate).origin === expectedOrigin),
+    "the configured origin is missing from the allowlist"
+  )
+
+  const localHostnames = new Set(["localhost", "127.0.0.1", "[::1]"])
+  const hasLocalhostOrigin = origins.some((candidate) => {
+    const parsed = new URL(candidate)
+    return parsed.protocol === "http:" && localHostnames.has(parsed.hostname)
+  })
+
+  assert.equal(hasLocalhostOrigin, false, "localhost is trusted in production")
 })
